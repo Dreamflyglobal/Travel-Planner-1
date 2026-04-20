@@ -4,12 +4,17 @@ import path from "path";
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// static files
-app.use(express.static(path.join(process.cwd(), "dist/public")));
+// serve frontend from correct folder
+app.use(
+  express.static(
+    path.join(process.cwd(), "artifacts/travel-booking/dist/public"),
+  ),
+);
 
-// fix for all routes
 app.get("*", (req, res) => {
-  res.sendFile(path.join(process.cwd(), "dist/public/index.html"));
+  res.sendFile(
+    path.join(process.cwd(), "artifacts/travel-booking/dist/public/index.html"),
+  );
 });
 
 app.listen(PORT, () => {
