@@ -4,7 +4,6 @@ import path from "path";
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// serve frontend from correct folder
 app.use(
   express.static(
     path.join(process.cwd(), "artifacts/travel-booking/dist/public"),
