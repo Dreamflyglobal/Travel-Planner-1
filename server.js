@@ -5,20 +5,20 @@ import { fileURLToPath } from "url";
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// fix for __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-console.log("SERVER STARTED");
-
-// correct absolute path
 const publicPath = path.join(__dirname, "dist/public");
+
+console.log("DIR:", __dirname);
+console.log("PUBLIC:", publicPath);
 
 app.use(express.static(publicPath));
 
 app.get("*", (req, res) => {
-  console.log("REQUEST:", req.url);
-  res.sendFile(path.join(publicPath, "index.html"));
+  const filePath = path.join(publicPath, "index.html");
+  console.log("TRY FILE:", filePath);
+  res.sendFile(filePath);
 });
 
 app.listen(PORT, () => {
