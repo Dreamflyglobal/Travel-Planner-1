@@ -4,11 +4,11 @@ import path from "path";
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// serve frontend
-app.use(express.static(path.join(process.cwd(), "dist/public")));
+// 👉 IMPORTANT CHANGE
+app.use(express.static(path.join(process.cwd(), "dist")));
 
 app.get("*", (req, res) => {
-  res.sendFile(path.join(process.cwd(), "dist/public", "index.html"));
+  res.sendFile(path.join(process.cwd(), "dist", "public", "index.html"));
 });
 
 app.listen(PORT, () => {
