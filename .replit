@@ -69,3 +69,4 @@ externalPort = 3001
 
 [agent]
 expertMode = true
+stack = "BEST_EFFORT_FALLBACK"
