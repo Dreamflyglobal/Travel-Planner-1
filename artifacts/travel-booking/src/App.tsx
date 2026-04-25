@@ -6,8 +6,10 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/auth-context";
 import { BrandingProvider } from "@/contexts/branding-context";
 import { SiteSettingsProvider } from "@/contexts/site-settings-context";
+import { NotificationSettingsProvider } from "@/contexts/notification-settings-context";
 import { AdminGuard } from "@/components/admin-guard";
 import { PushNotificationPrompt } from "@/components/push-notification-prompt";
+import { BookingNotificationPopup } from "@/components/booking-notification-popup";
 
 function ScrollToTop() {
   const [location] = useLocation();
@@ -189,16 +191,19 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <BrandingProvider>
         <SiteSettingsProvider>
+        <NotificationSettingsProvider>
         <AuthProvider>
           <TooltipProvider>
             <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
               <ScrollToTop />
               <Router />
               <PushNotificationPrompt />
+              <BookingNotificationPopup />
             </WouterRouter>
             <Toaster />
           </TooltipProvider>
         </AuthProvider>
+        </NotificationSettingsProvider>
         </SiteSettingsProvider>
       </BrandingProvider>
     </QueryClientProvider>

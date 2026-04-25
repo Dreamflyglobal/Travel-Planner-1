@@ -9,6 +9,7 @@ import { openRazorpayCheckout, verifyRazorpayPayment } from "@/lib/use-razorpay"
 import { deductWallet } from "@/lib/wallet";
 import { autoSaveLead, convertLeadToBooked } from "@/lib/crm";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
+import { useBookingNotifier } from "@/hooks/use-booking-notifier";
 import { logStaffBooking } from "@/lib/staff-data";
 import {
   loadBookingSession, clearBookingSession,
@@ -244,6 +245,7 @@ export default function BookingPayment() {
   const { isConfigured: pushEnabled } = usePushNotifications(
     user ? { id: user.id, name: user.name, phone: user.phone, email: user.email } : undefined
   );
+  const notifyBookingSuccess = useBookingNotifier();
 
   const [session, setSession] = useState<BookingSession | null>(null);
 
@@ -566,6 +568,14 @@ export default function BookingPayment() {
     refreshUser();
     setWalletPaying(false);
     toast({ title: "Booking Confirmed! 🎉", description: "Paid from wallet. Redirecting…" });
+    notifyBookingSuccess({
+      customerName:  session.type === "hotel" ? (session as HotelBookingSession).guest.name  : (session as any).passengers[0].name,
+      customerEmail: session.type === "hotel" ? (session as HotelBookingSession).guest.email : (session as any).passengers[0].email,
+      bookingType:   session.type,
+      amount:        netPayable,
+      reference:     wLastSuccessful.id,
+      paymentMethod: "Wallet",
+    });
     setTimeout(() => setLocation("/payment-success"), 800);
   }
 
@@ -674,6 +684,14 @@ export default function BookingPayment() {
       refreshUser();
       setProcessing(false);
       toast({ title: "Booking Confirmed! 🎉", description: "Paid entirely with Travel Credits." });
+      notifyBookingSuccess({
+        customerName:  session.type === "hotel" ? (session as HotelBookingSession).guest.name  : (session as any).passengers[0].name,
+        customerEmail: session.type === "hotel" ? (session as HotelBookingSession).guest.email : (session as any).passengers[0].email,
+        bookingType:   session.type,
+        amount:        netPayable,
+        reference:     cLastSuccessful.id,
+        paymentMethod: "Travel Credits",
+      });
       setTimeout(() => setLocation("/payment-success"), 800);
       return;
     }
@@ -847,6 +865,14 @@ export default function BookingPayment() {
         refreshUser();
         setProcessing(false);
         toast({ title: "Booking Confirmed! 🎉", description: "Payment successful. Redirecting…" });
+        notifyBookingSuccess({
+          customerName:  custName,
+          customerEmail: custEmail,
+          bookingType:   session.type,
+          amount:        netPayable,
+          reference:     lastSuccessful.id,
+          paymentMethod: "Razorpay",
+        });
         setTimeout(() => setLocation("/payment-success"), 800);
       },
 

@@ -26,6 +26,12 @@ import {
   Currency,
   DEFAULT_SITE_SETTINGS,
 } from "@/contexts/site-settings-context";
+import {
+  useNotificationSettings,
+  NotificationSettings,
+  DEFAULT_NOTIFICATION_SETTINGS,
+} from "@/contexts/notification-settings-context";
+import { Bell, BellRing, MailCheck } from "lucide-react";
 
 const MAX_LOGO_BYTES = 1_500_000;
 const MAX_FAVICON_BYTES = 500_000;
@@ -497,6 +503,11 @@ export default function AdminSettings() {
 
         <Separator className="my-6" />
 
+        {/* Notification Settings — modular, independent of branding/site settings */}
+        <NotificationSettingsSection />
+
+        <Separator className="my-6" />
+
         {/* Sticky save bar */}
         <div className="sticky bottom-4 bg-white border border-slate-200 rounded-2xl shadow-lg p-4 flex items-center justify-between gap-4">
           <div className="text-sm">
@@ -609,5 +620,201 @@ function FaviconPreview({ faviconUrl }: { faviconUrl: string | null }) {
         </span>
       </div>
     </div>
+  );
+}
+
+// ── Notification Settings (modular, additive) ────────────────────────────────
+function NotificationSettingsSection() {
+  const { settings, updateSettings, resetSettings } = useNotificationSettings();
+  const { toast } = useToast();
+
+  const [draft, setDraft] = useState<NotificationSettings>(settings);
+  const [dirty, setDirty] = useState(false);
+  const [showPwd, setShowPwd] = useState(false);
+  const [savedFlash, setSavedFlash] = useState(false);
+
+  useEffect(() => {
+    if (!dirty) setDraft(settings);
+  }, [settings, dirty]);
+
+  function patch(p: Partial<NotificationSettings>) {
+    setDraft((prev) => ({ ...prev, ...p }));
+    setDirty(true);
+  }
+
+  function handleSave() {
+    if (draft.emailEnabled) {
+      if (!draft.smtpEmail.trim() || !/^\S+@\S+\.\S+$/.test(draft.smtpEmail.trim())) {
+        toast({ title: "Invalid SMTP email", description: "Please enter a valid email address.", variant: "destructive" });
+        return;
+      }
+      if (!draft.smtpPassword.trim()) {
+        toast({ title: "SMTP password required", description: "Enter the app password for the SMTP account.", variant: "destructive" });
+        return;
+      }
+    }
+    if (draft.popupEnabled && !draft.popupMessage.trim()) {
+      toast({ title: "Popup message required", description: "Enter the message to show in the popup.", variant: "destructive" });
+      return;
+    }
+    updateSettings(draft);
+    setDirty(false);
+    setSavedFlash(true);
+    setTimeout(() => setSavedFlash(false), 3000);
+    toast({ title: "Notification settings saved", description: "Your notification preferences are now active." });
+  }
+
+  function handleReset() {
+    resetSettings();
+    setDraft(DEFAULT_NOTIFICATION_SETTINGS);
+    setDirty(false);
+    toast({ title: "Reset", description: "Notification settings restored to defaults." });
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <SectionHeader
+          icon={<Bell className="w-5 h-5 text-purple-600" />}
+          title="Notification Settings"
+          description="Control email + popup notifications shown after a successful booking or payment."
+        />
+      </CardHeader>
+      <CardContent className="space-y-8">
+
+        {savedFlash && (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-medium">
+            <MailCheck className="w-4 h-4" />
+            Notification settings saved successfully.
+          </div>
+        )}
+
+        {/* ── Email Notifications ───────────────────────────────────────── */}
+        <div className="space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <Label htmlFor="notif-email-enabled" className="text-base font-semibold flex items-center gap-2">
+                <MailCheck className="w-4 h-4 text-blue-600" />
+                Enable Email Notifications
+              </Label>
+              <p className="text-xs text-slate-500 mt-1">
+                Send a confirmation email to the customer after a successful booking and payment.
+              </p>
+            </div>
+            <Switch
+              id="notif-email-enabled"
+              checked={draft.emailEnabled}
+              onCheckedChange={(v) => patch({ emailEnabled: v })}
+              data-testid="switch-notif-email"
+            />
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="notif-smtp-email">SMTP Email</Label>
+              <Input
+                id="notif-smtp-email"
+                type="email"
+                placeholder="notifications@yourcompany.com"
+                value={draft.smtpEmail}
+                onChange={(e) => patch({ smtpEmail: e.target.value })}
+                disabled={!draft.emailEnabled}
+                data-testid="input-notif-smtp-email"
+              />
+              <p className="text-[11px] text-slate-500">
+                Gmail, Outlook, Yahoo, or any SMTP-capable address.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="notif-smtp-pass">SMTP Password / App Password</Label>
+              <div className="relative">
+                <Input
+                  id="notif-smtp-pass"
+                  type={showPwd ? "text" : "password"}
+                  placeholder="App password (16 chars for Gmail)"
+                  value={draft.smtpPassword}
+                  onChange={(e) => patch({ smtpPassword: e.target.value })}
+                  disabled={!draft.emailEnabled}
+                  className="pr-10"
+                  data-testid="input-notif-smtp-pass"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPwd((s) => !s)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                  tabIndex={-1}
+                >
+                  {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-500">
+                Stored locally — only sent to the server when an email is dispatched.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <Separator />
+
+        {/* ── Popup Notifications ───────────────────────────────────────── */}
+        <div className="space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <Label htmlFor="notif-popup-enabled" className="text-base font-semibold flex items-center gap-2">
+                <BellRing className="w-4 h-4 text-purple-600" />
+                Enable Popup Notifications
+              </Label>
+              <p className="text-xs text-slate-500 mt-1">
+                Show a confirmation popup to the customer immediately after booking or payment success.
+              </p>
+            </div>
+            <Switch
+              id="notif-popup-enabled"
+              checked={draft.popupEnabled}
+              onCheckedChange={(v) => patch({ popupEnabled: v })}
+              data-testid="switch-notif-popup"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="notif-popup-msg">Custom Popup Message</Label>
+            <Textarea
+              id="notif-popup-msg"
+              rows={3}
+              value={draft.popupMessage}
+              onChange={(e) => patch({ popupMessage: e.target.value })}
+              placeholder="Your booking has been confirmed! Check your email for details."
+              disabled={!draft.popupEnabled}
+              data-testid="input-notif-popup-msg"
+            />
+            <p className="text-[11px] text-slate-500">
+              Shown verbatim in the success popup. Keep it short and friendly.
+            </p>
+          </div>
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex items-center justify-end gap-2 pt-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleReset}
+            data-testid="button-notif-reset"
+          >
+            <RotateCcw className="w-4 h-4 mr-2" />
+            Reset
+          </Button>
+          <Button
+            onClick={handleSave}
+            disabled={!dirty}
+            data-testid="button-notif-save"
+          >
+            <Save className="w-4 h-4 mr-2" />
+            Save Notification Settings
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
