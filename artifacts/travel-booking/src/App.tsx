@@ -7,9 +7,12 @@ import { AuthProvider } from "@/contexts/auth-context";
 import { BrandingProvider } from "@/contexts/branding-context";
 import { SiteSettingsProvider } from "@/contexts/site-settings-context";
 import { NotificationSettingsProvider } from "@/contexts/notification-settings-context";
+import { WebsiteSettingsProvider } from "@/contexts/website-settings-context";
 import { AdminGuard } from "@/components/admin-guard";
 import { PushNotificationPrompt } from "@/components/push-notification-prompt";
 import { BookingNotificationPopup } from "@/components/booking-notification-popup";
+import { WhatsappFloat } from "@/components/whatsapp-float";
+import { MaintenanceGate } from "@/components/maintenance-gate";
 
 function ScrollToTop() {
   const [location] = useLocation();
@@ -192,17 +195,22 @@ function App() {
       <BrandingProvider>
         <SiteSettingsProvider>
         <NotificationSettingsProvider>
+        <WebsiteSettingsProvider>
         <AuthProvider>
           <TooltipProvider>
             <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
               <ScrollToTop />
-              <Router />
+              <MaintenanceGate>
+                <Router />
+              </MaintenanceGate>
               <PushNotificationPrompt />
               <BookingNotificationPopup />
+              <WhatsappFloat />
             </WouterRouter>
             <Toaster />
           </TooltipProvider>
         </AuthProvider>
+        </WebsiteSettingsProvider>
         </NotificationSettingsProvider>
         </SiteSettingsProvider>
       </BrandingProvider>

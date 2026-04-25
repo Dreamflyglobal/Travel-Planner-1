@@ -31,7 +31,24 @@ import {
   NotificationSettings,
   DEFAULT_NOTIFICATION_SETTINGS,
 } from "@/contexts/notification-settings-context";
-import { Bell, BellRing, MailCheck } from "lucide-react";
+import {
+  useWebsiteSettings,
+  WebsiteSettings,
+  DEFAULT_WEBSITE_SETTINGS,
+  sanitizeWhatsappNumber,
+} from "@/contexts/website-settings-context";
+import {
+  Bell,
+  BellRing,
+  MailCheck,
+  Facebook,
+  Instagram,
+  Twitter,
+  MessageCircle,
+  Megaphone,
+  Wrench,
+  CheckCircle2,
+} from "lucide-react";
 
 const MAX_LOGO_BYTES = 1_500_000;
 const MAX_FAVICON_BYTES = 500_000;
@@ -503,6 +520,11 @@ export default function AdminSettings() {
 
         <Separator className="my-6" />
 
+        {/* Website Settings — modular, independent of branding/site/notification settings */}
+        <WebsiteSettingsSection />
+
+        <Separator className="my-6" />
+
         {/* Notification Settings — modular, independent of branding/site settings */}
         <NotificationSettingsSection />
 
@@ -812,6 +834,399 @@ function NotificationSettingsSection() {
           >
             <Save className="w-4 h-4 mr-2" />
             Save Notification Settings
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── Website Settings (modular, additive) ────────────────────────────────────
+function WebsiteSettingsSection() {
+  const { settings, updateSettings, resetSettings } = useWebsiteSettings();
+  const { toast } = useToast();
+
+  const [draft, setDraft] = useState<WebsiteSettings>(settings);
+  const [dirty, setDirty] = useState(false);
+  const [savedFlash, setSavedFlash] = useState(false);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!dirty) setDraft(settings);
+  }, [settings, dirty]);
+
+  function patch(p: Partial<WebsiteSettings>) {
+    setDraft((prev) => ({ ...prev, ...p }));
+    setDirty(true);
+  }
+
+  function isValidUrl(value: string): boolean {
+    if (!value.trim()) return true;
+    try {
+      const u = new URL(value.trim());
+      return u.protocol === "http:" || u.protocol === "https:";
+    } catch {
+      return false;
+    }
+  }
+
+  async function handleBannerImage(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast({
+        title: "Unsupported file",
+        description: "Please choose an image file (PNG, JPG, or WebP).",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (file.size > 2_000_000) {
+      toast({
+        title: "Image too large",
+        description: "Banner image must be smaller than 2 MB.",
+        variant: "destructive",
+      });
+      return;
+    }
+    try {
+      const dataUrl = await readFileAsDataURL(file);
+      patch({ bannerImage: dataUrl });
+    } catch (err) {
+      console.error(err);
+      toast({
+        title: "Could not read image",
+        description: "Please try a different file.",
+        variant: "destructive",
+      });
+    }
+  }
+
+  function handleSave() {
+    for (const [field, label] of [
+      ["facebookUrl", "Facebook URL"],
+      ["instagramUrl", "Instagram URL"],
+      ["twitterUrl", "Twitter URL"],
+    ] as const) {
+      if (!isValidUrl(draft[field])) {
+        toast({
+          title: `Invalid ${label}`,
+          description: "Please enter a full URL starting with https://",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+    if (draft.whatsappEnabled) {
+      const cleaned = sanitizeWhatsappNumber(draft.whatsappNumber);
+      if (cleaned.length < 8 || cleaned.length > 15) {
+        toast({
+          title: "Invalid WhatsApp number",
+          description: "Enter a valid number with country code (digits only, 8–15 digits).",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+    updateSettings(draft);
+    setDirty(false);
+    setSavedFlash(true);
+    setTimeout(() => setSavedFlash(false), 3000);
+    toast({
+      title: "Website settings saved",
+      description: "Your changes are now live across the site.",
+    });
+  }
+
+  function handleReset() {
+    resetSettings();
+    setDraft(DEFAULT_WEBSITE_SETTINGS);
+    setDirty(false);
+    toast({
+      title: "Reset",
+      description: "Website settings restored to defaults.",
+    });
+  }
+
+  return (
+    <Card data-testid="website-settings-section">
+      <CardHeader>
+        <SectionHeader
+          icon={<Globe className="w-5 h-5 text-blue-600" />}
+          title="Website Settings"
+          description="Social media links, WhatsApp chat, homepage banner, and maintenance mode."
+        />
+      </CardHeader>
+      <CardContent className="space-y-8">
+        {savedFlash && (
+          <div
+            className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-medium"
+            data-testid="website-settings-saved-flash"
+          >
+            <CheckCircle2 className="w-4 h-4" />
+            Website settings saved successfully.
+          </div>
+        )}
+
+        {/* ── Social Media Links ───────────────────────────────────────── */}
+        <div className="space-y-4">
+          <Label className="text-base font-semibold flex items-center gap-2">
+            <Megaphone className="w-4 h-4 text-pink-600" />
+            Social Media Links
+          </Label>
+          <p className="text-xs text-slate-500 -mt-2">
+            Shown as icons in the website footer. Leave blank to hide.
+          </p>
+          <div className="grid md:grid-cols-3 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="ws-facebook" className="flex items-center gap-1.5 text-sm">
+                <Facebook className="w-3.5 h-3.5 text-blue-600" /> Facebook URL
+              </Label>
+              <Input
+                id="ws-facebook"
+                type="url"
+                placeholder="https://facebook.com/yourpage"
+                value={draft.facebookUrl}
+                onChange={(e) => patch({ facebookUrl: e.target.value })}
+                data-testid="input-website-facebook"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="ws-instagram" className="flex items-center gap-1.5 text-sm">
+                <Instagram className="w-3.5 h-3.5 text-pink-600" /> Instagram URL
+              </Label>
+              <Input
+                id="ws-instagram"
+                type="url"
+                placeholder="https://instagram.com/yourhandle"
+                value={draft.instagramUrl}
+                onChange={(e) => patch({ instagramUrl: e.target.value })}
+                data-testid="input-website-instagram"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="ws-twitter" className="flex items-center gap-1.5 text-sm">
+                <Twitter className="w-3.5 h-3.5 text-sky-500" /> Twitter URL
+              </Label>
+              <Input
+                id="ws-twitter"
+                type="url"
+                placeholder="https://twitter.com/yourhandle"
+                value={draft.twitterUrl}
+                onChange={(e) => patch({ twitterUrl: e.target.value })}
+                data-testid="input-website-twitter"
+              />
+            </div>
+          </div>
+        </div>
+
+        <Separator />
+
+        {/* ── WhatsApp Chat Button ─────────────────────────────────────── */}
+        <div className="space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <Label
+                htmlFor="ws-whatsapp-enabled"
+                className="text-base font-semibold flex items-center gap-2"
+              >
+                <MessageCircle className="w-4 h-4 text-emerald-600" />
+                WhatsApp Chat Button
+              </Label>
+              <p className="text-xs text-slate-500 mt-1">
+                Show a floating WhatsApp button on every page (except admin).
+              </p>
+            </div>
+            <Switch
+              id="ws-whatsapp-enabled"
+              checked={draft.whatsappEnabled}
+              onCheckedChange={(v) => patch({ whatsappEnabled: v })}
+              data-testid="switch-website-whatsapp"
+            />
+          </div>
+          <div className="space-y-1.5 max-w-md">
+            <Label htmlFor="ws-whatsapp-number">WhatsApp Number (with country code)</Label>
+            <Input
+              id="ws-whatsapp-number"
+              type="tel"
+              inputMode="tel"
+              placeholder="919000978856"
+              value={draft.whatsappNumber}
+              onChange={(e) => patch({ whatsappNumber: e.target.value })}
+              disabled={!draft.whatsappEnabled}
+              data-testid="input-website-whatsapp-number"
+            />
+            <p className="text-[11px] text-slate-500">
+              Digits only, including country code. Example: 919000978856.
+              Opens https://wa.me/&lt;number&gt; on click.
+            </p>
+          </div>
+        </div>
+
+        <Separator />
+
+        {/* ── Homepage Banner ──────────────────────────────────────────── */}
+        <div className="space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <Label
+                htmlFor="ws-banner-enabled"
+                className="text-base font-semibold flex items-center gap-2"
+              >
+                <Megaphone className="w-4 h-4 text-orange-600" />
+                Homepage Banner
+              </Label>
+              <p className="text-xs text-slate-500 mt-1">
+                Promo banner shown at the top of the homepage. Updates instantly after save.
+              </p>
+            </div>
+            <Switch
+              id="ws-banner-enabled"
+              checked={draft.bannerEnabled}
+              onCheckedChange={(v) => patch({ bannerEnabled: v })}
+              data-testid="switch-website-banner"
+            />
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="ws-banner-text">Banner Text</Label>
+              <Input
+                id="ws-banner-text"
+                placeholder="Summer Sale is here!"
+                value={draft.bannerText}
+                onChange={(e) => patch({ bannerText: e.target.value })}
+                disabled={!draft.bannerEnabled}
+                data-testid="input-website-banner-text"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="ws-banner-offer">Offer Text</Label>
+              <Input
+                id="ws-banner-offer"
+                placeholder="Flat 25% off — use code SUMMER25"
+                value={draft.bannerOffer}
+                onChange={(e) => patch({ bannerOffer: e.target.value })}
+                disabled={!draft.bannerEnabled}
+                data-testid="input-website-banner-offer"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Banner Image</Label>
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="w-32 h-20 rounded-lg border border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center">
+                {draft.bannerImage ? (
+                  <img
+                    src={draft.bannerImage}
+                    alt="Banner preview"
+                    className="w-full h-full object-cover"
+                    data-testid="img-banner-preview"
+                  />
+                ) : (
+                  <ImageIcon className="w-7 h-7 text-slate-300" />
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <input
+                  ref={bannerInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="hidden"
+                  onChange={handleBannerImage}
+                  data-testid="input-file-banner"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => bannerInputRef.current?.click()}
+                  disabled={!draft.bannerEnabled}
+                  data-testid="button-upload-banner"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  Upload image
+                </Button>
+                {draft.bannerImage && (
+                  <Button
+                    variant="outline"
+                    onClick={() => patch({ bannerImage: "" })}
+                    disabled={!draft.bannerEnabled}
+                    data-testid="button-remove-banner"
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Remove
+                  </Button>
+                )}
+              </div>
+            </div>
+            <p className="text-[11px] text-slate-500">
+              PNG, JPG, or WebP — under 2 MB. Optional.
+            </p>
+          </div>
+        </div>
+
+        <Separator />
+
+        {/* ── Maintenance Mode ─────────────────────────────────────────── */}
+        <div className="space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <Label
+                htmlFor="ws-maintenance-enabled"
+                className="text-base font-semibold flex items-center gap-2"
+              >
+                <Wrench className="w-4 h-4 text-amber-600" />
+                Maintenance Mode
+              </Label>
+              <p className="text-xs text-slate-500 mt-1">
+                Hide the public site and show a maintenance page. Admin and staff routes stay accessible.
+              </p>
+            </div>
+            <Switch
+              id="ws-maintenance-enabled"
+              checked={draft.maintenanceMode}
+              onCheckedChange={(v) => patch({ maintenanceMode: v })}
+              data-testid="switch-website-maintenance"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="ws-maintenance-message">Maintenance Message</Label>
+            <Textarea
+              id="ws-maintenance-message"
+              rows={2}
+              placeholder="We're upgrading the experience. We'll be back shortly."
+              value={draft.maintenanceMessage}
+              onChange={(e) => patch({ maintenanceMessage: e.target.value })}
+              disabled={!draft.maintenanceMode}
+              data-testid="input-website-maintenance-message"
+            />
+          </div>
+          {draft.maintenanceMode && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+              <strong>Heads up:</strong> The public website will display the maintenance page until this is turned off.
+            </div>
+          )}
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex items-center justify-end gap-2 pt-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleReset}
+            data-testid="button-website-reset"
+          >
+            <RotateCcw className="w-4 h-4 mr-2" />
+            Reset
+          </Button>
+          <Button
+            onClick={handleSave}
+            disabled={!dirty}
+            data-testid="button-website-save"
+          >
+            <Save className="w-4 h-4 mr-2" />
+            Save Website Settings
           </Button>
         </div>
       </CardContent>

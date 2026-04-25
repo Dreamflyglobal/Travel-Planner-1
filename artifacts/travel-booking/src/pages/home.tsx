@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Plane, Bus, Building2, Map, ArrowRight, Star, ShieldCheck, Headphones, Tag, Gift, Zap, BadgeCheck, Compass, CreditCard, Users, Phone, Mail, MapPin, Clock } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SearchTabs } from "@/components/search-tabs";
+import { HomepageBanner } from "@/components/homepage-banner";
 import { useState, useEffect } from "react";
 
 const TAB_META: Record<string, { image: string; headline: string; sub: string }> = {
@@ -87,6 +88,7 @@ export default function Home() {
 
   return (
     <Layout>
+      <HomepageBanner />
       {/* ── Hero Section ── */}
       <section className="relative w-full overflow-hidden min-h-[520px] sm:min-h-[600px] flex items-center pt-8 pb-16 sm:pt-16 sm:pb-32">
         <div className="absolute inset-0 z-0">

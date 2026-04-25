@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import { Phone, Mail, MapPin } from "lucide-react";
+import { FooterSocialLinks } from "@/components/footer-social-links";
 
 export function Footer() {
   return (
@@ -24,6 +25,7 @@ export function Footer() {
                 <MapPin className="w-4 h-4 shrink-0" /> India
               </span>
             </div>
+            <FooterSocialLinks />
           </div>
 
           {/* Book */}
