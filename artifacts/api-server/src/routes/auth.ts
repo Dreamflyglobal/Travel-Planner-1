@@ -251,15 +251,7 @@ router.post("/auth/login", async (req, res) => {
   const input = email.trim().toLowerCase();
 
   try {
-    // Special admin shortcut
-    if (input === "admin@wanderway.com" && password === "admin123") {
-      const adminToken = signToken({ userId: 0, role: "admin", email: "admin@wanderway.com" });
-      return res.json({
-        token: adminToken,
-        user: { id: 0, name: "Admin", email: "admin@wanderway.com", role: "admin" },
-      });
-    }
-
+    // Note: Admin login is handled by POST /api/admin/login (uses ADMIN_EMAIL / ADMIN_PASSWORD env vars)
     const rows = await db
       .select()
       .from(usersTable)

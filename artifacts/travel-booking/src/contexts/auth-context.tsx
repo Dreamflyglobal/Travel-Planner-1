@@ -291,6 +291,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     clearToken();
+    localStorage.removeItem("isAdmin");
     setUser(null);
   };
 

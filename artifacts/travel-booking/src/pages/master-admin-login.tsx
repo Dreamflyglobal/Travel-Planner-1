@@ -7,9 +7,11 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { ShieldCheck, Eye, EyeOff, Lock, Mail, AlertCircle } from "lucide-react";
 
+const API = import.meta.env.VITE_API_BASE_URL ?? "";
+
 export default function MasterAdminLogin() {
   const [, setLocation] = useLocation();
-  const { login, isAdmin, isAuthenticated } = useAuth();
+  const { isAdmin, isAuthenticated, refreshUser } = useAuth();
 
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
@@ -33,19 +35,32 @@ export default function MasterAdminLogin() {
     setLoading(true);
     setError("");
 
-    const { user: loggedInUser } = await login(email.trim().toLowerCase(), password);
+    try {
+      const res = await fetch(`${API}/api/admin/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+      });
+      const data = await res.json();
 
-    setLoading(false);
+      if (!res.ok || !data.success) {
+        setLoading(false);
+        setError("Invalid credentials");
+        return;
+      }
 
-    if (!loggedInUser) {
-      setError("Invalid credentials. Access denied.");
-      return;
-    }
+      // Persist auth state
+      localStorage.setItem("jwt_token", data.token);
+      localStorage.setItem("isAdmin", "true");
 
-    if (loggedInUser.role === "admin") {
+      // Refresh AuthContext so navbar / AdminGuard pick up the new admin user
+      await refreshUser();
+
+      setLoading(false);
       setLocation("/master-admin/dashboard");
-    } else {
-      setError("Access denied. This portal is for administrators only.");
+    } catch {
+      setLoading(false);
+      setError("Invalid credentials");
     }
   };
 

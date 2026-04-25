@@ -85,13 +85,13 @@ On top of the smart API price, the same two-layer system as flights/buses/hotels
 - **Duplicate detection**: `409` with `code: "duplicate_email" | "duplicate_phone"` → frontend shows "Account already exists. Please login."
 - **Phone validation**: Backend enforces 10-digit Indian mobile (starts 6-9)
 - **Account linking**: OTP users can add email/password via `POST /api/auth/link-email`; email users can add phone via `POST /api/auth/link-phone`
-- **Admin shortcut**: `admin@wanderway.com` / `admin123` returns JWT with `role:"admin"` (no DB row needed)
+- **Admin login**: dedicated `POST /api/admin/login` endpoint (`artifacts/api-server/src/routes/admin.ts`) validates against `ADMIN_EMAIL` / `ADMIN_PASSWORD` env vars and returns a JWT with `userId:0, role:"admin"`. The hardcoded `admin@wanderway.com / admin123` shortcut has been removed from `/api/auth/login`. Frontend (`master-admin-login.tsx`) calls the new endpoint and stores both `jwt_token` and `isAdmin=true` in localStorage; `logout()` clears both. `AdminGuard` component protects all `/master-admin/*` routes.
 - **API key security**: Razorpay KEY_SECRET, Twilio AUTH_TOKEN, SMTP_PASS, Hotelbeds SECRET all stay on backend only
 - **Key files**: `artifacts/api-server/src/routes/auth.ts`, `lib/jwt.ts`, `middlewares/auth.ts`, `lib/db/src/schema/users.ts`, `artifacts/travel-booking/src/contexts/auth-context.tsx`
 
 ### Admin Credentials
 - URL: `/master-admin/login`
-- Email: `admin@wanderway.com` / Password: `admin123`
+- Credentials sourced from env vars: `ADMIN_EMAIL` / `ADMIN_PASSWORD` (Replit Secrets)
 
 ## Artifacts
 
