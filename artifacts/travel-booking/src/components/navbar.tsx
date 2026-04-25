@@ -15,12 +15,14 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/auth-context";
+import { useBranding } from "@/contexts/branding-context";
 import { cn } from "@/lib/utils";
 import { popUnseenRewardNotifications } from "@/lib/referral";
 
 export function Navbar() {
   const [location] = useLocation();
   const { user, isAuthenticated, isAdmin, isAgent, logout, refreshUser } = useAuth();
+  const { branding } = useBranding();
   const { toast } = useToast();
 
   // Check for unseen referral reward notifications on every page the user visits
@@ -72,15 +74,27 @@ export function Navbar() {
         {/* Top Bar */}
         <div className="flex h-16 items-center justify-between px-4">
           {/* Logo */}
-          <Link href="/" className="flex items-center space-x-2 group">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center shadow-md transition-transform group-hover:scale-105">
-              <Sparkles className="h-6 w-6 text-white" />
-            </div>
+          <Link href="/" className="flex items-center space-x-2 group" data-testid="link-brand-home">
+            {branding.logoUrl ? (
+              <img
+                src={branding.logoUrl}
+                alt={branding.companyName}
+                className="w-10 h-10 rounded-lg object-contain bg-white border border-slate-200 shadow-md transition-transform group-hover:scale-105"
+                data-testid="img-brand-logo"
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center shadow-md transition-transform group-hover:scale-105">
+                <Sparkles className="h-6 w-6 text-white" />
+              </div>
+            )}
             <div className="flex flex-col">
-              <span className="font-bold text-xl bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                WanderWay
+              <span
+                className="font-bold text-xl bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent"
+                data-testid="text-brand-name"
+              >
+                {branding.companyName}
               </span>
-              <span className="text-[10px] text-muted-foreground -mt-1">Explore the world</span>
+              <span className="text-[10px] text-muted-foreground -mt-1">{branding.tagline}</span>
             </div>
           </Link>
 

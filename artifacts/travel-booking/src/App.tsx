@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/auth-context";
+import { BrandingProvider } from "@/contexts/branding-context";
 import { AdminGuard } from "@/components/admin-guard";
 import { PushNotificationPrompt } from "@/components/push-notification-prompt";
 
@@ -64,6 +65,7 @@ import Contact from "@/pages/contact";
 import AdminInvoices from "@/pages/admin/invoices";
 import AdminUsers from "@/pages/admin/users";
 import AdminStaffIncentives from "@/pages/admin/staff-incentives";
+import AdminSettings from "@/pages/admin/settings";
 import StaffLogin from "@/pages/staff-login";
 import AgentSignup from "@/pages/agent-signup";
 import InvoiceView from "@/pages/invoice-view";
@@ -169,6 +171,9 @@ function Router() {
       <Route path="/master-admin/staff-incentives">
         <AdminGuard><AdminStaffIncentives /></AdminGuard>
       </Route>
+      <Route path="/master-admin/settings">
+        <AdminGuard><AdminSettings /></AdminGuard>
+      </Route>
       <Route path="/master-admin/users">
         <AdminGuard><AdminUsers /></AdminGuard>
       </Route>
@@ -181,16 +186,18 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <TooltipProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <ScrollToTop />
-            <Router />
-            <PushNotificationPrompt />
-          </WouterRouter>
-          <Toaster />
-        </TooltipProvider>
-      </AuthProvider>
+      <BrandingProvider>
+        <AuthProvider>
+          <TooltipProvider>
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+              <ScrollToTop />
+              <Router />
+              <PushNotificationPrompt />
+            </WouterRouter>
+            <Toaster />
+          </TooltipProvider>
+        </AuthProvider>
+      </BrandingProvider>
     </QueryClientProvider>
   );
 }

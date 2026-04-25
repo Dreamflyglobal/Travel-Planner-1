@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useLocation, Link } from "wouter";
 import { useAuth } from "@/contexts/auth-context";
+import { useBranding } from "@/contexts/branding-context";
 import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard, TrendingUp, Package,
   MessageSquare, FileText, ClipboardList, LogOut, Menu, X,
-  ShieldCheck, UserCheck, ChevronRight, Receipt, Users, Award,
+  ShieldCheck, UserCheck, ChevronRight, Receipt, Users, Award, Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +21,7 @@ const NAV_ITEMS = [
   { label: "Staff Incentives", href: "/master-admin/staff-incentives", icon: Award },
   { label: "Leads",            href: "/master-admin/leads",            icon: FileText },
   { label: "Enquiries",        href: "/master-admin/enquiries",        icon: ClipboardList },
+  { label: "Settings",         href: "/master-admin/settings",         icon: Settings },
 ];
 
 function SidebarLink({
@@ -53,6 +55,7 @@ function SidebarLink({
 function Sidebar({ onClose }: { onClose?: () => void }) {
   const [location] = useLocation();
   const { user, logout } = useAuth();
+  const { branding } = useBranding();
   const [, setLocation] = useLocation();
 
   function handleLogout() {
@@ -65,11 +68,20 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
       {/* Logo */}
       <div className="flex items-center justify-between mb-8 px-1">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-purple-600 flex items-center justify-center">
-            <ShieldCheck className="w-4 h-4 text-white" />
-          </div>
+          {branding.logoUrl ? (
+            <img
+              src={branding.logoUrl}
+              alt={branding.companyName}
+              className="w-8 h-8 rounded-lg object-contain bg-white"
+              data-testid="img-admin-brand-logo"
+            />
+          ) : (
+            <div className="w-8 h-8 rounded-lg bg-purple-600 flex items-center justify-center">
+              <ShieldCheck className="w-4 h-4 text-white" />
+            </div>
+          )}
           <div>
-            <p className="text-white font-bold text-sm leading-tight">WanderWay</p>
+            <p className="text-white font-bold text-sm leading-tight" data-testid="text-admin-brand-name">{branding.companyName}</p>
             <p className="text-purple-400 text-[10px] font-semibold uppercase tracking-widest leading-tight">Admin Panel</p>
           </div>
         </div>
@@ -149,7 +161,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
             <div className="w-6 h-6 rounded bg-purple-600 flex items-center justify-center">
               <ShieldCheck className="w-3.5 h-3.5 text-white" />
             </div>
-            <span className="text-white font-bold text-sm">WanderWay Admin</span>
+            <span className="text-white font-bold text-sm">Admin Panel</span>
           </div>
         </header>
 
