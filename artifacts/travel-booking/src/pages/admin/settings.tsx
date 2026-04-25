@@ -38,6 +38,8 @@ import {
   sanitizeWhatsappNumber,
 } from "@/contexts/website-settings-context";
 import { ApiKeysSection } from "@/pages/admin/api-keys-section";
+import { Link } from "wouter";
+import { ClipboardList, ArrowRight } from "lucide-react";
 import {
   Bell,
   BellRing,
@@ -215,6 +217,27 @@ export default function AdminSettings() {
             Reset to defaults
           </Button>
         </div>
+
+        {/* ============== Quick links to other admin tools ============== */}
+        <Link href="/master-admin/bookings-management">
+          <a
+            className="mb-6 flex items-center justify-between gap-4 rounded-xl border border-indigo-200 bg-gradient-to-r from-indigo-50 to-purple-50 p-4 hover:shadow-md transition-shadow cursor-pointer group"
+            data-testid="link-bookings-management"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-indigo-600 text-white flex items-center justify-center">
+                <ClipboardList className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="font-semibold text-slate-900">Booking Management</div>
+                <div className="text-xs text-slate-600">
+                  View, confirm, cancel bookings and process Razorpay refunds.
+                </div>
+              </div>
+            </div>
+            <ArrowRight className="w-5 h-5 text-indigo-600 group-hover:translate-x-1 transition-transform" />
+          </a>
+        </Link>
 
         {/* ============== A) WEBSITE BRANDING ============== */}
         <SectionHeader

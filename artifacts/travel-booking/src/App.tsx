@@ -72,6 +72,7 @@ import AdminInvoices from "@/pages/admin/invoices";
 import AdminUsers from "@/pages/admin/users";
 import AdminStaffIncentives from "@/pages/admin/staff-incentives";
 import AdminSettings from "@/pages/admin/settings";
+import AdminBookingsManagement from "@/pages/admin/bookings-management";
 import StaffLogin from "@/pages/staff-login";
 import AgentSignup from "@/pages/agent-signup";
 import InvoiceView from "@/pages/invoice-view";
@@ -179,6 +180,9 @@ function Router() {
       </Route>
       <Route path="/master-admin/settings">
         <AdminGuard><AdminSettings /></AdminGuard>
+      </Route>
+      <Route path="/master-admin/bookings-management">
+        <AdminGuard><AdminBookingsManagement /></AdminGuard>
       </Route>
       <Route path="/master-admin/users">
         <AdminGuard><AdminUsers /></AdminGuard>

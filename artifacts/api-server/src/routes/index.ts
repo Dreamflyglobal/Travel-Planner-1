@@ -21,6 +21,7 @@ import pushRouter             from "./push";
 import currencyRouter         from "./currency";
 import marketingRouter        from "./marketing";
 import apiKeysRouter          from "./api-keys";
+import adminBookingsRouter    from "./admin-bookings";
 
 const router: IRouter = Router();
 
@@ -46,5 +47,6 @@ router.use(pushRouter);
 router.use(currencyRouter);
 router.use(marketingRouter);
 router.use(apiKeysRouter);
+router.use(adminBookingsRouter);
 
 export default router;
