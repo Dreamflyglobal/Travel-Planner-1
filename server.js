@@ -3,11 +3,6 @@ import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
 
-import dotenv from "dotenv";
-dotenv.config();
-
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
 const app = express();
 const PORT = process.env.PORT || 3000;
