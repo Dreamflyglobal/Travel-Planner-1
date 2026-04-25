@@ -37,6 +37,7 @@ import {
   DEFAULT_WEBSITE_SETTINGS,
   sanitizeWhatsappNumber,
 } from "@/contexts/website-settings-context";
+import { ApiKeysSection } from "@/pages/admin/api-keys-section";
 import {
   Bell,
   BellRing,
@@ -522,6 +523,16 @@ export default function AdminSettings() {
 
         {/* Website Settings — modular, independent of branding/site/notification settings */}
         <WebsiteSettingsSection />
+
+        <Separator className="my-6" />
+
+        {/* API Settings — server-stored API keys, fetched via /api/admin/api-keys */}
+        <SectionHeader
+          icon={<Sparkles className="w-5 h-5 text-indigo-600" />}
+          title="API Settings"
+          description="Securely manage external provider API keys. Stored on the server, never in the browser."
+        />
+        <ApiKeysSection />
 
         <Separator className="my-6" />
 

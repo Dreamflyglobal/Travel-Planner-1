@@ -20,6 +20,7 @@ import enquiriesRouter        from "./enquiries";
 import pushRouter             from "./push";
 import currencyRouter         from "./currency";
 import marketingRouter        from "./marketing";
+import apiKeysRouter          from "./api-keys";
 
 const router: IRouter = Router();
 
@@ -44,5 +45,6 @@ router.use(enquiriesRouter);
 router.use(pushRouter);
 router.use(currencyRouter);
 router.use(marketingRouter);
+router.use(apiKeysRouter);
 
 export default router;
