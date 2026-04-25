@@ -260,7 +260,7 @@ export default function Login() {
               </div>
               <div>
                 <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                  WanderWay
+                  Dream Fly Global
                 </h1>
                 <p className="text-muted-foreground">Explore the world with us</p>
               </div>
@@ -313,7 +313,7 @@ export default function Login() {
                 <Sparkles className="w-7 h-7 text-white" />
               </div>
               <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                WanderWay
+                Dream Fly Global
               </span>
             </div>
             <CardTitle className="text-2xl text-center">Customer Login</CardTitle>

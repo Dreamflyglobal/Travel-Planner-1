@@ -53,13 +53,13 @@ router.post("/push/register", async (req, res): Promise<void> => {
     // Send welcome notification (fire-and-forget)
     sendPushToToken({
       token,
-      title: "Welcome to WanderWay! ✈️",
+      title: "Welcome to Dream Fly Global! ✈️",
       body: "Explore flights, hotels, and holiday packages. Great deals await you!",
       url: DOMAIN(),
     }).then(async (result) => {
       await db.insert(pushNotificationsLogTable).values({
         token, type: "welcome",
-        title: "Welcome to WanderWay! ✈️",
+        title: "Welcome to Dream Fly Global! ✈️",
         body: "Explore flights, hotels, and holiday packages. Great deals await you!",
         status: result.sent ? "sent" : "failed",
         error: result.reason ?? null,

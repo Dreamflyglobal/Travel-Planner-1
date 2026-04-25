@@ -66,7 +66,7 @@ export function generateFlightTicketPDF(ticket: FlightTicketData): Promise<Buffe
       .font("Helvetica-Bold")
       .fontSize(22)
       .fillColor(WHITE)
-      .text("WanderWay", margin, 24);
+      .text("Dream Fly Global", margin, 24);
 
     doc
       .font("Helvetica")
@@ -208,7 +208,7 @@ export function generateFlightTicketPDF(ticket: FlightTicketData): Promise<Buffe
       .text(
         "This is an electronically generated ticket. Please carry a valid photo ID at the airport. " +
         "Check-in closes 45 minutes before departure for domestic flights. " +
-        "For assistance call WanderWay Support.",
+        "For assistance call Dream Fly Global Support.",
         margin,
         footerY + 16,
         { width: W - margin * 2, align: "center" }
@@ -217,7 +217,7 @@ export function generateFlightTicketPDF(ticket: FlightTicketData): Promise<Buffe
       .font("Helvetica-Bold")
       .fontSize(9)
       .fillColor(WHITE)
-      .text("WanderWay — Explore the world", margin, footerY + 52, { width: W - margin * 2, align: "center" });
+      .text("Dream Fly Global — Explore the world", margin, footerY + 52, { width: W - margin * 2, align: "center" });
 
     doc.end();
   });

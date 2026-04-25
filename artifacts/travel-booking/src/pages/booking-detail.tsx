@@ -244,7 +244,7 @@ export default function BookingDetail() {
       busDeparture:    booking.busDeparture,
       busArrival:      booking.busArrival,
     });
-    toast({ title: "Invoice Downloaded", description: `WanderWay branded PDF invoice saved.` });
+    toast({ title: "Invoice Downloaded", description: `Dream Fly Global branded PDF invoice saved.` });
   };
 
   const handleCancel = async () => {

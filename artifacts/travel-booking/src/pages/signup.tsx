@@ -82,7 +82,7 @@ export default function Signup() {
             description: "₹50 has been added to your Travel Credits wallet!",
           });
         } else {
-          toast({ title: "Account Created!", description: "Welcome to WanderWay!" });
+          toast({ title: "Account Created!", description: "Welcome to Dream Fly Global!" });
         }
         setLocation("/bookings");
       } else if (result.error === "duplicate_email") {
@@ -111,7 +111,7 @@ export default function Signup() {
               <div className="bg-primary text-primary-foreground p-2 rounded-lg">
                 <Plane className="w-6 h-6" />
               </div>
-              <span className="text-2xl font-bold">WanderWay</span>
+              <span className="text-2xl font-bold">Dream Fly Global</span>
             </div>
           </Link>
           <h1 className="text-3xl font-bold mb-2">Create Account</h1>

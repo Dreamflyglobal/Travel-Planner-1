@@ -27,14 +27,14 @@ const POINTS = [
     color: "text-purple-600",
     bg: "bg-purple-50",
     title: "Use of Data",
-    body: "Your data may be used to send booking confirmations, travel updates, and occasional promotional offers from WanderWay. You can opt out of marketing communications at any time by contacting our support team.",
+    body: "Your data may be used to send booking confirmations, travel updates, and occasional promotional offers from Dream Fly Global. You can opt out of marketing communications at any time by contacting our support team.",
   },
   {
     icon: ShieldCheck,
     color: "text-teal-600",
     bg: "bg-teal-50",
     title: "Your Agreement",
-    body: "By using the WanderWay platform, you acknowledge and agree to the collection and use of your data as described in this Privacy Policy. Continued use of our services implies ongoing consent.",
+    body: "By using the Dream Fly Global platform, you acknowledge and agree to the collection and use of your data as described in this Privacy Policy. Continued use of our services implies ongoing consent.",
   },
 ];
 
@@ -62,7 +62,7 @@ export default function PrivacyPolicy() {
           <div>
             <p className="font-semibold text-amber-900 text-sm">Your Consent</p>
             <p className="text-amber-800 text-sm mt-0.5 leading-relaxed">
-              By using WanderWay, you consent to the collection and use of your information as described in this policy. Please read it carefully before proceeding.
+              By using Dream Fly Global, you consent to the collection and use of your information as described in this policy. Please read it carefully before proceeding.
             </p>
           </div>
         </div>

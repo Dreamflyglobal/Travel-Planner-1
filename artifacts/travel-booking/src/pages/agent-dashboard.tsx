@@ -183,7 +183,7 @@ export default function AgentDashboard() {
       name: user.name,
       email: user.email,
       phone: user.phone ?? "9999999999",
-      description: "WanderWay Wallet Top-up",
+      description: "Dream Fly Global Wallet Top-up",
       onSuccess: () => {
         const newBalance = creditWallet(user.id, amount, `Wallet top-up ₹${amount}`);
         refreshUser();

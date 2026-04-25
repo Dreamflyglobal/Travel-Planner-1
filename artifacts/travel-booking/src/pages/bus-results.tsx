@@ -712,7 +712,7 @@ export default function BusResults() {
             <div className="w-7 h-7 rounded-md bg-gradient-to-br from-orange-500 to-pink-600 flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
               <Bus className="w-3.5 h-3.5 text-white" />
             </div>
-            <span className="font-bold text-base bg-gradient-to-r from-orange-600 to-pink-600 bg-clip-text text-transparent hidden sm:block">WanderWay</span>
+            <span className="font-bold text-base bg-gradient-to-r from-orange-600 to-pink-600 bg-clip-text text-transparent hidden sm:block">Dream Fly Global</span>
           </Link>
 
           <div className="w-px h-6 bg-border shrink-0" />

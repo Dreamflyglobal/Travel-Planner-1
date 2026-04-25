@@ -156,10 +156,10 @@ export default function Hotels() {
         </div>
       </section>
 
-      {/* Why WanderWay */}
+      {/* Why Dream Fly Global */}
       <section className="bg-blue-50 border-y">
         <div className="container mx-auto px-4 py-12">
-          <h2 className="text-2xl font-extrabold text-slate-900 text-center mb-8">Why Book with WanderWay?</h2>
+          <h2 className="text-2xl font-extrabold text-slate-900 text-center mb-8">Why Book with Dream Fly Global?</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
               { icon: Star,     title: "Best Price Guarantee",  desc: "Find a lower price? We'll match it." },

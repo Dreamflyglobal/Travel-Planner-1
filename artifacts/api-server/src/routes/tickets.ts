@@ -20,7 +20,7 @@ router.post("/generate", async (req, res) => {
 
     res.set({
       "Content-Type":        "application/pdf",
-      "Content-Disposition": `attachment; filename="WanderWay-Ticket-${ticket.bookingId}.pdf"`,
+      "Content-Disposition": `attachment; filename="Dream Fly Global-Ticket-${ticket.bookingId}.pdf"`,
       "Content-Length":      pdfBuffer.length,
     });
 

@@ -101,7 +101,7 @@ export async function openRazorpayCheckout(opts: RazorpayPaymentOptions) {
     key,
     amount:      order.amount,           // paise (from Razorpay API)
     currency:    order.currency || "INR",
-    name:        "WanderWay",
+    name:        "Dream Fly Global",
     description: opts.description || "Travel Booking",
     image:       "",
     order_id:    order.id,               // required — links payment to order

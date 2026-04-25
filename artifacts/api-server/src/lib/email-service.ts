@@ -76,7 +76,7 @@ function bookingEmailHTML(ticket: FlightTicketData): string {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Booking Confirmation — WanderWay</title>
+  <title>Booking Confirmation — Dream Fly Global</title>
   <style>
     body { margin: 0; padding: 0; background: #f1f5f9; font-family: 'Helvetica Neue', Arial, sans-serif; color: #1e293b; }
     .wrapper { max-width: 620px; margin: 32px auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,.08); }
@@ -104,7 +104,7 @@ function bookingEmailHTML(ticket: FlightTicketData): string {
 <body>
 <div class="wrapper">
   <div class="header">
-    <h1>✈ WanderWay</h1>
+    <h1>✈ Dream Fly Global</h1>
     <p>Your flight ticket is confirmed!</p>
   </div>
   <div class="hero">
@@ -148,7 +148,7 @@ function bookingEmailHTML(ticket: FlightTicketData): string {
     <p style="margin:0 0 16px;color:#64748b;font-size:13px;">Your e-ticket PDF is attached to this email. Please carry a valid photo ID at the airport.</p>
   </div>
   <div class="footer">
-    <p>WanderWay — Explore the world</p>
+    <p>Dream Fly Global — Explore the world</p>
     <p>This is an automated message. For support, reply to this email.</p>
   </div>
 </div>
@@ -166,17 +166,17 @@ export async function sendBookingConfirmationEmail(
     return { sent: false, reason: "SMTP not configured" };
   }
 
-  const from = process.env.SMTP_FROM || process.env.SMTP_USER || "noreply@wanderway.com";
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER || "noreply@dreamflyglobal.com";
 
   try {
     await transport.sendMail({
-      from: `"WanderWay Tickets" <${from}>`,
+      from: `"Dream Fly Global Tickets" <${from}>`,
       to:   ticket.passengerEmail,
       subject: `✈ Booking Confirmed: ${ticket.from} → ${ticket.to} · ${ticket.bookingId}`,
       html: bookingEmailHTML(ticket),
       attachments: [
         {
-          filename:    `WanderWay-Ticket-${ticket.bookingId}.pdf`,
+          filename:    `Dream Fly Global-Ticket-${ticket.bookingId}.pdf`,
           content:     pdfBuffer,
           contentType: "application/pdf",
         },
@@ -224,7 +224,7 @@ function generalBookingEmailHTML(data: GeneralBookingEmailData): string {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Booking Confirmation — WanderWay</title>
+  <title>Booking Confirmation — Dream Fly Global</title>
   <style>
     * { box-sizing: border-box; }
     body { margin: 0; padding: 0; background: #f1f5f9; font-family: 'Helvetica Neue', Arial, sans-serif; color: #1e293b; }
@@ -261,7 +261,7 @@ function generalBookingEmailHTML(data: GeneralBookingEmailData): string {
       <span class="logo-text">WW</span>
     </div>
     <div class="header-info">
-      <h1>WanderWay</h1>
+      <h1>Dream Fly Global</h1>
       <p>Your Ultimate Travel Companion</p>
     </div>
   </div>
@@ -310,7 +310,7 @@ function generalBookingEmailHTML(data: GeneralBookingEmailData): string {
   </div>
 
   <div class="footer">
-    <p class="brand">WanderWay — Explore the World</p>
+    <p class="brand">Dream Fly Global — Explore the World</p>
     <p>+91 9000978856 · support@dreamflyglobal.com</p>
     <p>This is an automated confirmation. Do not reply to this email.</p>
   </div>
@@ -329,13 +329,13 @@ export async function sendGeneralBookingEmail(
     return { sent: false, reason: "SMTP not configured" };
   }
 
-  const from    = process.env.SMTP_FROM || process.env.SMTP_USER || "noreply@wanderway.com";
+  const from    = process.env.SMTP_FROM || process.env.SMTP_USER || "noreply@dreamflyglobal.com";
   const emoji   = SERVICE_EMOJI[data.bookingType] ?? "📋";
-  const subject = `${emoji} Booking Confirmed – WanderWay | ${data.bookingId}`;
+  const subject = `${emoji} Booking Confirmed – Dream Fly Global | ${data.bookingId}`;
 
   try {
     await transport.sendMail({
-      from: `"WanderWay" <${from}>`,
+      from: `"Dream Fly Global" <${from}>`,
       to:   data.passengerEmail,
       subject,
       html: generalBookingEmailHTML(data),

@@ -203,7 +203,7 @@ export default function PaymentFailed() {
                   <Mail className="w-6 h-6 text-blue-600" />
                   <div>
                     <p className="text-xs text-gray-500">Email Support</p>
-                    <p className="font-semibold">support@wanderway.com</p>
+                    <p className="font-semibold">support@dreamflyglobal.com</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 p-4 bg-white rounded-lg border">

@@ -14,7 +14,7 @@ const POINTS = [
     color: "text-blue-600",
     bg: "bg-blue-50",
     title: "Provider-Based Refunds",
-    desc: "Refunds are processed based on the respective airline, hotel, or bus operator's policies. WanderWay initiates the refund once the provider approves it.",
+    desc: "Refunds are processed based on the respective airline, hotel, or bus operator's policies. Dream Fly Global initiates the refund once the provider approves it.",
   },
   {
     icon: Clock,
@@ -64,7 +64,7 @@ export default function RefundPolicy() {
           </div>
           <h1 className="text-3xl md:text-5xl font-extrabold mb-4 leading-tight">Refund Policy</h1>
           <p className="text-white/70 text-base md:text-lg max-w-2xl mx-auto">
-            Everything you need to know about how refunds are handled for bookings made through WanderWay.
+            Everything you need to know about how refunds are handled for bookings made through Dream Fly Global.
           </p>
         </div>
       </section>
@@ -77,7 +77,7 @@ export default function RefundPolicy() {
           <div>
             <p className="font-semibold text-amber-900 text-sm">Please Note</p>
             <p className="text-amber-800 text-sm mt-0.5 leading-relaxed">
-              Refund eligibility and timelines are governed by the airline, hotel, or bus operator's individual policies. WanderWay will facilitate the refund process but is not responsible for delays caused by third-party providers or banks.
+              Refund eligibility and timelines are governed by the airline, hotel, or bus operator's individual policies. Dream Fly Global will facilitate the refund process but is not responsible for delays caused by third-party providers or banks.
             </p>
           </div>
         </div>

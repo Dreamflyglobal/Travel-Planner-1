@@ -52,7 +52,7 @@ export default function StaffLogin() {
             <ShieldCheck className="w-5 h-5 text-white" />
           </div>
           <div>
-            <p className="font-bold text-white text-sm tracking-wide">WanderWay</p>
+            <p className="font-bold text-white text-sm tracking-wide">Dream Fly Global</p>
             <p className="text-slate-400 text-xs uppercase tracking-widest">Staff Portal</p>
           </div>
         </div>
@@ -87,7 +87,7 @@ export default function StaffLogin() {
 
         <p className="text-xs text-slate-500">
           Need help? Contact your admin or{" "}
-          <a href="mailto:support@wanderway.com" className="text-slate-300 hover:underline">support@wanderway.com</a>
+          <a href="mailto:support@dreamflyglobal.com" className="text-slate-300 hover:underline">support@dreamflyglobal.com</a>
         </p>
       </div>
 
@@ -100,7 +100,7 @@ export default function StaffLogin() {
               <ShieldCheck className="w-4 h-4 text-white" />
             </div>
             <div>
-              <p className="font-bold text-slate-900 text-sm">WanderWay</p>
+              <p className="font-bold text-slate-900 text-sm">Dream Fly Global</p>
               <p className="text-xs text-slate-400 uppercase tracking-widest">Staff Portal</p>
             </div>
           </div>
@@ -122,7 +122,7 @@ export default function StaffLogin() {
               <label className="text-sm font-semibold text-slate-700 block mb-1.5">Email Address</label>
               <Input
                 type="email"
-                placeholder="staff@wanderway.com"
+                placeholder="staff@dreamflyglobal.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required

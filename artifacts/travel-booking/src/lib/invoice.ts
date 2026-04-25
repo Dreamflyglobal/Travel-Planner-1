@@ -51,12 +51,12 @@ export interface StoredInvoice extends InvoiceData {
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const COMPANY = {
-  name: "WanderWay",
+  name: "Dream Fly Global",
   tagline: "Your Ultimate Travel Companion",
   brand: "DreamFly Global",
   phone: "+91 9000978856",
   email: "support@dreamflyglobal.com",
-  website: "www.wanderway.in",
+  website: "www.dreamflyglobal.in",
   gst: "GSTIN: Applied For",
   address: "India",
 };
@@ -389,7 +389,7 @@ export function generateInvoicePDF(data: InvoiceData): void {
     "Please carry a valid government-issued photo ID during your journey.",
     "Check-in opens 2 hours before departure for flights.",
     "For cancellations or changes, contact us at " + COMPANY.phone,
-    "This is a WanderWay branded invoice. Provider details are not disclosed.",
+    "This is a Dream Fly Global branded invoice. Provider details are not disclosed.",
   ];
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.5);
@@ -405,7 +405,7 @@ export function generateInvoicePDF(data: InvoiceData): void {
   doc.setTextColor(...C.white);
   doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
-  doc.text("Thank you for choosing WanderWay!", W / 2, 280, { align: "center" });
+  doc.text("Thank you for choosing Dream Fly Global!", W / 2, 280, { align: "center" });
 
   doc.setFontSize(7);
   doc.setFont("helvetica", "normal");
@@ -414,7 +414,7 @@ export function generateInvoicePDF(data: InvoiceData): void {
   doc.text(`Generated: ${new Date().toLocaleString("en-IN")}  |  ${COMPANY.gst}`, W / 2, 290.5, { align: "center" });
 
   // ── Save ──────────────────────────────────────────────────────────────────
-  doc.save(`WanderWay-Invoice-${data.bookingId}.pdf`);
+  doc.save(`Dream Fly Global-Invoice-${data.bookingId}.pdf`);
 }
 
 // ─── WhatsApp helper ──────────────────────────────────────────────────────────
@@ -433,13 +433,13 @@ export function openWhatsAppConfirmation(data: InvoiceData) {
       `*Travel Date:* ${new Date(data.travelDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}\n`;
   const message =
     `Hi ${data.passengerName.split(" ")[0]}! ${serviceEmoji}\n\n` +
-    `Your booking with *WanderWay* is confirmed! 🎉\n\n` +
+    `Your booking with *Dream Fly Global* is confirmed! 🎉\n\n` +
     `*Booking ID:* ${data.bookingId}\n` +
     hotelLines +
     `*Amount Paid:* ₹${data.totalAmount.toLocaleString("en-IN")}\n\n` +
-    `Your invoice has been generated and can be downloaded from My Bookings on the WanderWay app.\n\n` +
+    `Your invoice has been generated and can be downloaded from My Bookings on the Dream Fly Global app.\n\n` +
     `For support: ${COMPANY.phone}\n` +
-    `Happy Travels! 🗺️ – Team WanderWay`;
+    `Happy Travels! 🗺️ – Team Dream Fly Global`;
 
   window.open(`https://wa.me/${data.passengerPhone.replace(/\D/g, "")}?text=${encodeURIComponent(message)}`, "_blank");
 }
@@ -447,10 +447,10 @@ export function openWhatsAppConfirmation(data: InvoiceData) {
 // ─── Mailto helper ────────────────────────────────────────────────────────────
 
 export function openEmailConfirmation(data: InvoiceData) {
-  const subject = encodeURIComponent(`Booking Confirmed – WanderWay | ${data.bookingId}`);
+  const subject = encodeURIComponent(`Booking Confirmed – Dream Fly Global | ${data.bookingId}`);
   const body = encodeURIComponent(
     `Dear ${data.passengerName},\n\n` +
-    `Your booking with WanderWay has been confirmed!\n\n` +
+    `Your booking with Dream Fly Global has been confirmed!\n\n` +
     `Booking ID:    ${data.bookingId}\n` +
     (data.bookingType === "hotel"
       ? `Hotel:         ${data.hotelName || data.title}\n` +
@@ -465,12 +465,12 @@ export function openEmailConfirmation(data: InvoiceData) {
         `Passengers:    ${data.passengers}\n`) +
     `Amount Paid:   ₹${data.totalAmount.toLocaleString("en-IN")}\n` +
     `Payment ID:    ${data.paymentId}\n\n` +
-    `Please download your invoice from My Bookings on the WanderWay platform.\n\n` +
+    `Please download your invoice from My Bookings on the Dream Fly Global platform.\n\n` +
     `For any queries, reach us at:\n` +
     `📞 ${COMPANY.phone}\n` +
     `📧 ${COMPANY.email}\n\n` +
-    `Thank you for choosing WanderWay!\n` +
-    `Team WanderWay – DreamFly Global`
+    `Thank you for choosing Dream Fly Global!\n` +
+    `Team Dream Fly Global – DreamFly Global`
   );
   window.location.href = `mailto:${data.passengerEmail}?subject=${subject}&body=${body}`;
 }

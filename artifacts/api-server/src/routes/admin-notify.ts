@@ -60,7 +60,7 @@ router.post("/admin/notify", async (req, res) => {
   try {
     const transport = buildTransport(user, pass);
     await transport.sendMail({
-      from: from?.trim() || `"WanderWay" <${user}>`,
+      from: from?.trim() || `"Dream Fly Global" <${user}>`,
       to,
       subject,
       html: html || undefined,

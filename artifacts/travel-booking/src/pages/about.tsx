@@ -65,7 +65,7 @@ export default function About() {
             Making Travel Simple,<br className="hidden md:block" /> Affordable &amp; Enjoyable
           </h1>
           <p className="text-white/70 text-base md:text-lg max-w-2xl mx-auto">
-            WanderWay is a one-stop travel booking platform that helps you discover, plan, and book your perfect trip — flights, hotels, buses, and holiday packages all in one place.
+            Dream Fly Global is a one-stop travel booking platform that helps you discover, plan, and book your perfect trip — flights, hotels, buses, and holiday packages all in one place.
           </p>
         </div>
       </section>
@@ -87,10 +87,10 @@ export default function About() {
           <div>
             <h2 className="text-2xl md:text-3xl font-extrabold text-slate-900 mb-4">Our Story</h2>
             <p className="text-slate-500 text-sm leading-relaxed mb-4">
-              WanderWay was born from a simple idea — travel booking should be effortless. We noticed that travellers were spending hours comparing prices across different platforms, dealing with hidden fees, and struggling to get timely support when things went wrong.
+              Dream Fly Global was born from a simple idea — travel booking should be effortless. We noticed that travellers were spending hours comparing prices across different platforms, dealing with hidden fees, and struggling to get timely support when things went wrong.
             </p>
             <p className="text-slate-500 text-sm leading-relaxed mb-4">
-              We built WanderWay to change that. Our platform brings together flights, hotels, buses, and curated holiday packages under one roof — with honest pricing, instant confirmations, and a support team that genuinely cares.
+              We built Dream Fly Global to change that. Our platform brings together flights, hotels, buses, and curated holiday packages under one roof — with honest pricing, instant confirmations, and a support team that genuinely cares.
             </p>
             <p className="text-slate-500 text-sm leading-relaxed">
               Based in India, we serve travellers across the country and continue to grow our network of destinations, partners, and features — all with one goal: making your journey as enjoyable as the destination itself.
@@ -120,7 +120,7 @@ export default function About() {
         {/* Why Choose Us */}
         <div>
           <div className="text-center mb-10">
-            <h2 className="text-2xl md:text-3xl font-extrabold text-slate-900 mb-3">Why Choose WanderWay?</h2>
+            <h2 className="text-2xl md:text-3xl font-extrabold text-slate-900 mb-3">Why Choose Dream Fly Global?</h2>
             <p className="text-slate-500 text-sm max-w-xl mx-auto">
               We're not just a booking platform — we're your travel partner from first search to safe return.
             </p>
@@ -150,7 +150,7 @@ export default function About() {
           <div>
             <h3 className="font-bold text-slate-900 text-lg mb-1">Based in India. Built for Indian Travellers.</h3>
             <p className="text-slate-500 text-sm leading-relaxed">
-              WanderWay is operated by DreamFly Global, headquartered in India. We specialize in domestic and international travel, with deep expertise in routes, operators, and destinations most relevant to Indian travellers.
+              Dream Fly Global is operated by DreamFly Global, headquartered in India. We specialize in domestic and international travel, with deep expertise in routes, operators, and destinations most relevant to Indian travellers.
             </p>
           </div>
         </div>
@@ -160,7 +160,7 @@ export default function About() {
           <Star className="w-8 h-8 text-yellow-400 mx-auto mb-3" />
           <h3 className="text-xl font-bold mb-2">Ready to Plan Your Next Trip?</h3>
           <p className="text-white/70 text-sm mb-6 max-w-md mx-auto">
-            Join over 50,000 happy travellers who trust WanderWay for their journeys.
+            Join over 50,000 happy travellers who trust Dream Fly Global for their journeys.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link href="/flights">

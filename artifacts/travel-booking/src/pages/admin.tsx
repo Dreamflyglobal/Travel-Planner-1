@@ -862,7 +862,7 @@ export default function AdminDashboard() {
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement("a");
     a.href     = url;
-    a.download = `wanderway-bookings-${todayStr}.csv`;
+    a.download = `dream-fly-global-bookings-${todayStr}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     toast({ title: "CSV exported!", description: `${filteredBookings.length} bookings downloaded.` });

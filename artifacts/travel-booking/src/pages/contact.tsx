@@ -35,7 +35,7 @@ const CARDS = [
     title: "WhatsApp",
     value: "+91 9000978856",
     sub: "Quick replies on WhatsApp",
-    href: "https://wa.me/919000978856?text=Hi%20WanderWay%2C%20I%20need%20help%20with%20my%20booking.",
+    href: "https://wa.me/919000978856?text=Hi%20Dream%20Fly%20Global%2C%20I%20need%20help%20with%20my%20booking.",
     cta: "Chat on WhatsApp",
   },
   {
@@ -141,7 +141,7 @@ export default function Contact() {
               const name = (form.elements.namedItem("name") as HTMLInputElement).value;
               const phone = (form.elements.namedItem("phone") as HTMLInputElement).value;
               const message = (form.elements.namedItem("message") as HTMLTextAreaElement).value;
-              const text = `Hi WanderWay, I'm ${name} (${phone}). ${message}`;
+              const text = `Hi Dream Fly Global, I'm ${name} (${phone}). ${message}`;
               window.open(`https://wa.me/919000978856?text=${encodeURIComponent(text)}`, "_blank");
             }}
             className="space-y-4"

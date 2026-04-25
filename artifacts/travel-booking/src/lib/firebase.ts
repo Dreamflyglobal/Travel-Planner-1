@@ -105,7 +105,7 @@ export function listenForForegroundMessages(
   const unsubscribe = onMessage(msg, (payload) => {
     const n = payload.notification;
     callback({
-      title: n?.title || "WanderWay",
+      title: n?.title || "Dream Fly Global",
       body:  n?.body  || "You have a new update",
       url:   (payload.data as any)?.url,
     });

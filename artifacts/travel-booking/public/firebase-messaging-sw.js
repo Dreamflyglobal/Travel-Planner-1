@@ -32,7 +32,7 @@ messaging.onBackgroundMessage((payload) => {
   const { title, body, icon, image } = payload.notification || {};
   const clickUrl = payload.data?.url || "/";
 
-  self.registration.showNotification(title || "WanderWay", {
+  self.registration.showNotification(title || "Dream Fly Global", {
     body:  body  || "You have a new notification",
     icon:  icon  || "/favicon.svg",
     badge: "/favicon.svg",

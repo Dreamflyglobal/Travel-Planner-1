@@ -147,7 +147,7 @@ router.post("/notify", async (req, res) => {
     return res.status(400).json({ success: false, error: "bookingContext.bookingId is required" });
   }
 
-  const invoiceUrl = `${frontendBaseUrl || "https://wanderway.in"}/invoice/${bookingContext.bookingId}`;
+  const invoiceUrl = `${frontendBaseUrl || "https://dreamflyglobal.in"}/invoice/${bookingContext.bookingId}`;
   console.log(`[notify] Invoice URL: ${invoiceUrl}`);
 
   let emailSent    = false;

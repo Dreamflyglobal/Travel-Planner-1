@@ -65,7 +65,7 @@ async function sendSMSOTP(phone: string, otp: string): Promise<{ sent: boolean; 
 
   const client = twilio(accountSid, authToken);
   const to     = `+91${phone}`;
-  const body   = `Your WanderWay OTP is ${otp}. Valid for 5 minutes. Do not share this code.`;
+  const body   = `Your Dream Fly Global OTP is ${otp}. Valid for 5 minutes. Do not share this code.`;
 
   const smsSender = process.env.TWILIO_SMS_FROM || "";
   if (smsSender) {
@@ -86,7 +86,7 @@ async function sendSMSOTP(phone: string, otp: string): Promise<{ sent: boolean; 
       await client.messages.create({
         from: fromWA,
         to: toWA,
-        body: `🔐 *WanderWay OTP Login*\n\nYour OTP is: *${otp}*\n\nValid for 5 minutes. Do not share.`,
+        body: `🔐 *Dream Fly Global OTP Login*\n\nYour OTP is: *${otp}*\n\nValid for 5 minutes. Do not share.`,
       });
       return { sent: true };
     } catch (err: any) {

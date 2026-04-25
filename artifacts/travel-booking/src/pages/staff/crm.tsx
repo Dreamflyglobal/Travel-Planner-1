@@ -255,7 +255,7 @@ export default function StaffCRM() {
 
                         {/* WhatsApp */}
                         <a
-                          href={`https://wa.me/91${lead.phone.replace(/\D/g, "")}?text=${encodeURIComponent(`Hi ${lead.name}, I'm calling from WanderWay regarding your ${lead.type} enquiry. How can I help you?`)}`}
+                          href={`https://wa.me/91${lead.phone.replace(/\D/g, "")}?text=${encodeURIComponent(`Hi ${lead.name}, I'm calling from Dream Fly Global regarding your ${lead.type} enquiry. How can I help you?`)}`}
                           target="_blank"
                           rel="noopener noreferrer"
                         >

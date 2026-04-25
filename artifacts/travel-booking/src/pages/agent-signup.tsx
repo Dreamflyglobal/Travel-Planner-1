@@ -97,7 +97,7 @@ export default function AgentSignup() {
               <div className="bg-blue-600 text-white p-2 rounded-lg">
                 <Plane className="w-6 h-6" />
               </div>
-              <span className="text-2xl font-bold">WanderWay</span>
+              <span className="text-2xl font-bold">Dream Fly Global</span>
             </div>
           </Link>
           <h1 className="text-3xl font-bold mb-2">Agent Registration</h1>

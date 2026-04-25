@@ -101,7 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Decode payload without verifying (verification is server-side)
       const payload = JSON.parse(atob(token.split(".")[1]));
       if (payload.userId === 0 && payload.role === "admin") {
-        setUser({ id: 0, name: "Admin", email: "admin@wanderway.com", role: "admin" });
+        setUser({ id: 0, name: "Admin", email: "admin@dreamflyglobal.com", role: "admin" });
         setLoaded(true);
         return;
       }

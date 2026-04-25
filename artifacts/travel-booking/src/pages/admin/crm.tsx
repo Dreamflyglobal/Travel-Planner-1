@@ -548,7 +548,7 @@ export default function AdminCRM() {
                 <Input
                   type={field === "password" ? "password" : "text"}
                   placeholder={
-                    field === "email"    ? "staff@wanderway.com" :
+                    field === "email"    ? "staff@dreamflyglobal.com" :
                     field === "phone"    ? "9876543210" :
                     field === "name"     ? "Full name" :
                     "Create a password"

@@ -89,7 +89,7 @@ function buildMessage(data: WhatsAppBookingData): string {
     `📅 *Travel Date:* ${data.date}\n` +
     `💰 *Amount Paid:* ₹${amount}\n` +
     downloadLine +
-    `\n\nThank you for booking with *WanderWay* ✈️\nSupport: +91 9000978856`
+    `\n\nThank you for booking with *Dream Fly Global* ✈️\nSupport: +91 9000978856`
   );
 }
 
@@ -186,7 +186,7 @@ function buildHolidayMessage(data: HolidayWhatsAppData, pdfUrl: string): string 
       price + "\n\n" +
       `📥 *Download Your Itinerary:*\n${pdfUrl}\n\n` +
       `Our travel expert will call you within 24 hours.\n\n` +
-      `_WanderWay ✈️ — Explore the World_`
+      `_Dream Fly Global ✈️ — Explore the World_`
     );
   }
 
@@ -199,7 +199,7 @@ function buildHolidayMessage(data: HolidayWhatsAppData, pdfUrl: string): string 
     "\n\n" +
     `📥 *Download Your Itinerary PDF:*\n${pdfUrl}\n\n` +
     `Our travel expert will call you within *24 hours* with the best package options.\n\n` +
-    `_WanderWay ✈️ — Explore the World_`
+    `_Dream Fly Global ✈️ — Explore the World_`
   );
 }
 
@@ -222,7 +222,7 @@ function buildLeadAdminAlertMessage(lead: LeadNotificationData): string {
     day: "2-digit", month: "short", year: "numeric",
   });
   return (
-    `🔔 *New Lead Alert — WanderWay*\n\n` +
+    `🔔 *New Lead Alert — Dream Fly Global*\n\n` +
     `👤 *Name:* ${lead.name}\n` +
     `📱 *Phone:* ${lead.phone}\n` +
     `🔍 *Looking for:* ${typeLabel}\n` +
@@ -230,7 +230,7 @@ function buildLeadAdminAlertMessage(lead: LeadNotificationData): string {
     `🆔 *Lead ID:* ${lead.leadId}\n` +
     `⏱️ *Received:* ${time} IST\n\n` +
     `Reply quickly to increase conversion! 🚀\n` +
-    `_CRM: wanderway.com/crm_`
+    `_CRM: dreamflyglobal.com/crm_`
   );
 }
 
@@ -243,7 +243,7 @@ function buildLeadCustomerConfirmationMessage(lead: LeadNotificationData): strin
     `Our travel expert will contact you within *30 minutes*.\n\n` +
     `📞 Support: +91 9000978856\n` +
     `📧 support@dreamflyglobal.com\n\n` +
-    `_WanderWay ✈️ — Explore the World_`
+    `_Dream Fly Global ✈️ — Explore the World_`
   );
 }
 
@@ -252,11 +252,11 @@ function buildAbandonedLeadMessage(lead: LeadNotificationData): string {
   const firstName = lead.name.split(" ")[0];
   return (
     `👋 Hi *${firstName}*!\n\n` +
-    `🔍 You were searching for *${typeLabel}* on WanderWay.\n\n` +
+    `🔍 You were searching for *${typeLabel}* on Dream Fly Global.\n\n` +
     `Did you find what you were looking for? Our experts can help you find the *best deals* tailored to your needs!\n\n` +
     `📞 Call us: *+91 9000978856*\n` +
     `💬 Or reply to this message\n\n` +
-    `_WanderWay ✈️ — Don't miss out on great deals!_`
+    `_Dream Fly Global ✈️ — Don't miss out on great deals!_`
   );
 }
 
@@ -268,7 +268,7 @@ function buildStaffFollowUpMessage(lead: LeadNotificationData): string {
     `🔍 *Service:* ${typeLabel}\n` +
     `🆔 *Lead ID:* ${lead.leadId}\n\n` +
     `Please reach out now to increase conversion! 🎯\n` +
-    `_WanderWay CRM_`
+    `_Dream Fly Global CRM_`
   );
 }
 

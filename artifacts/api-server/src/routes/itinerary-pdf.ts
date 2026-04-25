@@ -44,7 +44,7 @@ router.get("/", async (req, res) => {
       totalPrice:     total  ? parseInt(total)  : undefined,
     });
 
-    const filename = `WanderWay_${dest.replace(/\s+/g, "_")}_Itinerary.pdf`;
+    const filename = `Dream Fly Global_${dest.replace(/\s+/g, "_")}_Itinerary.pdf`;
 
     res.setHeader("Content-Type",        "application/pdf");
     res.setHeader("Content-Disposition", `inline; filename="${filename}"`);

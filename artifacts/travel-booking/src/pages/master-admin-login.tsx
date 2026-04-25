@@ -87,7 +87,7 @@ export default function MasterAdminLogin() {
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-lg">
               <ShieldCheck className="w-4 h-4 text-white" />
             </div>
-            <span className="text-white font-bold text-sm tracking-wide">WanderWay · Master Admin</span>
+            <span className="text-white font-bold text-sm tracking-wide">Dream Fly Global · Master Admin</span>
           </div>
         </div>
 
@@ -113,7 +113,7 @@ export default function MasterAdminLogin() {
                   <Input
                     id="email"
                     type="email"
-                    placeholder="admin@wanderway.com"
+                    placeholder="admin@dreamflyglobal.com"
                     value={email}
                     onChange={(e) => { setEmail(e.target.value); setError(""); }}
                     className="pl-10 h-11 border-slate-200 focus:border-purple-500 focus:ring-purple-500/20"
@@ -179,7 +179,7 @@ export default function MasterAdminLogin() {
 
             <div className="mt-6 pt-5 border-t border-slate-100 text-center">
               <p className="text-xs text-muted-foreground">
-                🔒 This area is restricted to WanderWay administrators.<br />
+                🔒 This area is restricted to Dream Fly Global administrators.<br />
                 Unauthorised access attempts are logged.
               </p>
             </div>
@@ -187,7 +187,7 @@ export default function MasterAdminLogin() {
         </Card>
 
         <p className="text-center text-xs text-white/40 mt-6">
-          © {new Date().getFullYear()} WanderWay · All rights reserved
+          © {new Date().getFullYear()} Dream Fly Global · All rights reserved
         </p>
       </div>
     </div>

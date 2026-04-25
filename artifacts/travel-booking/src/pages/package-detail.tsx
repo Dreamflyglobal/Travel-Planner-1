@@ -247,7 +247,7 @@ export default function PackageDetail() {
 
     setLcSubmitting(true);
     try {
-      const email    = `guest_${cleanPhone}@wanderway.in`;
+      const email    = `guest_${cleanPhone}@dreamflyglobal.in`;
       const password = `ww_${Date.now()}`;
       await signup(lcName.trim(), email, cleanPhone, password);
       await autoSaveLead(

@@ -402,9 +402,9 @@ export default function Packages() {
         </div>
       </section>
 
-      {/* ── Why WanderWay ── */}
+      {/* ── Why Dream Fly Global ── */}
       <section className="container mx-auto px-4 py-14">
-        <h2 className="text-2xl font-extrabold text-slate-900 text-center mb-8">The WanderWay Advantage</h2>
+        <h2 className="text-2xl font-extrabold text-slate-900 text-center mb-8">The Dream Fly Global Advantage</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {[
             { icon: "🧳", title: "All-Inclusive Packages", desc: "Hotels, transfers, and sightseeing — all bundled." },

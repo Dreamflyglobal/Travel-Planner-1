@@ -47,7 +47,7 @@ export function PushNotificationPrompt() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-sm text-gray-900 mb-0.5">
-                Stay updated with WanderWay
+                Stay updated with Dream Fly Global
               </p>
               <p className="text-xs text-gray-500 leading-relaxed">
                 Get booking confirmations, exclusive deals, and travel offers instantly.

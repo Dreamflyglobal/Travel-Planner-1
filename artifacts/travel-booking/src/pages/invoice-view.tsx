@@ -75,12 +75,12 @@ interface BookingInvoice {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const COMPANY = {
-  name:    "WanderWay",
+  name:    "Dream Fly Global",
   brand:   "Dream Fly Global",
   tagline: "Your Ultimate Travel Companion",
   phone:   "+91 9000978856",
   email:   "support@dreamflyglobal.com",
-  website: "www.wanderway.in",
+  website: "www.dreamflyglobal.in",
   gst:     "GSTIN: Applied For",
 };
 
@@ -393,7 +393,7 @@ export default function InvoiceView() {
   const handleEmail    = () => {
     if (!invoice) return;
     const sub = `Your ${typeLabel(invoice.bookingType)} Confirmation — ${invoice.bookingId}`;
-    const body = `Hi,\n\nYour booking is confirmed!\n\nBooking ID: ${invoice.bookingId}\nView Invoice: ${window.location.href}\n\nThank you for booking with WanderWay.`;
+    const body = `Hi,\n\nYour booking is confirmed!\n\nBooking ID: ${invoice.bookingId}\nView Invoice: ${window.location.href}\n\nThank you for booking with Dream Fly Global.`;
     window.location.href = `mailto:?subject=${encodeURIComponent(sub)}&body=${encodeURIComponent(body)}`;
   };
 
@@ -451,7 +451,7 @@ export default function InvoiceView() {
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-2 flex-wrap">
           <Link href="/">
             <button className="flex items-center gap-2 text-slate-600 hover:text-slate-900 text-sm font-medium transition-colors">
-              <ArrowLeft className="w-4 h-4" /> Back to WanderWay
+              <ArrowLeft className="w-4 h-4" /> Back to Dream Fly Global
             </button>
           </Link>
           <div className="flex items-center gap-2">

@@ -10,7 +10,7 @@ export function Footer() {
 
           {/* Brand — spans wider on md */}
           <div className="sm:col-span-2 md:col-span-1 space-y-4">
-            <h3 className="text-xl font-bold text-primary font-sans">WanderWay</h3>
+            <h3 className="text-xl font-bold text-primary font-sans">Dream Fly Global</h3>
             <p className="text-sm text-muted-foreground">
               Your ultimate travel companion. Book flights, buses, hotels, and holiday packages all in one place.
             </p>
@@ -46,7 +46,7 @@ export function Footer() {
               <li><Link href="/about"   className="hover:text-primary transition-colors">About Us</Link></li>
               <li><Link href="/contact" className="hover:text-primary transition-colors">Contact Us</Link></li>
               <li><Link href="/bookings" className="hover:text-primary transition-colors">Manage Bookings</Link></li>
-              <li><a href="https://wa.me/919000978856?text=Hi%20WanderWay%2C%20I%20need%20help." target="_blank" rel="noreferrer" className="hover:text-primary transition-colors">WhatsApp Us</a></li>
+              <li><a href="https://wa.me/919000978856?text=Hi%20Dream%20Fly%20Global%2C%20I%20need%20help." target="_blank" rel="noreferrer" className="hover:text-primary transition-colors">WhatsApp Us</a></li>
             </ul>
           </div>
 
@@ -75,7 +75,7 @@ export function Footer() {
         </div>
 
         <div className="mt-12 pt-8 border-t flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-muted-foreground">
-          <p>&copy; {new Date().getFullYear()} WanderWay. All rights reserved.</p>
+          <p>&copy; {new Date().getFullYear()} Dream Fly Global. All rights reserved.</p>
           <p>Response time: Within 24 hours &nbsp;·&nbsp; support@dreamflyglobal.com</p>
         </div>
       </div>
