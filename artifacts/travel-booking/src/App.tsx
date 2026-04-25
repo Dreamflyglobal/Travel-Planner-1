@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/auth-context";
 import { BrandingProvider } from "@/contexts/branding-context";
+import { SiteSettingsProvider } from "@/contexts/site-settings-context";
 import { AdminGuard } from "@/components/admin-guard";
 import { PushNotificationPrompt } from "@/components/push-notification-prompt";
 
@@ -187,6 +188,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrandingProvider>
+        <SiteSettingsProvider>
         <AuthProvider>
           <TooltipProvider>
             <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
@@ -197,6 +199,7 @@ function App() {
             <Toaster />
           </TooltipProvider>
         </AuthProvider>
+        </SiteSettingsProvider>
       </BrandingProvider>
     </QueryClientProvider>
   );

@@ -1,16 +1,42 @@
-import { useRef, useState, ChangeEvent } from "react";
+import { useRef, useState, ChangeEvent, useEffect } from "react";
 import { AdminLayout } from "@/components/admin-layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Image as ImageIcon, Sparkles, Upload, Trash2, RotateCcw, Save, Globe } from "lucide-react";
+import {
+  Image as ImageIcon, Sparkles, Upload, Trash2, RotateCcw, Save, Globe,
+  Building2, CreditCard, Receipt, Mail, Phone, Eye, EyeOff,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useBranding, BrandingSettings } from "@/contexts/branding-context";
+import {
+  useSiteSettings,
+  SiteSettings,
+  Currency,
+  DEFAULT_SITE_SETTINGS,
+} from "@/contexts/site-settings-context";
 
-const MAX_LOGO_BYTES = 1_500_000; // 1.5 MB — keeps localStorage manageable
-const MAX_FAVICON_BYTES = 500_000; // 500 KB
+const MAX_LOGO_BYTES = 1_500_000;
+const MAX_FAVICON_BYTES = 500_000;
+
+const CURRENCIES: { value: Currency; label: string }[] = [
+  { value: "INR", label: "₹ INR — Indian Rupee" },
+  { value: "USD", label: "$ USD — US Dollar" },
+  { value: "EUR", label: "€ EUR — Euro" },
+  { value: "GBP", label: "£ GBP — British Pound" },
+  { value: "AED", label: "د.إ AED — UAE Dirham" },
+];
 
 function readFileAsDataURL(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -23,16 +49,31 @@ function readFileAsDataURL(file: File): Promise<string> {
 
 export default function AdminSettings() {
   const { branding, updateBranding, resetBranding } = useBranding();
+  const { settings, updateSettings, resetSettings } = useSiteSettings();
   const { toast } = useToast();
 
-  const [draft, setDraft] = useState<BrandingSettings>(branding);
+  const [brandingDraft, setBrandingDraft] = useState<BrandingSettings>(branding);
+  const [siteDraft, setSiteDraft] = useState<SiteSettings>(settings);
   const [dirty, setDirty] = useState(false);
+  const [showSecret, setShowSecret] = useState(false);
+
+  // Keep drafts in sync if context changes elsewhere (e.g. cross-tab updates)
+  useEffect(() => {
+    if (!dirty) setBrandingDraft(branding);
+  }, [branding, dirty]);
+  useEffect(() => {
+    if (!dirty) setSiteDraft(settings);
+  }, [settings, dirty]);
 
   const logoInputRef = useRef<HTMLInputElement>(null);
   const faviconInputRef = useRef<HTMLInputElement>(null);
 
-  function patchDraft(patch: Partial<BrandingSettings>) {
-    setDraft((prev) => ({ ...prev, ...patch }));
+  function patchBranding(patch: Partial<BrandingSettings>) {
+    setBrandingDraft((prev) => ({ ...prev, ...patch }));
+    setDirty(true);
+  }
+  function patchSite(patch: Partial<SiteSettings>) {
+    setSiteDraft((prev) => ({ ...prev, ...patch }));
     setDirty(true);
   }
 
@@ -41,7 +82,7 @@ export default function AdminSettings() {
     kind: "logo" | "favicon",
   ) {
     const file = e.target.files?.[0];
-    e.target.value = ""; // allow re-selecting same file
+    e.target.value = "";
     if (!file) return;
 
     const limit = kind === "logo" ? MAX_LOGO_BYTES : MAX_FAVICON_BYTES;
@@ -64,11 +105,8 @@ export default function AdminSettings() {
 
     try {
       const dataUrl = await readFileAsDataURL(file);
-      if (kind === "logo") {
-        patchDraft({ logoUrl: dataUrl });
-      } else {
-        patchDraft({ faviconUrl: dataUrl });
-      }
+      if (kind === "logo") patchBranding({ logoUrl: dataUrl });
+      else patchBranding({ faviconUrl: dataUrl });
     } catch (err) {
       console.error(err);
       toast({
@@ -80,77 +118,102 @@ export default function AdminSettings() {
   }
 
   function handleSave() {
-    updateBranding(draft);
+    // Validate booking fee
+    if (siteDraft.bookingFee < 0 || !Number.isFinite(siteDraft.bookingFee)) {
+      toast({
+        title: "Invalid booking fee",
+        description: "Booking fee must be zero or a positive number.",
+        variant: "destructive",
+      });
+      return;
+    }
+    // Validate email if provided
+    if (siteDraft.contactEmail && !/^\S+@\S+\.\S+$/.test(siteDraft.contactEmail)) {
+      toast({
+        title: "Invalid contact email",
+        description: "Please enter a valid email address.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    updateBranding(brandingDraft);
+    updateSettings(siteDraft);
     setDirty(false);
     toast({
-      title: "Branding updated",
-      description: "Your changes are now live across the site.",
+      title: "Settings saved",
+      description: "All your changes are now live.",
     });
   }
 
   function handleDiscard() {
-    setDraft(branding);
+    setBrandingDraft(branding);
+    setSiteDraft(settings);
     setDirty(false);
   }
 
   function handleReset() {
     resetBranding();
-    // Pull defaults back into the local draft after the context resets
+    resetSettings();
     setTimeout(() => {
-      setDraft({
+      setBrandingDraft({
         companyName: "Dream Fly Global",
         tagline: "Explore the world",
         logoUrl: null,
         faviconUrl: null,
       });
+      setSiteDraft(DEFAULT_SITE_SETTINGS);
       setDirty(false);
     }, 0);
     toast({
       title: "Reset to defaults",
-      description: "Branding has been restored to the original values.",
+      description: "All settings have been restored to the original values.",
     });
   }
 
   return (
     <AdminLayout>
-      <div className="p-4 md:p-8 max-w-5xl mx-auto">
+      <div className="p-4 md:p-8 max-w-5xl mx-auto pb-24">
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-slate-900">Settings</h1>
             <p className="text-sm text-slate-500 mt-1">
-              Manage your website branding — header logo, browser tab favicon, and company name.
+              Manage branding, site info, payments, and booking preferences. Changes apply instantly across the site.
             </p>
           </div>
           <Button
             variant="outline"
             size="sm"
             onClick={handleReset}
-            data-testid="button-reset-branding"
+            data-testid="button-reset-settings"
           >
             <RotateCcw className="w-4 h-4 mr-2" />
             Reset to defaults
           </Button>
         </div>
 
-        {/* Company identity */}
-        <Card className="mb-6">
+        {/* ============== A) WEBSITE BRANDING ============== */}
+        <SectionHeader
+          icon={<Sparkles className="w-5 h-5 text-purple-600" />}
+          title="Website Branding"
+          description="Logo, favicon, and the brand identity displayed in the header."
+        />
+
+        <Card className="mb-4">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-purple-600" />
-              Company Identity
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Building2 className="w-4 h-4 text-purple-600" />
+              Brand Name &amp; Tagline
             </CardTitle>
-            <CardDescription>
-              Shown in the header next to the logo and on the browser tab.
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="company-name">Company name</Label>
+                <Label htmlFor="company-name">Site name</Label>
                 <Input
                   id="company-name"
-                  value={draft.companyName}
-                  onChange={(e) => patchDraft({ companyName: e.target.value })}
+                  value={brandingDraft.companyName}
+                  onChange={(e) => patchBranding({ companyName: e.target.value })}
                   placeholder="Dream Fly Global"
                   data-testid="input-company-name"
                 />
@@ -159,8 +222,8 @@ export default function AdminSettings() {
                 <Label htmlFor="tagline">Tagline</Label>
                 <Input
                   id="tagline"
-                  value={draft.tagline}
-                  onChange={(e) => patchDraft({ tagline: e.target.value })}
+                  value={brandingDraft.tagline}
+                  onChange={(e) => patchBranding({ tagline: e.target.value })}
                   placeholder="Explore the world"
                   data-testid="input-tagline"
                 />
@@ -169,119 +232,282 @@ export default function AdminSettings() {
           </CardContent>
         </Card>
 
-        {/* Header logo */}
-        <Card className="mb-6">
+        <Card className="mb-4">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ImageIcon className="w-5 h-5 text-blue-600" />
-              Website Header Logo
+            <CardTitle className="flex items-center gap-2 text-base">
+              <ImageIcon className="w-4 h-4 text-blue-600" />
+              Header Logo
             </CardTitle>
             <CardDescription>
-              Recommended: square or wide PNG/SVG, transparent background, under 1.5&nbsp;MB.
+              PNG, JPG, SVG, or WebP — under 1.5&nbsp;MB. Shows in the top-left corner of every page.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent>
             <div className="flex flex-wrap items-center gap-6">
               <LogoPreview
-                logoUrl={draft.logoUrl}
-                companyName={draft.companyName}
-                size="lg"
+                logoUrl={brandingDraft.logoUrl}
+                companyName={brandingDraft.companyName}
               />
-              <div className="flex-1 min-w-[220px]">
-                <p className="text-sm text-slate-600 mb-3">
-                  This appears in the top-left corner of every page on the site.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <input
-                    ref={logoInputRef}
-                    type="file"
-                    accept="image/png,image/jpeg,image/svg+xml,image/webp"
-                    className="hidden"
-                    onChange={(e) => handleFileSelect(e, "logo")}
-                    data-testid="input-file-logo"
-                  />
+              <div className="flex flex-wrap gap-2">
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                  className="hidden"
+                  onChange={(e) => handleFileSelect(e, "logo")}
+                  data-testid="input-file-logo"
+                />
+                <Button
+                  onClick={() => logoInputRef.current?.click()}
+                  data-testid="button-upload-logo"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  Upload logo
+                </Button>
+                {brandingDraft.logoUrl && (
                   <Button
-                    onClick={() => logoInputRef.current?.click()}
-                    data-testid="button-upload-logo"
+                    variant="outline"
+                    onClick={() => patchBranding({ logoUrl: null })}
+                    data-testid="button-remove-logo"
                   >
-                    <Upload className="w-4 h-4 mr-2" />
-                    Upload logo
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Remove
                   </Button>
-                  {draft.logoUrl && (
-                    <Button
-                      variant="outline"
-                      onClick={() => patchDraft({ logoUrl: null })}
-                      data-testid="button-remove-logo"
-                    >
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      Remove
-                    </Button>
-                  )}
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Globe className="w-4 h-4 text-emerald-600" />
+              Browser Tab Favicon
+            </CardTitle>
+            <CardDescription>
+              PNG, ICO, SVG, or WebP — under 500&nbsp;KB. Square 32×32 or 64×64 recommended.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap items-center gap-6">
+              <FaviconPreview faviconUrl={brandingDraft.faviconUrl} />
+              <div className="flex flex-wrap gap-2">
+                <input
+                  ref={faviconInputRef}
+                  type="file"
+                  accept="image/png,image/x-icon,image/vnd.microsoft.icon,image/svg+xml,image/webp"
+                  className="hidden"
+                  onChange={(e) => handleFileSelect(e, "favicon")}
+                  data-testid="input-file-favicon"
+                />
+                <Button
+                  onClick={() => faviconInputRef.current?.click()}
+                  data-testid="button-upload-favicon"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  Upload favicon
+                </Button>
+                {brandingDraft.faviconUrl && (
+                  <Button
+                    variant="outline"
+                    onClick={() => patchBranding({ faviconUrl: null })}
+                    data-testid="button-remove-favicon"
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Remove
+                  </Button>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ============== B) WEBSITE INFO ============== */}
+        <SectionHeader
+          icon={<Mail className="w-5 h-5 text-blue-600" />}
+          title="Website Info"
+          description="Public contact details for your business."
+        />
+
+        <Card className="mb-8">
+          <CardContent className="pt-6 space-y-4">
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="contact-email">Contact email</Label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  <Input
+                    id="contact-email"
+                    type="email"
+                    className="pl-9"
+                    value={siteDraft.contactEmail}
+                    onChange={(e) => patchSite({ contactEmail: e.target.value })}
+                    placeholder="hello@dreamflyglobal.com"
+                    data-testid="input-contact-email"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="contact-phone">Phone number</Label>
+                <div className="relative">
+                  <Phone className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  <Input
+                    id="contact-phone"
+                    type="tel"
+                    className="pl-9"
+                    value={siteDraft.contactPhone}
+                    onChange={(e) => patchSite({ contactPhone: e.target.value })}
+                    placeholder="+91 90009 78856"
+                    data-testid="input-contact-phone"
+                  />
                 </div>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Favicon */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Globe className="w-5 h-5 text-emerald-600" />
-              Browser Tab Favicon
-            </CardTitle>
-            <CardDescription>
-              Recommended: square 32×32 or 64×64 PNG/ICO/SVG, under 500&nbsp;KB.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-wrap items-center gap-6">
-              <FaviconPreview faviconUrl={draft.faviconUrl} />
-              <div className="flex-1 min-w-[220px]">
-                <p className="text-sm text-slate-600 mb-3">
-                  Shown in the browser tab, bookmarks, and history.
+        {/* ============== C) PAYMENT SETTINGS ============== */}
+        <SectionHeader
+          icon={<CreditCard className="w-5 h-5 text-amber-600" />}
+          title="Payment Settings"
+          description="Razorpay credentials and global payment toggle."
+        />
+
+        <Card className="mb-8">
+          <CardContent className="pt-6 space-y-5">
+            <div className="flex items-center justify-between gap-4 p-3 rounded-lg bg-slate-50 border border-slate-200">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Enable payments</p>
+                <p className="text-xs text-slate-500">
+                  When off, the checkout flow will hide the pay button across the site.
                 </p>
-                <div className="flex flex-wrap gap-2">
-                  <input
-                    ref={faviconInputRef}
-                    type="file"
-                    accept="image/png,image/x-icon,image/vnd.microsoft.icon,image/svg+xml,image/webp"
-                    className="hidden"
-                    onChange={(e) => handleFileSelect(e, "favicon")}
-                    data-testid="input-file-favicon"
+              </div>
+              <Switch
+                checked={siteDraft.paymentsEnabled}
+                onCheckedChange={(v) => patchSite({ paymentsEnabled: v })}
+                data-testid="switch-payments-enabled"
+              />
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="razorpay-key">Razorpay Key ID</Label>
+                <Input
+                  id="razorpay-key"
+                  value={siteDraft.razorpayKeyId}
+                  onChange={(e) => patchSite({ razorpayKeyId: e.target.value })}
+                  placeholder="rzp_live_xxxxxxxxxxxx"
+                  autoComplete="off"
+                  data-testid="input-razorpay-key"
+                />
+              </div>
+              <div>
+                <Label htmlFor="razorpay-secret">Razorpay Key Secret</Label>
+                <div className="relative">
+                  <Input
+                    id="razorpay-secret"
+                    type={showSecret ? "text" : "password"}
+                    value={siteDraft.razorpaySecret}
+                    onChange={(e) => patchSite({ razorpaySecret: e.target.value })}
+                    placeholder="••••••••••••••••"
+                    autoComplete="new-password"
+                    className="pr-10"
+                    data-testid="input-razorpay-secret"
                   />
-                  <Button
-                    onClick={() => faviconInputRef.current?.click()}
-                    data-testid="button-upload-favicon"
+                  <button
+                    type="button"
+                    onClick={() => setShowSecret((v) => !v)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-700"
+                    aria-label={showSecret ? "Hide secret" : "Show secret"}
+                    data-testid="button-toggle-secret"
                   >
-                    <Upload className="w-4 h-4 mr-2" />
-                    Upload favicon
-                  </Button>
-                  {draft.faviconUrl && (
-                    <Button
-                      variant="outline"
-                      onClick={() => patchDraft({ faviconUrl: null })}
-                      data-testid="button-remove-favicon"
-                    >
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      Remove
-                    </Button>
-                  )}
+                    {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
               </div>
+            </div>
+
+            <div className="text-xs text-slate-500 bg-amber-50 border border-amber-200 rounded-md p-3">
+              <strong className="text-amber-800">Note:</strong> Credentials entered here are stored in
+              your browser&apos;s local storage for now. For production, move secrets to a server-side
+              configuration before going live.
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ============== D) BOOKING SETTINGS ============== */}
+        <SectionHeader
+          icon={<Receipt className="w-5 h-5 text-emerald-600" />}
+          title="Booking Settings"
+          description="Defaults applied across all bookings."
+        />
+
+        <Card className="mb-8">
+          <CardContent className="pt-6 space-y-4">
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="currency">Default currency</Label>
+                <Select
+                  value={siteDraft.currency}
+                  onValueChange={(v: Currency) => patchSite({ currency: v })}
+                >
+                  <SelectTrigger id="currency" data-testid="select-currency">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CURRENCIES.map((c) => (
+                      <SelectItem key={c.value} value={c.value} data-testid={`option-currency-${c.value}`}>
+                        {c.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="booking-fee">Booking fee</Label>
+                <Input
+                  id="booking-fee"
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={Number.isFinite(siteDraft.bookingFee) ? siteDraft.bookingFee : 0}
+                  onChange={(e) => patchSite({ bookingFee: Number(e.target.value) })}
+                  placeholder="0"
+                  data-testid="input-booking-fee"
+                />
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Flat fee added to every booking, in the selected currency.
+                </p>
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="cancellation-policy">Cancellation policy</Label>
+              <Textarea
+                id="cancellation-policy"
+                rows={6}
+                value={siteDraft.cancellationPolicy}
+                onChange={(e) => patchSite({ cancellationPolicy: e.target.value })}
+                placeholder="Describe your cancellation, refund, and reschedule policy here..."
+                data-testid="input-cancellation-policy"
+              />
             </div>
           </CardContent>
         </Card>
 
         <Separator className="my-6" />
 
-        {/* Sticky-feeling save bar */}
+        {/* Sticky save bar */}
         <div className="sticky bottom-4 bg-white border border-slate-200 rounded-2xl shadow-lg p-4 flex items-center justify-between gap-4">
           <div className="text-sm">
             {dirty ? (
-              <span className="text-amber-700 font-medium">You have unsaved changes</span>
+              <span className="text-amber-700 font-medium" data-testid="text-dirty-status">
+                You have unsaved changes
+              </span>
             ) : (
-              <span className="text-slate-500">All changes saved</span>
+              <span className="text-slate-500" data-testid="text-saved-status">
+                All changes saved
+              </span>
             )}
           </div>
           <div className="flex gap-2">
@@ -289,14 +515,14 @@ export default function AdminSettings() {
               variant="outline"
               onClick={handleDiscard}
               disabled={!dirty}
-              data-testid="button-discard-branding"
+              data-testid="button-discard-settings"
             >
               Discard
             </Button>
             <Button
               onClick={handleSave}
               disabled={!dirty}
-              data-testid="button-save-branding"
+              data-testid="button-save-settings"
             >
               <Save className="w-4 h-4 mr-2" />
               Save changes
@@ -308,29 +534,46 @@ export default function AdminSettings() {
   );
 }
 
+function SectionHeader({
+  icon,
+  title,
+  description,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="mb-3 mt-2 flex items-center gap-2.5">
+      <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white border border-slate-200 shadow-sm">
+        {icon}
+      </div>
+      <div>
+        <h2 className="text-sm font-bold uppercase tracking-wider text-slate-700">{title}</h2>
+        <p className="text-xs text-slate-500">{description}</p>
+      </div>
+    </div>
+  );
+}
+
 function LogoPreview({
   logoUrl,
   companyName,
-  size = "md",
 }: {
   logoUrl: string | null;
   companyName: string;
-  size?: "md" | "lg";
 }) {
-  const dim = size === "lg" ? "w-20 h-20" : "w-12 h-12";
   return (
-    <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3 min-w-[220px]">
+    <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3 min-w-[260px]">
       {logoUrl ? (
         <img
           src={logoUrl}
           alt={companyName}
-          className={`${dim} rounded-lg object-contain bg-white border border-slate-200`}
+          className="w-20 h-20 rounded-lg object-contain bg-white border border-slate-200"
           data-testid="img-preview-logo"
         />
       ) : (
-        <div
-          className={`${dim} rounded-lg bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center shadow-md`}
-        >
+        <div className="w-20 h-20 rounded-lg bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center shadow-md">
           <Sparkles className="h-8 w-8 text-white" />
         </div>
       )}
@@ -346,7 +589,7 @@ function LogoPreview({
 
 function FaviconPreview({ faviconUrl }: { faviconUrl: string | null }) {
   return (
-    <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3 min-w-[220px]">
+    <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3 min-w-[260px]">
       <div className="w-12 h-12 rounded-lg bg-white border border-slate-200 flex items-center justify-center overflow-hidden">
         {faviconUrl ? (
           <img
