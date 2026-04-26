@@ -70,3 +70,9 @@ externalPort = 3001
 [agent]
 expertMode = true
 stack = "BEST_EFFORT_FALLBACK"
+
+[userenv]
+
+[userenv.shared]
+ADMIN_EMAIL = "admin@dreamflyglobal.com"
+ADMIN_PASSWORD = "123456"
