@@ -81,7 +81,8 @@
     ]
   },
   "dependencies": {
-    "jspdf": "^4.2.1",
-    "firebase": "^10.12.2"
+    "axios": "^1.15.2",
+    "firebase": "^10.12.2",
+    "jspdf": "^4.2.1"
   }
 }

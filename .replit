@@ -76,3 +76,6 @@ stack = "BEST_EFFORT_FALLBACK"
 [userenv.shared]
 ADMIN_EMAIL = "admin@dreamflyglobal.com"
 ADMIN_PASSWORD = "123456"
+
+[nix]
+channel = "stable-25_05"

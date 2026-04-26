@@ -11,7 +11,6 @@ import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useQuery } from "@tanstack/react-query";
 import {
   Building2, SlidersHorizontal, Star, MapPin, Calendar, Users,
   Wifi, Car, Utensils, Waves, Dumbbell, Wind, Tv, Coffee,
@@ -20,181 +19,13 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export const MOCK_HOTELS = [
-  {
-    id: 1,
-    name: "Grand Palace Hotel",
-    city: "Hyderabad",
-    location: "Banjara Hills",
-    stars: 5,
-    rating: 4.5,
-    ratingCount: 1240,
-    ratingLabel: "Excellent",
-    pricePerNight: 2500,
-    amenities: ["AC", "WiFi", "Parking", "TV", "Restaurant", "Room Service", "Gym"],
-    images: [
-      "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&q=80",
-      "https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=800&q=80",
-      "https://images.unsplash.com/photo-1455587734955-081b22074882?w=800&q=80",
-    ],
-    description: "A 5-star luxury hotel in the heart of Hyderabad offering world-class amenities and impeccable service.",
-  },
-  {
-    id: 2,
-    name: "Sea View Resort",
-    city: "Goa",
-    location: "Calangute Beach",
-    stars: 4,
-    rating: 4.2,
-    ratingCount: 892,
-    ratingLabel: "Very Good",
-    pricePerNight: 3000,
-    amenities: ["AC", "WiFi", "Pool", "Restaurant", "Bar", "Beach Access"],
-    images: [
-      "https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?w=800&q=80",
-      "https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?w=800&q=80",
-      "https://images.unsplash.com/photo-1501117716987-c8e1ecb2108f?w=800&q=80",
-    ],
-    description: "Experience the magic of Goa with stunning beach views, a sparkling pool, and vibrant nightlife.",
-  },
-  {
-    id: 3,
-    name: "The Taj Majestic",
-    city: "Mumbai",
-    location: "Nariman Point",
-    stars: 5,
-    rating: 4.7,
-    ratingCount: 2100,
-    ratingLabel: "Exceptional",
-    pricePerNight: 8000,
-    amenities: ["AC", "WiFi", "Pool", "Spa", "Restaurant", "Bar", "Gym", "Parking"],
-    images: [
-      "https://images.unsplash.com/photo-1444201983204-c43cbd584d93?w=800&q=80",
-      "https://images.unsplash.com/photo-1571003123894-1f0594d2b5d9?w=800&q=80",
-      "https://images.unsplash.com/photo-1568084680786-a84f91d1153c?w=800&q=80",
-    ],
-    description: "Iconic luxury hotel overlooking the Arabian Sea, offering an unmatched Mumbai experience.",
-  },
-  {
-    id: 4,
-    name: "Comfort Inn Express",
-    city: "Delhi",
-    location: "Connaught Place",
-    stars: 3,
-    rating: 3.8,
-    ratingCount: 540,
-    ratingLabel: "Good",
-    pricePerNight: 1500,
-    amenities: ["AC", "WiFi", "TV", "Parking"],
-    images: [
-      "https://images.unsplash.com/photo-1578683010236-d716f9a3f461?w=800&q=80",
-      "https://images.unsplash.com/photo-1587213811864-49e7b31bb862?w=800&q=80",
-    ],
-    description: "Budget-friendly hotel in the heart of New Delhi, perfect for business and leisure travellers.",
-  },
-  {
-    id: 5,
-    name: "Royal Orchid Retreat",
-    city: "Bangalore",
-    location: "MG Road",
-    stars: 4,
-    rating: 4.1,
-    ratingCount: 780,
-    ratingLabel: "Very Good",
-    pricePerNight: 3500,
-    amenities: ["AC", "WiFi", "Gym", "Restaurant", "TV", "Parking"],
-    images: [
-      "https://images.unsplash.com/photo-1582719508461-905c673771fd?w=800&q=80",
-      "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&q=80",
-    ],
-    description: "A premium business hotel in the Silicon Valley of India with modern facilities and fine dining.",
-  },
-  {
-    id: 6,
-    name: "Sunrise Beach Resort",
-    city: "Chennai",
-    location: "Marina Beach Road",
-    stars: 4,
-    rating: 4.0,
-    ratingCount: 430,
-    ratingLabel: "Very Good",
-    pricePerNight: 2200,
-    amenities: ["AC", "WiFi", "Pool", "Restaurant", "Parking"],
-    images: [
-      "https://images.unsplash.com/photo-1561501900-3701fa6a0864?w=800&q=80",
-      "https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?w=800&q=80",
-    ],
-    description: "Beachfront resort with panoramic views of the Bay of Bengal and world-class amenities.",
-  },
-  {
-    id: 7,
-    name: "Mountain View Lodge",
-    city: "Shimla",
-    location: "Mall Road",
-    stars: 3,
-    rating: 4.3,
-    ratingCount: 320,
-    ratingLabel: "Excellent",
-    pricePerNight: 2800,
-    amenities: ["WiFi", "Restaurant", "TV", "Room Service"],
-    images: [
-      "https://images.unsplash.com/photo-1518684079-3c830dcef090?w=800&q=80",
-      "https://images.unsplash.com/photo-1587213811864-49e7b31bb862?w=800&q=80",
-    ],
-    description: "A charming mountain lodge offering breathtaking Himalayan views and peaceful surroundings.",
-  },
-  {
-    id: 8,
-    name: "Palm Grove Spa Hotel",
-    city: "Kerala",
-    location: "Kovalam Beach",
-    stars: 5,
-    rating: 4.6,
-    ratingCount: 670,
-    ratingLabel: "Exceptional",
-    pricePerNight: 5500,
-    amenities: ["AC", "WiFi", "Spa", "Pool", "Restaurant", "Yoga", "Beach Access"],
-    images: [
-      "https://images.unsplash.com/photo-1571003123894-1f0594d2b5d9?w=800&q=80",
-      "https://images.unsplash.com/photo-1444201983204-c43cbd584d93?w=800&q=80",
-    ],
-    description: "A luxury Ayurvedic spa resort nestled amidst coconut palms on the Malabar Coast.",
-  },
-  {
-    id: 9,
-    name: "Heritage Haveli",
-    city: "Jaipur",
-    location: "Old City",
-    stars: 4,
-    rating: 4.4,
-    ratingCount: 590,
-    ratingLabel: "Excellent",
-    pricePerNight: 3800,
-    amenities: ["AC", "WiFi", "Pool", "Restaurant", "Heritage Architecture", "Parking"],
-    images: [
-      "https://images.unsplash.com/photo-1568084680786-a84f91d1153c?w=800&q=80",
-      "https://images.unsplash.com/photo-1455587734955-081b22074882?w=800&q=80",
-    ],
-    description: "Stay in a beautifully restored 18th-century Haveli with royal Rajasthani hospitality.",
-  },
-  {
-    id: 10,
-    name: "Tech Park Suites",
-    city: "Hyderabad",
-    location: "HITEC City",
-    stars: 3,
-    rating: 3.9,
-    ratingCount: 410,
-    ratingLabel: "Good",
-    pricePerNight: 1800,
-    amenities: ["AC", "WiFi", "Gym", "TV", "Parking"],
-    images: [
-      "https://images.unsplash.com/photo-1578683010236-d716f9a3f461?w=800&q=80",
-      "https://images.unsplash.com/photo-1582719508461-905c673771fd?w=800&q=80",
-    ],
-    description: "Modern business hotel adjacent to HITEC City, ideal for corporate travellers and IT professionals.",
-  },
-];
+import type { Hotel } from "@/services/hotelService";
+import { fetchHotels } from "@/services/hotelService";
+
+// Mock data removed — hotels are now fetched via /services/hotelService.ts.
+// Kept as a mutable export so other pages (hotel-detail.tsx) can still resolve
+// the most recently loaded list when navigating to /hotels/:id directly.
+export let MOCK_HOTELS: Hotel[] = [];
 
 const AMENITY_ICONS: Record<string, JSX.Element> = {
   "AC":                   <Wind className="w-3 h-3" />,
@@ -233,15 +64,6 @@ function starLabel(r: number) {
   return            { label: "Good",           color: "text-slate-600 bg-slate-50 border-slate-200" };
 }
 
-async function fetchLiveHotels(city: string, checkin: string, checkout: string) {
-  const params = new URLSearchParams({ city });
-  if (checkin)  params.set("checkin", checkin);
-  if (checkout) params.set("checkout", checkout);
-  const res = await fetch(`/api/hotels/live-search?${params.toString()}`);
-  if (!res.ok) throw new Error("Hotel search failed");
-  return res.json();
-}
-
 export default function HotelResults() {
   const searchString = useSearch();
   const [, setLocation] = useLocation();
@@ -261,21 +83,40 @@ export default function HotelResults() {
 
   const nights = nightsBetween(checkin, checkout);
 
-  const { data: liveData, isLoading, isError, refetch } = useQuery({
-    queryKey: ["hotels-live-search", city, checkin, checkout],
-    queryFn: () => fetchLiveHotels(city, checkin, checkout),
-    enabled: Boolean(city.trim()),
-    staleTime: 5 * 60 * 1000,
-    retry: 1,
-  });
+  // ── Fetch hotels from /services/hotelService.ts (axios → API) ─────────────
+  const [allHotels, setAllHotels] = useState<Hotel[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isError, setIsError]     = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const refetch = () => setReloadKey((k) => k + 1);
 
-  const hotels: any[] = liveData?.hotels ?? MOCK_HOTELS.filter((h) => {
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoading(true);
+    setIsError(false);
+    fetchHotels()
+      .then((list) => {
+        if (cancelled) return;
+        setAllHotels(list);
+        // Update the shared export so direct-link detail pages can resolve items.
+        MOCK_HOTELS = list;
+        setIsLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setIsError(true);
+        setIsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [reloadKey]);
+
+  const hotels: any[] = allHotels.filter((h) => {
     if (!city) return true;
     return h.city.toLowerCase().includes(city.toLowerCase()) ||
            city.toLowerCase().includes(h.city.toLowerCase());
   });
 
-  const fallbackMessage: string | null = liveData?.fallbackMessage ?? null;
+  const fallbackMessage: string | null = null;
 
   const allAmenities = Array.from(new Set(hotels.flatMap((h) => h.amenities ?? [])));
   const starOptions  = [3, 4, 5];
@@ -429,39 +270,33 @@ export default function HotelResults() {
             {/* Results */}
             <main className="flex-1 min-w-0">
 
-              {/* Data source banner */}
+              {/* Data source banner — driven by hotelService (axios) */}
               <div className={cn(
                 "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium mb-4 border",
                 isLoading
                   ? "bg-blue-50 border-blue-200 text-blue-700"
-                  : liveData?.source === "hotelbeds" || liveData?.source === "rapidapi"
-                  ? "bg-green-50 border-green-200 text-green-700"
-                  : "bg-amber-50 border-amber-200 text-amber-800"
+                  : isError
+                  ? "bg-rose-50 border-rose-200 text-rose-700"
+                  : "bg-green-50 border-green-200 text-green-700"
               )}>
                 {isLoading ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
-                    <span>Searching live hotels in {city}…</span>
+                    <span>Loading hotels{city ? ` in ${city}` : ""}…</span>
                   </>
-                ) : liveData?.source === "hotelbeds" ? (
-                  <>
-                    <Wifi className="w-4 h-4 shrink-0" />
-                    <span className="font-semibold">Live hotels from Hotelbeds</span>
-                    <span className="text-green-600/70 text-xs">· Real availability &amp; pricing</span>
-                  </>
-                ) : liveData?.source === "rapidapi" ? (
-                  <>
-                    <Wifi className="w-4 h-4 shrink-0" />
-                    <span className="font-semibold">Live hotels from Booking.com</span>
-                    <span className="text-green-600/70 text-xs">· Real availability &amp; pricing via RapidAPI</span>
-                  </>
-                ) : (
+                ) : isError ? (
                   <>
                     <WifiOff className="w-4 h-4 shrink-0" />
-                    <span>{fallbackMessage ?? `Showing curated top hotels in ${city}.`}</span>
+                    <span>Failed to load hotels. Please try again.</span>
                     <button onClick={() => refetch()} className="ml-auto flex items-center gap-1 font-semibold underline underline-offset-2 hover:opacity-80">
                       <RefreshCw className="w-3.5 h-3.5" /> Retry
                     </button>
+                  </>
+                ) : (
+                  <>
+                    <Wifi className="w-4 h-4 shrink-0" />
+                    <span className="font-semibold">Showing {hotels.length} hotels</span>
+                    <span className="text-green-600/70 text-xs">· Live data</span>
                   </>
                 )}
               </div>

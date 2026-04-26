@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import type { JSX } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/auth-context";
 import { useAbandonedLeadTracker } from "@/hooks/use-abandoned-lead-tracker";
 import { useMarketing } from "@/hooks/use-marketing";
@@ -33,432 +32,13 @@ import {
 import { cn } from "@/lib/utils";
 
 // ── Structured bus data (RedBus style) ───────────────────────────────────────
-export const MOCK_BUSES = [
+import type { Bus as BusItem } from "@/services/busService";
+import { fetchBuses } from "@/services/busService";
 
-  // ── Hyderabad → Vijayawada ────────────────────────────────────────────────
-  {
-    id: 1,
-    name: "Orange Travels",
-    operator: "Orange Travels",
-    from: "Hyderabad",
-    to: "Vijayawada",
-    departure: "10:00 PM",
-    arrival: "5:00 AM",
-    duration: "7h",
-    price: 1200,
-    busType: "AC Sleeper",
-    totalSeats: 40,
-    seatsAvailable: 20,
-    amenities: ["AC", "Wifi", "Charging"],
-    rating: 4.2,
-    boardingPoints: ["Ameerpet", "Kukatpally", "MGBS", "Uppal"],
-    droppingPoints: ["Benz Circle", "Gannavaram", "One Town", "Auto Nagar"],
-  },
-  {
-    id: 2,
-    name: "VRL Travels",
-    operator: "VRL Travels",
-    from: "Hyderabad",
-    to: "Vijayawada",
-    departure: "9:00 PM",
-    arrival: "4:30 AM",
-    duration: "7h 30m",
-    price: 1500,
-    busType: "AC Semi-Sleeper",
-    totalSeats: 36,
-    seatsAvailable: 14,
-    amenities: ["AC", "Water Bottle"],
-    rating: 4.0,
-    boardingPoints: ["Ameerpet", "MGBS", "LB Nagar"],
-    droppingPoints: ["Benz Circle", "One Town", "Machavaram"],
-  },
-  {
-    id: 3,
-    name: "SRS Travels",
-    operator: "SRS Travels",
-    from: "Hyderabad",
-    to: "Vijayawada",
-    departure: "8:00 PM",
-    arrival: "3:30 AM",
-    duration: "7h 30m",
-    price: 950,
-    busType: "Non-AC Seater",
-    totalSeats: 42,
-    seatsAvailable: 30,
-    amenities: ["Water Bottle"],
-    rating: 3.7,
-    boardingPoints: ["MGBS", "Koti", "Dilsukhnagar"],
-    droppingPoints: ["Benz Circle", "Gunadala", "Auto Nagar"],
-  },
-  {
-    id: 4,
-    name: "APSRTC Rajdhani",
-    operator: "APSRTC",
-    from: "Hyderabad",
-    to: "Vijayawada",
-    departure: "11:30 PM",
-    arrival: "6:00 AM",
-    duration: "6h 30m",
-    price: 800,
-    busType: "AC Seater",
-    totalSeats: 45,
-    seatsAvailable: 32,
-    amenities: ["AC"],
-    rating: 4.5,
-    boardingPoints: ["Mahatma Gandhi Bus Station", "Uppal X Roads"],
-    droppingPoints: ["Pandit Nehru Bus Station", "Benz Circle"],
-  },
-  {
-    id: 5,
-    name: "Patel Travels",
-    operator: "Patel Travels",
-    from: "Hyderabad",
-    to: "Vijayawada",
-    departure: "6:00 PM",
-    arrival: "1:00 AM",
-    duration: "7h",
-    price: 1100,
-    busType: "AC Sleeper",
-    totalSeats: 30,
-    seatsAvailable: 8,
-    amenities: ["AC", "Wifi", "Entertainment", "Charging"],
-    rating: 4.3,
-    boardingPoints: ["Ameerpet", "Kukatpally", "MGBS"],
-    droppingPoints: ["Benz Circle", "Gannavaram", "One Town"],
-  },
-
-  // ── Hyderabad → Visakhapatnam ─────────────────────────────────────────────
-  {
-    id: 10,
-    name: "APSRTC Garuda Plus",
-    operator: "APSRTC",
-    from: "Hyderabad",
-    to: "Visakhapatnam",
-    departure: "6:00 PM",
-    arrival: "5:30 AM",
-    duration: "11h 30m",
-    price: 1100,
-    busType: "AC Seater",
-    totalSeats: 45,
-    seatsAvailable: 28,
-    amenities: ["AC"],
-    rating: 4.4,
-    boardingPoints: ["MGBS", "Uppal", "LB Nagar"],
-    droppingPoints: ["RTC Complex", "Dwaraka Nagar", "MVP Colony"],
-  },
-  {
-    id: 11,
-    name: "Orange Travels",
-    operator: "Orange Travels",
-    from: "Hyderabad",
-    to: "Visakhapatnam",
-    departure: "4:30 PM",
-    arrival: "4:00 AM",
-    duration: "11h 30m",
-    price: 1600,
-    busType: "AC Sleeper",
-    totalSeats: 36,
-    seatsAvailable: 18,
-    amenities: ["AC", "Wifi", "Charging", "Water Bottle"],
-    rating: 4.3,
-    boardingPoints: ["Ameerpet", "Kukatpally", "MGBS"],
-    droppingPoints: ["RTC Complex", "Steel Plant", "Madhurawada"],
-  },
-  {
-    id: 12,
-    name: "VRL Travels",
-    operator: "VRL Travels",
-    from: "Hyderabad",
-    to: "Visakhapatnam",
-    departure: "7:00 PM",
-    arrival: "6:30 AM",
-    duration: "11h 30m",
-    price: 1800,
-    busType: "AC Semi-Sleeper",
-    totalSeats: 40,
-    seatsAvailable: 12,
-    amenities: ["AC", "Wifi", "Charging"],
-    rating: 4.1,
-    boardingPoints: ["Ameerpet", "MGBS", "Dilsukhnagar"],
-    droppingPoints: ["RTC Complex", "Dwaraka Nagar", "Steel Plant"],
-  },
-  {
-    id: 13,
-    name: "SRS Travels",
-    operator: "SRS Travels",
-    from: "Hyderabad",
-    to: "Visakhapatnam",
-    departure: "5:00 PM",
-    arrival: "4:30 AM",
-    duration: "11h 30m",
-    price: 900,
-    busType: "Non-AC Seater",
-    totalSeats: 50,
-    seatsAvailable: 35,
-    amenities: ["Water Bottle"],
-    rating: 3.6,
-    boardingPoints: ["MGBS", "Koti", "LB Nagar"],
-    droppingPoints: ["RTC Complex", "MVP Colony", "Gajuwaka"],
-  },
-
-  // ── Hyderabad → Bangalore ─────────────────────────────────────────────────
-  {
-    id: 20,
-    name: "APSRTC Volvo",
-    operator: "APSRTC",
-    from: "Hyderabad",
-    to: "Bangalore",
-    departure: "8:00 PM",
-    arrival: "6:00 AM",
-    duration: "10h",
-    price: 1300,
-    busType: "AC Seater",
-    totalSeats: 45,
-    seatsAvailable: 22,
-    amenities: ["AC"],
-    rating: 4.3,
-    boardingPoints: ["MGBS", "Ameerpet", "Kukatpally"],
-    droppingPoints: ["Majestic", "Silk Board", "Electronic City"],
-  },
-  {
-    id: 21,
-    name: "Orange Travels",
-    operator: "Orange Travels",
-    from: "Hyderabad",
-    to: "Bangalore",
-    departure: "7:00 PM",
-    arrival: "5:30 AM",
-    duration: "10h 30m",
-    price: 1700,
-    busType: "AC Sleeper",
-    totalSeats: 36,
-    seatsAvailable: 10,
-    amenities: ["AC", "Wifi", "Charging", "Water Bottle"],
-    rating: 4.5,
-    boardingPoints: ["Ameerpet", "MGBS", "LB Nagar"],
-    droppingPoints: ["Majestic", "Silk Board", "Hebbal"],
-  },
-  {
-    id: 22,
-    name: "VRL Travels",
-    operator: "VRL Travels",
-    from: "Hyderabad",
-    to: "Bangalore",
-    departure: "9:30 PM",
-    arrival: "7:30 AM",
-    duration: "10h",
-    price: 1950,
-    busType: "AC Sleeper (Premium)",
-    totalSeats: 24,
-    seatsAvailable: 6,
-    amenities: ["AC", "Wifi", "Charging", "Entertainment"],
-    rating: 4.6,
-    boardingPoints: ["Ameerpet", "Kukatpally", "MGBS"],
-    droppingPoints: ["Majestic", "Marathahalli", "Electronic City"],
-  },
-  {
-    id: 23,
-    name: "KPN Travels",
-    operator: "KPN Travels",
-    from: "Hyderabad",
-    to: "Bangalore",
-    departure: "6:30 PM",
-    arrival: "5:00 AM",
-    duration: "10h 30m",
-    price: 1400,
-    busType: "AC Semi-Sleeper",
-    totalSeats: 40,
-    seatsAvailable: 25,
-    amenities: ["AC", "Water Bottle"],
-    rating: 4.0,
-    boardingPoints: ["MGBS", "Dilsukhnagar", "Uppal"],
-    droppingPoints: ["Majestic", "Silk Board", "Koramangala"],
-  },
-
-  // ── Bangalore → Chennai ───────────────────────────────────────────────────
-  {
-    id: 30,
-    name: "KPN Travels",
-    operator: "KPN Travels",
-    from: "Bangalore",
-    to: "Chennai",
-    departure: "9:30 PM",
-    arrival: "6:00 AM",
-    duration: "8h 30m",
-    price: 1350,
-    busType: "AC Sleeper",
-    totalSeats: 24,
-    seatsAvailable: 10,
-    amenities: ["AC", "Wifi", "Water Bottle"],
-    rating: 4.1,
-    boardingPoints: ["Majestic", "Marathahalli", "Silk Board"],
-    droppingPoints: ["Koyambedu", "Chennai Central", "Tambaram"],
-  },
-  {
-    id: 31,
-    name: "IntrCity SmartBus",
-    operator: "IntrCity",
-    from: "Bangalore",
-    to: "Chennai",
-    departure: "7:00 PM",
-    arrival: "3:00 AM",
-    duration: "8h",
-    price: 1800,
-    busType: "AC Sleeper (Premium)",
-    totalSeats: 20,
-    seatsAvailable: 6,
-    amenities: ["AC", "Wifi", "Charging", "Entertainment"],
-    rating: 4.6,
-    boardingPoints: ["Majestic", "Hebbal", "Electronic City"],
-    droppingPoints: ["Koyambedu", "Tidel Park", "Chennai Central"],
-  },
-  {
-    id: 32,
-    name: "TNSTC Deluxe",
-    operator: "TNSTC",
-    from: "Bangalore",
-    to: "Chennai",
-    departure: "10:00 PM",
-    arrival: "6:30 AM",
-    duration: "8h 30m",
-    price: 600,
-    busType: "Non-AC Seater",
-    totalSeats: 50,
-    seatsAvailable: 38,
-    amenities: [],
-    rating: 3.5,
-    boardingPoints: ["Majestic", "Kalasipalya"],
-    droppingPoints: ["Koyambedu", "Broadway"],
-  },
-  {
-    id: 33,
-    name: "Orange Travels",
-    operator: "Orange Travels",
-    from: "Bangalore",
-    to: "Chennai",
-    departure: "8:00 PM",
-    arrival: "4:30 AM",
-    duration: "8h 30m",
-    price: 1500,
-    busType: "AC Semi-Sleeper",
-    totalSeats: 36,
-    seatsAvailable: 20,
-    amenities: ["AC", "Wifi", "Charging"],
-    rating: 4.2,
-    boardingPoints: ["Majestic", "Silk Board", "Koramangala"],
-    droppingPoints: ["Koyambedu", "Chennai Central", "Guindy"],
-  },
-  {
-    id: 34,
-    name: "VRL Travels",
-    operator: "VRL Travels",
-    from: "Bangalore",
-    to: "Chennai",
-    departure: "6:30 PM",
-    arrival: "3:00 AM",
-    duration: "8h 30m",
-    price: 1650,
-    busType: "AC Sleeper",
-    totalSeats: 30,
-    seatsAvailable: 14,
-    amenities: ["AC", "Wifi", "Water Bottle", "Charging"],
-    rating: 4.3,
-    boardingPoints: ["Majestic", "Hebbal", "Whitefield"],
-    droppingPoints: ["Koyambedu", "Tidel Park", "Broadway"],
-  },
-
-  // ── Chennai → Hyderabad ───────────────────────────────────────────────────
-  {
-    id: 40,
-    name: "APSRTC Garuda",
-    operator: "APSRTC",
-    from: "Chennai",
-    to: "Hyderabad",
-    departure: "6:00 PM",
-    arrival: "5:00 AM",
-    duration: "11h",
-    price: 1200,
-    busType: "AC Seater",
-    totalSeats: 45,
-    seatsAvailable: 30,
-    amenities: ["AC"],
-    rating: 4.3,
-    boardingPoints: ["Koyambedu", "Broadway", "Chennai Central"],
-    droppingPoints: ["MGBS", "Ameerpet", "LB Nagar"],
-  },
-  {
-    id: 41,
-    name: "Orange Travels",
-    operator: "Orange Travels",
-    from: "Chennai",
-    to: "Hyderabad",
-    departure: "7:30 PM",
-    arrival: "6:30 AM",
-    duration: "11h",
-    price: 1700,
-    busType: "AC Sleeper",
-    totalSeats: 36,
-    seatsAvailable: 16,
-    amenities: ["AC", "Wifi", "Charging", "Water Bottle"],
-    rating: 4.4,
-    boardingPoints: ["Koyambedu", "Tidel Park", "Guindy"],
-    droppingPoints: ["MGBS", "Ameerpet", "Kukatpally"],
-  },
-  {
-    id: 42,
-    name: "VRL Travels",
-    operator: "VRL Travels",
-    from: "Chennai",
-    to: "Hyderabad",
-    departure: "5:00 PM",
-    arrival: "4:00 AM",
-    duration: "11h",
-    price: 1950,
-    busType: "AC Sleeper (Premium)",
-    totalSeats: 24,
-    seatsAvailable: 8,
-    amenities: ["AC", "Wifi", "Charging", "Entertainment"],
-    rating: 4.6,
-    boardingPoints: ["Koyambedu", "Chennai Central", "Tambaram"],
-    droppingPoints: ["MGBS", "Dilsukhnagar", "Uppal"],
-  },
-  {
-    id: 43,
-    name: "KPN Travels",
-    operator: "KPN Travels",
-    from: "Chennai",
-    to: "Hyderabad",
-    departure: "9:00 PM",
-    arrival: "8:00 AM",
-    duration: "11h",
-    price: 1400,
-    busType: "AC Semi-Sleeper",
-    totalSeats: 40,
-    seatsAvailable: 22,
-    amenities: ["AC", "Water Bottle"],
-    rating: 4.0,
-    boardingPoints: ["Koyambedu", "Broadway", "Guindy"],
-    droppingPoints: ["MGBS", "Koti", "LB Nagar"],
-  },
-  {
-    id: 44,
-    name: "SRS Travels",
-    operator: "SRS Travels",
-    from: "Chennai",
-    to: "Hyderabad",
-    departure: "8:00 PM",
-    arrival: "7:00 AM",
-    duration: "11h",
-    price: 950,
-    busType: "Non-AC Seater",
-    totalSeats: 50,
-    seatsAvailable: 40,
-    amenities: ["Water Bottle"],
-    rating: 3.6,
-    boardingPoints: ["Koyambedu", "Broadway"],
-    droppingPoints: ["MGBS", "Koti", "Dilsukhnagar"],
-  },
-];
+// Mock data removed — buses are now fetched via /services/busService.ts.
+// Kept as a mutable export so other pages (bus-detail.tsx, bus-seat-selection.tsx)
+// can still resolve the most recently loaded list when navigating directly.
+export let MOCK_BUSES: BusItem[] = [];
 
 const AMENITY_ICONS: Record<string, JSX.Element> = {
   "AC":            <Wind className="w-3 h-3" />,
@@ -519,33 +99,44 @@ export default function BusResults() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const agentMarkupFlat: number | null = (isAgent && user?.agentMarkup !== undefined) ? user.agentMarkup : null;
 
-  // Live search via API
-  const { data: liveData, isLoading, isError, refetch } = useQuery({
-    queryKey: ["buses-live-search", from, to],
-    queryFn: async () => {
-      if (!from || !to) return null;
-      const p = new URLSearchParams({ from, to });
-      const res = await fetch(`/api/buses/live-search?${p.toString()}`);
-      if (!res.ok) throw new Error("Bus search failed");
-      return res.json() as Promise<{ buses: typeof MOCK_BUSES; total: number; source: string; distanceKm?: number }>;
-    },
-    enabled: Boolean(from && to),
-    staleTime: 5 * 60 * 1000,
-    retry: 1,
-  });
+  // ── Fetch buses from /services/busService.ts (axios → API) ────────────────
+  const [allBuses, setAllBuses]   = useState<BusItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isError, setIsError]     = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const refetch = () => setReloadKey((k) => k + 1);
 
-  // Fallback: filter MOCK_BUSES for known routes, or show generic if live search fails
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoading(true);
+    setIsError(false);
+    fetchBuses()
+      .then((list) => {
+        if (cancelled) return;
+        setAllBuses(list);
+        // Update the shared export so direct-link detail/seat pages can resolve items.
+        MOCK_BUSES = list;
+        setIsLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setIsError(true);
+        setIsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [reloadKey]);
+
+  // Optional client-side route filter; fall back to full list if filter is empty.
   const normalise = (v: string) => v.split(",")[0].trim().toLowerCase();
   const fromCity = normalise(from);
   const toCity   = normalise(to);
-  const mockFallback = MOCK_BUSES.filter((b) => {
+  const routeFiltered: BusItem[] = allBuses.filter((b) => {
     const bFrom = b.from.trim().toLowerCase();
     const bTo   = b.to.trim().toLowerCase();
     return (!fromCity || bFrom === fromCity) && (!toCity || bTo === toCity);
   });
-
-  const busList: typeof MOCK_BUSES = liveData?.buses ?? (isError ? mockFallback : []);
-  const dataSource = liveData?.source ?? (isError ? "fallback" : null);
+  const busList: BusItem[] = routeFiltered.length > 0 ? routeFiltered : allBuses;
+  const dataSource = isError ? "fallback" : null;
 
   const operators  = Array.from(new Set(busList.map((b) => b.operator)));
   const busTypes   = Array.from(new Set(busList.map((b) => b.busType)));
@@ -800,21 +391,19 @@ export default function BusResults() {
 
               {showMobileFilters && <div className="lg:hidden mb-4">{FiltersPanel()}</div>}
 
-              {/* Data source banner */}
-              {!isLoading && (from || to) && (
+              {/* Data source banner — driven by busService (axios) */}
+              {!isLoading && (
                 <div className={cn(
                   "flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-medium mb-4 border",
-                  dataSource === "generated"
-                    ? "bg-green-50 border-green-200 text-green-700"
-                    : isError
+                  isError
                     ? "bg-amber-50 border-amber-200 text-amber-700"
-                    : "bg-blue-50 border-blue-200 text-blue-700"
+                    : "bg-green-50 border-green-200 text-green-700"
                 )}>
-                  {dataSource === "generated" ? (
-                    <><Bus className="w-3.5 h-3.5 shrink-0" /><span className="font-semibold">Live bus schedule</span><span className="opacity-70">· Operators &amp; pricing for {from.split(",")[0].trim()} → {to.split(",")[0].trim()}</span></>
-                  ) : isError ? (
-                    <><Bus className="w-3.5 h-3.5 shrink-0" /><span>Showing available buses</span><button onClick={() => refetch()} className="ml-auto underline hover:opacity-80">Retry</button></>
-                  ) : null}
+                  {isError ? (
+                    <><Bus className="w-3.5 h-3.5 shrink-0" /><span>Failed to load buses.</span><button onClick={() => refetch()} className="ml-auto underline hover:opacity-80">Retry</button></>
+                  ) : (
+                    <><Bus className="w-3.5 h-3.5 shrink-0" /><span className="font-semibold">Showing {busList.length} buses</span><span className="opacity-70">· Live data{dataSource ? ` (${dataSource})` : ""}</span></>
+                  )}
                 </div>
               )}
 
