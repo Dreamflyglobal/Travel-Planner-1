@@ -109,6 +109,9 @@ export default function FlightResults() {
   const { user, isAgent } = useAuth();
   const { toast } = useToast();
   const [bookingLoadingId, setBookingLoadingId] = useState<string | null>(null);
+  // Ref-based atomic guard — prevents two concurrent handleSelectFlight calls even
+  // if React state hasn't re-rendered yet (covers rapid double-click edge cases).
+  const isLoadingRef = useRef(false);
   // Tracks whether the current fareQuote was triggered by an explicit user click.
   // Prevents any automatic / accidental "sold out" toast from background calls.
   const userClickedRef = useRef(false);
@@ -116,7 +119,8 @@ export default function FlightResults() {
   // ── Reset loading state whenever the search changes ──────────────────────
   useEffect(() => {
     setBookingLoadingId(null);
-    userClickedRef.current = false;   // reset on new search
+    isLoadingRef.current  = false;    // release any stuck lock on new search
+    userClickedRef.current = false;   // reset click flag on new search
   }, [searchString]);
 
   // ── fareQuote on fare/flight selection ────────────────────────────────────
@@ -131,6 +135,10 @@ export default function FlightResults() {
     resultIndex?: string,
     searchTraceId?: string,
   ) {
+    // ── Atomic guard — blocks concurrent calls regardless of render timing ──
+    if (isLoadingRef.current) return;
+    isLoadingRef.current = true;
+
     setBookingLoadingId(fareKey);
     sessionStorage.removeItem("ww_tj_farequote");
     sessionStorage.removeItem("ww_tj_booking_id");
@@ -138,147 +146,195 @@ export default function FlightResults() {
 
     // No valid TripJack bookingId → skip fareQuote, navigate directly
     if (!isTjFare) {
+      isLoadingRef.current = false;
       setBookingLoadingId(null);
       setLocation(`/booking/flight?${urlParams.toString()}`);
       return;
     }
 
-    const apiBase = (import.meta.env.VITE_API_BASE_URL as string) ?? "";
-    try {
-      const ri = resultIndex  || "";
-      const ti = searchTraceId || "";
-      console.info(
-        "[fareQuote/select] fareKey:", fareKey,
-        "| resultIndex:", ri || "(none)",
-        "| traceId:", ti || "(none)",
-      );
+    const apiBase  = (import.meta.env.VITE_API_BASE_URL as string) ?? "";
+    const ri       = resultIndex   || "";
+    const ti       = searchTraceId || "";
+    const payload  = JSON.stringify({ bookingId: fareKey, traceId: ti, resultIndex: ri });
 
-      const res  = await fetch(`${apiBase}/api/tj-farequote`, {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ bookingId: fareKey, traceId: ti, resultIndex: ri }),
-      });
-      const data = await res.json().catch(() => ({}));
-      console.info(
-        "[fareQuote/select] status:", res.status,
-        "| fareKey:", fareKey,
-        "| response:", data,
-      );
+    console.info(
+      "[fareQuote/select] fareKey:", fareKey,
+      "| resultIndex:", ri || "(none)",
+      "| traceId:", ti || "(none)",
+    );
 
-      // ── Helper: re-trigger this fare selection (used by Retry buttons) ────
-      const retry = () => {
-        userClickedRef.current = true;
-        handleSelectFlight(fareKey, urlParams, isTjFare, resultIndex, searchTraceId);
-      };
+    // ── Manual retry callback (attached to toast Retry buttons) ───────────
+    const manualRetry = () => {
+      userClickedRef.current = true;
+      handleSelectFlight(fareKey, urlParams, isTjFare, resultIndex, searchTraceId);
+    };
 
-      // ── HTTP-level errors ─────────────────────────────────────────────────
-      if (!res.ok) {
-        setBookingLoadingId(null);
-        if (!userClickedRef.current) return;
+    // ── Auto-retry loop ───────────────────────────────────────────────────
+    // Up to 1 silent automatic retry for transient failures (5xx, network
+    // errors, timeouts) before surfacing an error toast to the user.
+    const MAX_AUTO_RETRIES  = 1;
+    const RETRY_DELAY_MS    = 1_500;   // wait 1.5 s between attempts
+    const FETCH_TIMEOUT_MS  = 15_000;  // abort if airline takes > 15 s
 
-        // 5xx / 408 / 429 = server or timeout — transient, offer retry
-        const isTransient = res.status >= 500 || res.status === 408 || res.status === 429;
-        if (isTransient) {
-          console.warn("[fareQuote/select] server error", res.status, "— transient, retryable");
-          toast({
-            variant:     "destructive",
-            title:       "Server busy",
-            description: "Could not reach the airline right now. Please try again.",
-            action:      <ToastAction altText="Retry" onClick={retry}>Retry</ToastAction>,
-          });
-        } else {
-          // 4xx — bad request / auth issue; not a sold-out but not retryable either
-          console.warn("[fareQuote/select] client error", res.status);
-          toast({
-            variant:     "destructive",
-            title:       "Could not verify fare",
-            description: "Please go back and select the flight again.",
-          });
-        }
-        return;
+    const isTransientStatus = (status: number) =>
+      status >= 500 || status === 408 || status === 429;
+
+    let res: Response | null  = null;
+    let data: any             = {};
+    let fetchErr: Error | null = null;
+
+    for (let attempt = 0; attempt <= MAX_AUTO_RETRIES; attempt++) {
+      if (attempt > 0) {
+        console.info(`[fareQuote/select] auto-retry attempt ${attempt + 1}…`);
+        await new Promise<void>(r => setTimeout(r, RETRY_DELAY_MS));
       }
 
-      // ── TripJack application-level error ──────────────────────────────────
-      if (data?.status === false || data?.errors?.length) {
-        const rawMsg: string = data?.errors?.[0]?.message || data?.message || "";
-        const msg = rawMsg.toLowerCase();
-        const tf: number = data?.data?.totalPriceInfo?.totalFareDetail?.fC?.TF ?? 0;
-        console.warn("[fareQuote/select] TripJack error:", rawMsg || "(no message)", "| tf:", tf);
+      const controller = new AbortController();
+      const timeoutId  = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+      fetchErr = null;
 
-        // Price changed — still valid, let passenger page handle the dialog
-        const isPriceChange = tf > 0 &&
-          (msg.includes("price") || msg.includes("fare chang") || msg.includes("revised") || msg.includes("updated"));
+      try {
+        res  = await fetch(`${apiBase}/api/tj-farequote`, {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    payload,
+          signal:  controller.signal,
+        });
+        clearTimeout(timeoutId);
+        data = await res.json().catch(() => ({}));
+        console.info(
+          "[fareQuote/select] status:", res.status,
+          "| attempt:", attempt + 1,
+          "| fareKey:", fareKey,
+          "| response:", data,
+        );
 
-        if (isPriceChange) {
-          const resolvedId = data?.data?.bookingId || fareKey;
-          const travelersCount = parseInt(urlParams.get("travelers") || "1", 10);
-          const newRawPerPerson = Math.round(tf / travelersCount);
-          urlParams.set("price", String(newRawPerPerson));
-          urlParams.set("priceWithMarkup", String(newRawPerPerson + parseInt(urlParams.get("markup") || "0", 10)));
-          sessionStorage.setItem("ww_tj_farequote",     JSON.stringify(data));
-          sessionStorage.setItem("ww_tj_booking_id",    resolvedId);
-          sessionStorage.setItem("ww_tj_farequote_key", fareKey);
-          setBookingLoadingId(null);
-          setLocation(`/booking/flight?${urlParams.toString()}`);
-          return;
+        // Retry only for transient HTTP errors; break out for success or 4xx
+        if (!isTransientStatus(res.status) || !res.ok === false) break;
+        if (attempt < MAX_AUTO_RETRIES) {
+          console.warn(`[fareQuote/select] transient HTTP ${res.status} — will retry`);
+          continue;
         }
-
-        setBookingLoadingId(null);
-        if (!userClickedRef.current) return;
-
-        // Classify by error message: server hiccup vs genuine unavailability
-        const SERVER_SIGNALS  = ["timeout", "server error", "internal", "try again", "gateway", "service", "session expired", "system error", "overload"];
-        const SOLDOUT_SIGNALS = ["not available", "sold out", "no inventory", "unavailable", "no seat", "fare not", "inventory", "cannot", "no fare"];
-
-        const isServerHiccup = SERVER_SIGNALS.some(s => msg.includes(s));
-        const isSoldOut      = SOLDOUT_SIGNALS.some(s => msg.includes(s));
-
-        if (isServerHiccup && !isSoldOut) {
-          toast({
-            variant:     "destructive",
-            title:       "Server busy",
-            description: "The airline server is temporarily unavailable. Please try again.",
-            action:      <ToastAction altText="Retry" onClick={retry}>Retry</ToastAction>,
-          });
-        } else {
-          // Explicit sold out OR unrecognised error (safest default)
-          toast({
-            variant:     "destructive",
-            title:       "Flight sold out",
-            description: "This fare is no longer available. Please select another flight.",
-          });
+      } catch (err: any) {
+        clearTimeout(timeoutId);
+        fetchErr = err;
+        if (attempt < MAX_AUTO_RETRIES) {
+          console.warn(`[fareQuote/select] fetch error on attempt ${attempt + 1}: ${err?.message} — will retry`);
+          continue;
         }
-        return;
       }
+    }
 
-      // ── Success — cache and navigate ──────────────────────────────────────
-      const resolvedId = data?.data?.bookingId || fareKey;
-      const tf: number = data?.data?.totalPriceInfo?.totalFareDetail?.fC?.TF ?? 0;
-      if (tf > 0) {
-        const travelersCount  = parseInt(urlParams.get("travelers") || "1", 10);
-        const newRawPerPerson = Math.round(tf / travelersCount);
-        urlParams.set("price", String(newRawPerPerson));
-        urlParams.set("priceWithMarkup", String(newRawPerPerson + parseInt(urlParams.get("markup") || "0", 10)));
-      }
-      sessionStorage.setItem("ww_tj_farequote",     JSON.stringify(data));
-      sessionStorage.setItem("ww_tj_booking_id",    resolvedId);
-      sessionStorage.setItem("ww_tj_farequote_key", fareKey);
-      console.info("[fareQuote/select] cached — resolvedId:", resolvedId);
-      setBookingLoadingId(null);
-      setLocation(`/booking/flight?${urlParams.toString()}`);
+    // ── Always release the atomic lock after all attempts ─────────────────
+    isLoadingRef.current = false;
 
-    } catch (err: any) {
-      // Network failure, DNS error, AbortError (timeout), etc.
-      console.error("[fareQuote/select] network/fetch error:", err?.message ?? err);
+    // Network / timeout failure (all attempts exhausted)
+    if (fetchErr) {
+      console.error("[fareQuote/select] network/fetch error:", fetchErr.message);
       setBookingLoadingId(null);
       if (!userClickedRef.current) return;
       toast({
         variant:     "destructive",
         title:       "Server busy",
         description: "Could not reach the airline. Please check your connection and try again.",
-        action:      <ToastAction altText="Retry" onClick={retry}>Retry</ToastAction>,
+        action:      <ToastAction altText="Retry" onClick={manualRetry}>Retry</ToastAction>,
       });
+      return;
     }
+
+    // ── HTTP-level errors (after retries) ─────────────────────────────────
+    if (!res!.ok) {
+      setBookingLoadingId(null);
+      if (!userClickedRef.current) return;
+
+      if (isTransientStatus(res!.status)) {
+        console.warn("[fareQuote/select] server error", res!.status, "— still failing after retries");
+        toast({
+          variant:     "destructive",
+          title:       "Server busy",
+          description: "Could not reach the airline right now. Please try again.",
+          action:      <ToastAction altText="Retry" onClick={manualRetry}>Retry</ToastAction>,
+        });
+      } else {
+        console.warn("[fareQuote/select] client error", res!.status);
+        toast({
+          variant:     "destructive",
+          title:       "Could not verify fare",
+          description: "Please go back and select the flight again.",
+        });
+      }
+      return;
+    }
+
+    // ── TripJack application-level error ──────────────────────────────────
+    if (data?.status === false || data?.errors?.length) {
+      const rawMsg: string = data?.errors?.[0]?.message || data?.message || "";
+      const msg  = rawMsg.toLowerCase();
+      const tf: number = data?.data?.totalPriceInfo?.totalFareDetail?.fC?.TF ?? 0;
+      console.warn("[fareQuote/select] TripJack error:", rawMsg || "(no message)", "| tf:", tf);
+
+      // Price changed — still a valid fare; passenger page shows the dialog
+      const isPriceChange = tf > 0 &&
+        (msg.includes("price") || msg.includes("fare chang") || msg.includes("revised") || msg.includes("updated"));
+
+      if (isPriceChange) {
+        const resolvedId = data?.data?.bookingId || fareKey;
+        const travelersCount = parseInt(urlParams.get("travelers") || "1", 10);
+        const newRawPerPerson = Math.round(tf / travelersCount);
+        urlParams.set("price", String(newRawPerPerson));
+        urlParams.set("priceWithMarkup", String(newRawPerPerson + parseInt(urlParams.get("markup") || "0", 10)));
+        sessionStorage.setItem("ww_tj_farequote",     JSON.stringify(data));
+        sessionStorage.setItem("ww_tj_booking_id",    resolvedId);
+        sessionStorage.setItem("ww_tj_farequote_key", fareKey);
+        setBookingLoadingId(null);
+        setLocation(`/booking/flight?${urlParams.toString()}`);
+        return;
+      }
+
+      setBookingLoadingId(null);
+      if (!userClickedRef.current) return;
+
+      const SERVER_SIGNALS  = ["timeout", "server error", "internal", "try again", "gateway",
+                               "service", "session expired", "system error", "overload",
+                               "access denied", "unauthorized", "forbidden", "auth"];
+      const SOLDOUT_SIGNALS = ["not available", "sold out", "no inventory", "unavailable",
+                               "no seat", "fare not", "inventory", "cannot", "no fare"];
+
+      const isServerHiccup = SERVER_SIGNALS.some(s => msg.includes(s));
+      const isSoldOut      = SOLDOUT_SIGNALS.some(s => msg.includes(s));
+
+      if (isServerHiccup && !isSoldOut) {
+        toast({
+          variant:     "destructive",
+          title:       "Server busy",
+          description: "The airline server is temporarily unavailable. Please try again.",
+          action:      <ToastAction altText="Retry" onClick={manualRetry}>Retry</ToastAction>,
+        });
+      } else {
+        toast({
+          variant:     "destructive",
+          title:       "Flight sold out",
+          description: "This fare is no longer available. Please select another flight.",
+        });
+      }
+      return;
+    }
+
+    // ── Success — cache fareQuote result and navigate ─────────────────────
+    const resolvedId = data?.data?.bookingId || fareKey;
+    const tf: number = data?.data?.totalPriceInfo?.totalFareDetail?.fC?.TF ?? 0;
+    if (tf > 0) {
+      const travelersCount  = parseInt(urlParams.get("travelers") || "1", 10);
+      const newRawPerPerson = Math.round(tf / travelersCount);
+      urlParams.set("price", String(newRawPerPerson));
+      urlParams.set("priceWithMarkup", String(newRawPerPerson + parseInt(urlParams.get("markup") || "0", 10)));
+    }
+    sessionStorage.setItem("ww_tj_farequote",     JSON.stringify(data));
+    sessionStorage.setItem("ww_tj_booking_id",    resolvedId);
+    sessionStorage.setItem("ww_tj_farequote_key", fareKey);
+    console.info("[fareQuote/select] cached — resolvedId:", resolvedId);
+    setBookingLoadingId(null);
+    setLocation(`/booking/flight?${urlParams.toString()}`);
   }
 
   useAbandonedLeadTracker("flight");
