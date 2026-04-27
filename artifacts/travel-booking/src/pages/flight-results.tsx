@@ -94,6 +94,7 @@ export default function FlightResults() {
     isLiveError,
     source,
     fallbackMessage,
+    traceId,
     refetch,
   } = useFlightSearch(from, to, date, searchOpts);
 
@@ -123,6 +124,8 @@ export default function FlightResults() {
     fareKey: string,
     urlParams: URLSearchParams,
     isTjFare: boolean,
+    resultIndex?: string,
+    searchTraceId?: string,
   ) {
     setBookingLoadingId(fareKey);
     sessionStorage.removeItem("ww_tj_farequote");
@@ -138,10 +141,18 @@ export default function FlightResults() {
 
     const apiBase = (import.meta.env.VITE_API_BASE_URL as string) ?? "";
     try {
+      const ri = resultIndex  || "";
+      const ti = searchTraceId || "";
+      console.info(
+        "[fareQuote/select] fareKey:", fareKey,
+        "| resultIndex:", ri || "(none)",
+        "| traceId:", ti || "(none)",
+      );
+
       const res  = await fetch(`${apiBase}/api/tj-farequote`, {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ bookingId: fareKey }),
+        body:    JSON.stringify({ bookingId: fareKey, traceId: ti, resultIndex: ri }),
       });
       const data = await res.json().catch(() => ({}));
       console.info("[fareQuote/select] status:", res.status, "| fareKey:", fareKey);
@@ -903,7 +914,7 @@ export default function FlightResults() {
                                   return (
                                     <div
                                       key={fare.fareId || fare.cabinClass}
-                                      onClick={() => !bookingLoadingId && handleSelectFlight(fare.fareId, bookParams, true)}
+                                      onClick={() => !bookingLoadingId && handleSelectFlight(fare.fareId, bookParams, true, flight.resultIndex, traceId)}
                                       className={cn(
                                         "p-3.5 rounded-xl border-2 bg-white transition-all group",
                                         bookingLoadingId

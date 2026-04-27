@@ -25,6 +25,7 @@ export interface LiveFlight {
   stopsLabel?: string;
   status?: string;
   fareOptions?: FareOption[];
+  resultIndex?: string;  // TripJack result identifier — required for fareQuote/SSR/book
 }
 
 interface LiveSearchResult {
@@ -33,6 +34,7 @@ interface LiveSearchResult {
   source: "tripjack" | "scheduled";
   fallbackMessage?: string;
   error?: string;
+  traceId?: string;      // TripJack search session token — required for fareQuote/SSR/book
 }
 
 export interface FlightSearchOptions {
@@ -115,6 +117,7 @@ export function useFlightSearch(
     errorMessage: query.error?.message,
     source: query.data?.source ?? null,
     fallbackMessage: query.data?.fallbackMessage,
+    traceId: query.data?.traceId ?? "",
     refetch: query.refetch,
   };
 }

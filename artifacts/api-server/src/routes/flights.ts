@@ -185,6 +185,13 @@ function mapTripJackFlight(item: any, idx: number, fromIata: string, toIata: str
   const stops = Math.max(0, segCount - 1);
   const stopsLabel = segCount === 1 ? "Non-stop" : segCount === 2 ? "1 Stop" : "Multi-stop";
 
+  // resultIndex: TripJack's unique identifier for this result within the search session.
+  // Required by fareQuote / SSR / book.  Falls back through known field names then to idx.
+  const resultIndex: string =
+    item.resultIndex            ??
+    item.sI?.[0]?.rI            ??
+    String(idx);
+
   return {
     id: idx + 1,
     airline,
@@ -202,6 +209,7 @@ function mapTripJackFlight(item: any, idx: number, fromIata: string, toIata: str
     stopsLabel,
     status: "scheduled",
     fareOptions,   // ← all cabin classes with their prices
+    resultIndex,   // ← required by TripJack fareQuote/SSR/book
   };
 }
 
@@ -336,9 +344,12 @@ router.post("/flights", async (req, res): Promise<void> => {
       || data?.tripInfos?.ONWARD
       || [];
     const flights = onward.map((item, idx) => mapTripJackFlight(item, idx, f0, t0));
-    console.log(`[flights/tripjack] ${logLabel}: ${flights.length} flights (${cabinClass}, A${adultCount}C${childCount}I${infantCount})`);
 
-    res.json({ flights, total: flights.length, source: "tripjack" });
+    // traceId ties every fareQuote / SSR / book call back to this search session.
+    const traceId: string = data?.searchResult?.traceId || "";
+    console.log(`[flights/tripjack] ${logLabel}: ${flights.length} flights (${cabinClass}, A${adultCount}C${childCount}I${infantCount}) | traceId: ${traceId || "(none)"}`);
+
+    res.json({ flights, total: flights.length, source: "tripjack", traceId });
   } catch (err: any) {
     console.error("[flights/tripjack] Request failed:", err.message);
     res.status(502).json({ error: `TripJack request failed: ${err.message}` });
