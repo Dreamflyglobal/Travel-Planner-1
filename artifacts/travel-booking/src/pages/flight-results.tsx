@@ -292,31 +292,53 @@ export default function FlightResults() {
       }
 
       setBookingLoadingId(null);
-      if (!userClickedRef.current) return;
 
+      // Three-way classification of TripJack body errors:
+      const AUTH_SIGNALS    = ["access denied", "unauthorized", "forbidden", "auth failed",
+                               "invalid token", "session invalid", "denied"];
       const SERVER_SIGNALS  = ["timeout", "server error", "internal", "try again", "gateway",
-                               "service", "session expired", "system error", "overload",
-                               "access denied", "unauthorized", "forbidden", "auth"];
+                               "service unavailable", "session expired", "system error", "overload"];
       const SOLDOUT_SIGNALS = ["not available", "sold out", "no inventory", "unavailable",
-                               "no seat", "fare not", "inventory", "cannot", "no fare"];
+                               "no seat", "fare not", "inventory not", "no fare"];
 
+      const isAuthError    = AUTH_SIGNALS.some(s => msg.includes(s));
       const isServerHiccup = SERVER_SIGNALS.some(s => msg.includes(s));
       const isSoldOut      = SOLDOUT_SIGNALS.some(s => msg.includes(s));
 
-      if (isServerHiccup && !isSoldOut) {
-        toast({
-          variant:     "destructive",
-          title:       "Server busy",
-          description: "The airline server is temporarily unavailable. Please try again.",
-          action:      <ToastAction altText="Retry" onClick={manualRetry}>Retry</ToastAction>,
-        });
-      } else {
+      // ── Auth / session error ───────────────────────────────────────────────
+      // TripJack returned an auth rejection — this is NOT a fare availability
+      // problem. Cache what we have and navigate to the passenger page so the
+      // user can still attempt to book. The booking step will re-validate.
+      if (isAuthError && !isSoldOut) {
+        console.warn("[fareQuote/select] auth bypass — navigating with fareKey as bookingId");
+        sessionStorage.setItem("ww_tj_farequote",     JSON.stringify(data));
+        sessionStorage.setItem("ww_tj_booking_id",    fareKey);
+        sessionStorage.setItem("ww_tj_farequote_key", fareKey);
+        setLocation(`/booking/flight?${urlParams.toString()}`);
+        return;
+      }
+
+      // Remaining error paths show a toast — require explicit user click
+      if (!userClickedRef.current) return;
+
+      // ── Explicit sold out ──────────────────────────────────────────────────
+      if (isSoldOut && !isServerHiccup) {
         toast({
           variant:     "destructive",
           title:       "Flight sold out",
           description: "This fare is no longer available. Please select another flight.",
         });
+        return;
       }
+
+      // ── Server hiccup OR unrecognised — default to retryable error ─────────
+      // Never default to "sold out" for unknown errors — that creates false blocks.
+      toast({
+        variant:     "destructive",
+        title:       "Server busy",
+        description: "The airline server is temporarily unavailable. Please try again.",
+        action:      <ToastAction altText="Retry" onClick={manualRetry}>Retry</ToastAction>,
+      });
       return;
     }
 
