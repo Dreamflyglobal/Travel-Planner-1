@@ -229,6 +229,7 @@ export default function FlightBooking() {
       let { res: fqRes, data: fqData } = await callFareQuote(fareKey);
       if (fqData?.data?.bookingId) resolvedBookingId = fqData.data.bookingId;
       let classification = classifyFq(fqRes, fqData);
+      console.info("[fareQuote] attempt 1:", classification, "| bookingId:", fareKey, "| status:", fqRes.status);
 
       // ── Auto-retry once before surfacing any error to the user ───────────
       if (classification !== "ok") {
@@ -238,13 +239,16 @@ export default function FlightBooking() {
           const retry = await callFareQuote(fareKey);
           if (retry.data?.data?.bookingId) resolvedBookingId = retry.data.data.bookingId;
           const retryClass = classifyFq(retry.res, retry.data);
+          console.info("[fareQuote] attempt 2 (retry):", retryClass, "| bookingId:", fareKey, "| status:", retry.res.status);
           // Accept retry result if it is the same or better
           if (retryClass === "ok" || retryClass === "price_change") {
             fqRes          = retry.res;
             fqData         = retry.data;
             classification = retryClass;
           }
-        } catch { /* retry network failure — keep first result */ }
+        } catch (retryErr) {
+          console.warn("[fareQuote] attempt 2 network error:", retryErr);
+        }
       }
 
       // ── Act on final classification ───────────────────────────────────────
