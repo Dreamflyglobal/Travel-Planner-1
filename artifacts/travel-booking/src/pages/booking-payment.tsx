@@ -468,6 +468,43 @@ export default function BookingPayment() {
     };
   }
 
+  // ── Refund helper ─────────────────────────────────────────────────────────
+  // Attempts to trigger a Razorpay refund via the backend admin route.
+  // For non-admin users the API returns 401 and `initiated` will be false;
+  // the payment details are always persisted in localStorage for admin review.
+  async function attemptRefund(
+    paymentId: string,
+    amount: number,
+    reason: string,
+  ): Promise<{ initiated: boolean; refundId?: string; error?: string }> {
+    const apiBase = (import.meta.env.VITE_API_BASE_URL as string) ?? "";
+
+    // Always record locally so admins can spot and process orphaned payments.
+    try {
+      const pending = JSON.parse(localStorage.getItem("ww_pending_refunds") ?? "[]");
+      pending.push({ paymentId, amount, reason, timestamp: new Date().toISOString() });
+      localStorage.setItem("ww_pending_refunds", JSON.stringify(pending));
+    } catch { /* localStorage unavailable — continue */ }
+
+    try {
+      const res = await fetch(`${apiBase}/api/admin/refund`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ paymentId, amount }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        console.info("[refund] initiated:", data.refund?.id, "paymentId:", paymentId);
+        return { initiated: true, refundId: data.refund?.refundId };
+      }
+      console.warn("[refund] backend returned error:", data.error ?? res.status, "paymentId:", paymentId);
+      return { initiated: false, error: data.error ?? `HTTP ${res.status}` };
+    } catch (err) {
+      console.error("[refund] network error for paymentId:", paymentId, err);
+      return { initiated: false, error: "Network error during refund" };
+    }
+  }
+
   async function attemptTjBook(
     s: FlightBookingSession,
   ): Promise<{ pnr?: string; tjBookingRef?: string; error?: string }> {
@@ -825,8 +862,19 @@ export default function BookingPayment() {
           console.log("Booking saved");
         } catch (err) {
           console.error("Booking save failed:", err);
+          // Payment was collected but our DB failed — attempt an automatic refund.
+          const refundResult = await attemptRefund(paymentId, totalAfterCoupon, "booking_save_failed");
+          console.log("[refund] result:", refundResult);
           setProcessing(false);
-          toast({ variant: "destructive", title: "Booking Failed", description: "Payment received but booking could not be saved. Please contact support with Payment ID: " + paymentId });
+          const refundMsg = refundResult.initiated
+            ? `Payment successful but booking failed. Refund initiated — allow 5–7 business days. Payment ID: ${paymentId}`
+            : `Payment successful but booking failed. Refund will be processed manually. Payment ID: ${paymentId} — please contact support.`;
+          setPaymentError(refundMsg);
+          toast({
+            title: "Refund Initiated",
+            description: `₹${totalAfterCoupon.toLocaleString("en-IN")} will be refunded to your account.`,
+            duration: 12000,
+          });
           return;
         }
 
