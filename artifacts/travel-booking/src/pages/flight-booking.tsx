@@ -227,91 +227,19 @@ export default function FlightBooking() {
       }
       // Price consistent — skip the network block entirely; SSR will use resolvedBookingId
     } else {
-
-    // Helper: one fareQuote network call
-    const callFareQuote = async (bookingId: string) => {
-      const res = await fetch(`${apiBase}/api/tj-farequote`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bookingId }),
-      });
-      const data = await res.json();
-      return { res, data };
-    };
-
-    // Helper: classify a fareQuote result as "ok" | "price_change" | "unavailable"
-    const classifyFq = (res: Response, data: any): "ok" | "price_change" | "unavailable" => {
-      const tf: number = data?.data?.totalPriceInfo?.totalFareDetail?.fC?.TF ?? 0;
-      if (!res.ok || data?.status === false || data?.errors?.length) {
-        const msg = (data?.errors?.[0]?.message || data?.message || "").toLowerCase();
-        const isPrice = msg.includes("price") || msg.includes("fare chang") ||
-                        msg.includes("revised") || msg.includes("updated");
-        return (isPrice && tf > 0) ? "price_change" : "unavailable";
-      }
-      // Success — check if airline silently returned a different total fare
-      if (tf > 0 && Math.abs(tf - rawPrice * travelers) > 1) return "price_change";
-      return "ok";
-    };
-
-    try {
-      let { res: fqRes, data: fqData } = await callFareQuote(fareKey);
-      if (fqData?.data?.bookingId) resolvedBookingId = fqData.data.bookingId;
-      let classification = classifyFq(fqRes, fqData);
-      console.info("[fareQuote] attempt 1:", classification, "| bookingId:", fareKey, "| status:", fqRes.status);
-
-      // ── Auto-retry once before surfacing any error to the user ───────────
-      if (classification !== "ok") {
-        setSubmitStep("Verifying fare with airline…");
-        await new Promise<void>((r) => setTimeout(r, 1200));
-        try {
-          const retry = await callFareQuote(fareKey);
-          if (retry.data?.data?.bookingId) resolvedBookingId = retry.data.data.bookingId;
-          const retryClass = classifyFq(retry.res, retry.data);
-          console.info("[fareQuote] attempt 2 (retry):", retryClass, "| bookingId:", fareKey, "| status:", retry.res.status);
-          // Accept retry result if it is the same or better
-          if (retryClass === "ok" || retryClass === "price_change") {
-            fqRes          = retry.res;
-            fqData         = retry.data;
-            classification = retryClass;
-          }
-        } catch (retryErr) {
-          console.warn("[fareQuote] attempt 2 network error:", retryErr);
-        }
-      }
-
-      // ── Act on final classification ───────────────────────────────────────
-      if (classification === "price_change") {
-        const tf: number = fqData?.data?.totalPriceInfo?.totalFareDetail?.fC?.TF ?? 0;
-        const newRawPerPerson = Math.round(tf / travelers);
-        const newBaseFare     = newRawPerPerson + hiddenMarkup;
-        const newTotal        = (newBaseFare + convFee) * travelers;
-        sessionStorage.setItem("ww_tj_farequote", JSON.stringify(fqData));
-        setPriceChangeInfo({ oldTotal: totalBase, newTotal, newRawPrice: newRawPerPerson, newBaseFare, resolvedBookingId });
-        setSubmitting(false);
-        setSubmitStep("");
-        return;
-      }
-
-      if (classification === "unavailable") {
-        setFareUnavailable("Flight sold out. Please select another flight.");
-        setSubmitting(false);
-        setSubmitStep("");
-        return;
-      }
-
-      // classification === "ok" — store and continue to SSR
-      sessionStorage.setItem("ww_tj_farequote", JSON.stringify(fqData));
-    } catch {
+      // No pre-fetched fareQuote in session — the user likely refreshed the page
+      // or landed here via a direct URL. Send them back to search so they can
+      // select a flight and have the fare verified before proceeding.
+      console.warn("[fareQuote] no cached data — redirecting to search");
       toast({
-        variant: "destructive",
-        title: "Fare check failed",
-        description: "Could not reach the airline system. Please check your connection and try again.",
+        variant:     "destructive",
+        title:       "Session expired",
+        description: "Please select your flight again to continue.",
       });
       setSubmitting(false);
       setSubmitStep("");
       return;
     }
-    } // end else (no pre-fetch)
 
     // ── Step 2: SSR — seats & baggage (optional — failure shows empty state) ──
     setSubmitStep("Fetching seats & baggage…");
