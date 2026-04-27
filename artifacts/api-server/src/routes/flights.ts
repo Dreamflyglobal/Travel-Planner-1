@@ -162,7 +162,8 @@ function mapTripJackFlight(item: any, idx: number, fromIata: string, toIata: str
     item.sI?.[0]?.rI  ??
     String(idx);
 
-  const fareOptions = (item.totalPriceList || [])
+  // Map every totalPriceList entry to a fare option object.
+  const allFareOptions = (item.totalPriceList || [])
     .map((pl: any) => {
       const adultFd = pl?.fd?.ADULT;
       if (!adultFd) return null;
@@ -170,7 +171,7 @@ function mapTripJackFlight(item: any, idx: number, fromIata: string, toIata: str
       if (!rawFare) return null;
       const cc = (adultFd?.cc || "ECONOMY").toUpperCase();
 
-      // Each fare entry in totalPriceList may have its own resultIndex.
+      // Each fare entry in totalPriceList may carry its own resultIndex.
       // Use it when present; fall back to the flight-level value.
       const fareResultIndex: string =
         pl.resultIndex    ??
@@ -186,7 +187,21 @@ function mapTripJackFlight(item: any, idx: number, fromIata: string, toIata: str
         resultIndex: fareResultIndex,   // ← per-fare TripJack result identifier
       };
     })
-    .filter(Boolean);
+    .filter(Boolean) as Array<{
+      fareId: string; cabinClass: string; cabinLabel: string;
+      totalFare: number; seatsLeft: number; resultIndex: string;
+    }>;
+
+  // TripJack often returns multiple sub-types per cabin class (SAVER, FLEXI, PLUS …).
+  // Deduplicate: sort cheapest-first then keep the first (cheapest) per cabin class.
+  // This ensures one card per cabin class in the UI, with a 1-to-1 fare ↔ API mapping.
+  allFareOptions.sort((a, b) => a.totalFare - b.totalFare);
+  const seenCabins = new Set<string>();
+  const fareOptions = allFareOptions.filter((f) => {
+    if (seenCabins.has(f.cabinClass)) return false;
+    seenCabins.add(f.cabinClass);
+    return true;
+  });
 
   // Primary price = cheapest available fare (for sort/filter compatibility)
   const priceInfo  = item.totalPriceList?.[0]?.fd?.ADULT;
