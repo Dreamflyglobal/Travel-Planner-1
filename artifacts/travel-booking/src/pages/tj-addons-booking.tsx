@@ -98,7 +98,10 @@ export default function TJAddonsBooking() {
   const [confirmedId,  setConfirmedId]  = useState("");
   const [isBooking,    setIsBooking]    = useState(false);
 
-  // ── Step 1: FareQuote + SSR on mount ───────────────────────────────────────
+  // ── Load fareQuote from cache + SSR on mount ──────────────────────────────
+  // fareQuote is ONLY called when the user clicks "Select [cabin]" on the
+  // flight-results page. The result is stored in sessionStorage there and
+  // consumed here — we never call fareQuote automatically.
   const hasStarted = useRef(false);
   useEffect(() => {
     if (hasStarted.current) return;
@@ -107,44 +110,43 @@ export default function TJAddonsBooking() {
       setLoadError("No bookingId provided. Please go back and select a flight.");
       return;
     }
-    runFarequoteAndSSR();
+    runSSR();
   }, []);
 
-  async function runFarequoteAndSSR() {
+  async function runSSR() {
     setStep("loading");
 
-    // 1. FareQuote
-    try {
-      setLoadingMsg("Confirming fare quote…");
-      const fqRes = await fetch(`${API}/api/tj-farequote`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bookingId }),
-      });
-      const fqData = await fqRes.json();
-      console.log("[tj-addons] FareQuote response:", fqData);
+    // 1. Read fareQuote from sessionStorage cache (set during flight selection).
+    // Using a local variable so the resolved ID is available immediately for SSR.
+    const cachedFqStr = sessionStorage.getItem("ww_tj_farequote");
+    const cachedBid   = sessionStorage.getItem("ww_tj_booking_id");
+    let resolvedBid   = bookingId;
 
-      const fqBookingId =
-        fqData?.bookingId ||
-        fqData?.results?.bookingId ||
-        bookingId;
-
-      const fqPrice =
-        fqData?.results?.totalPriceInfo?.totalFareDetail?.fC?.TF ||
-        fqData?.totalPriceInfo?.totalFareDetail?.fC?.TF ||
-        price;
-
-      setFarequoteBookingId(fqBookingId);
-      setQuotedPrice(Number(fqPrice) || price);
-    } catch (err: any) {
-      console.warn("[tj-addons] FareQuote failed, using original bookingId:", err.message);
+    if (cachedFqStr && cachedBid) {
+      try {
+        const fqData = JSON.parse(cachedFqStr);
+        const fqPrice =
+          fqData?.data?.totalPriceInfo?.totalFareDetail?.fC?.TF ||
+          fqData?.results?.totalPriceInfo?.totalFareDetail?.fC?.TF ||
+          price;
+        resolvedBid = cachedBid;
+        setFarequoteBookingId(cachedBid);
+        setQuotedPrice(Number(fqPrice) || price);
+        console.info("[tj-addons] Using cached fareQuote | bookingId:", cachedBid);
+      } catch {
+        resolvedBid = cachedBid || bookingId;
+        setFarequoteBookingId(resolvedBid);
+      }
+    } else {
+      // No cache — fall back to URL bookingId; SSR will still work
+      console.warn("[tj-addons] No cached fareQuote found — using URL bookingId");
       setFarequoteBookingId(bookingId);
     }
 
-    // 2. SSR
+    // 2. SSR — uses resolvedBid (not stale state)
     try {
       setLoadingMsg("Loading seats & baggage options…");
-      const ssrBid = farequoteBookingId || bookingId;
+      const ssrBid = resolvedBid;
       const ssrRes = await fetch(`${API}/api/tj-ssr`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

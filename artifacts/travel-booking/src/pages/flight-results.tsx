@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { useAuth } from "@/contexts/auth-context";
 import { useAbandonedLeadTracker } from "@/hooks/use-abandoned-lead-tracker";
@@ -108,10 +108,14 @@ export default function FlightResults() {
   const { user, isAgent } = useAuth();
   const { toast } = useToast();
   const [bookingLoadingId, setBookingLoadingId] = useState<string | null>(null);
+  // Tracks whether the current fareQuote was triggered by an explicit user click.
+  // Prevents any automatic / accidental "sold out" toast from background calls.
+  const userClickedRef = useRef(false);
 
   // ── Reset loading state whenever the search changes ──────────────────────
   useEffect(() => {
     setBookingLoadingId(null);
+    userClickedRef.current = false;   // reset on new search
   }, [searchString]);
 
   // ── fareQuote on fare/flight selection ────────────────────────────────────
@@ -159,11 +163,13 @@ export default function FlightResults() {
       // ── HTTP 4xx / 5xx — fare could not be verified; treat as unavailable ──
       if (!res.ok) {
         setBookingLoadingId(null);
-        toast({
-          variant:     "destructive",
-          title:       "Flight sold out",
-          description: "This fare is no longer available. Please select another flight.",
-        });
+        if (userClickedRef.current) {
+          toast({
+            variant:     "destructive",
+            title:       "Flight sold out",
+            description: "This fare is no longer available. Please select another flight.",
+          });
+        }
         return;
       }
 
@@ -191,11 +197,13 @@ export default function FlightResults() {
 
         // Fare genuinely sold out (TripJack said so explicitly)
         setBookingLoadingId(null);
-        toast({
-          variant:     "destructive",
-          title:       "Flight sold out",
-          description: "This fare is no longer available. Please select another flight.",
-        });
+        if (userClickedRef.current) {
+          toast({
+            variant:     "destructive",
+            title:       "Flight sold out",
+            description: "This fare is no longer available. Please select another flight.",
+          });
+        }
         return;
       }
 
@@ -841,7 +849,7 @@ export default function FlightResults() {
                                   <Button
                                     size="lg"
                                     disabled={bookingLoadingId !== null}
-                                    onClick={() => handleSelectFlight(
+                                    onClick={() => { userClickedRef.current = true; handleSelectFlight(
                                       String(flight.id),
                                       new URLSearchParams({
                                         id:             String(flight.id),
@@ -861,7 +869,7 @@ export default function FlightResults() {
                                         travelers:      String(travelers),
                                       }),
                                       false, // sequential DB id — skip fareQuote
-                                    )}
+                                    )}}
                                     className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm gap-1.5 shadow-sm"
                                   >
                                     {bookingLoadingId === String(flight.id)
@@ -958,6 +966,7 @@ export default function FlightResults() {
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           if (bookingLoadingId) return;
+                                          userClickedRef.current = true;
                                           const ri = fare.resultIndex || flight.resultIndex;
                                           console.log("[fareSelect] fareId:", fare.fareId, "| cabinClass:", fare.cabinClass, "| resultIndex:", ri, "| traceId:", traceId || "(none)");
                                           handleSelectFlight(fare.fareId, bookParams, true, ri, traceId);
