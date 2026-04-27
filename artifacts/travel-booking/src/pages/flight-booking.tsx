@@ -196,9 +196,37 @@ export default function FlightBooking() {
     setSubmitting(true);
     const apiBase = (import.meta.env.VITE_API_BASE_URL as string) ?? "";
 
-    // ── Step 1: Fare Quote with automatic single retry ───────────────────────
+    // ── Step 1: Fare Quote ────────────────────────────────────────────────────
+    // If the user came via flight-results, fareQuote was already called there
+    // and the result is cached in sessionStorage.  Use it directly so we never
+    // hit the airline twice, which is the root cause of false "sold out" errors.
     setSubmitStep("Confirming fare…");
     let resolvedBookingId = fareKey;
+
+    const prefetchedKey = sessionStorage.getItem("ww_tj_farequote_key");
+    const prefetchedStr = sessionStorage.getItem("ww_tj_farequote");
+    const prefetchedId  = sessionStorage.getItem("ww_tj_booking_id");
+    const hasPrefetch   = prefetchedKey === fareKey && !!prefetchedStr && !!prefetchedId;
+
+    if (hasPrefetch) {
+      // ── Use data already fetched at flight selection ──────────────────────
+      resolvedBookingId = prefetchedId!;
+      const fqCached: any = JSON.parse(prefetchedStr!);
+      console.info("[fareQuote] using pre-fetched data | bookingId:", resolvedBookingId);
+
+      // Still check whether the cached data shows a different price
+      const tf: number = fqCached?.data?.totalPriceInfo?.totalFareDetail?.fC?.TF ?? 0;
+      if (tf > 0 && Math.abs(tf - rawPrice * travelers) > 1) {
+        const newRawPerPerson = Math.round(tf / travelers);
+        const newBaseFare     = newRawPerPerson + hiddenMarkup;
+        const newTotal        = (newBaseFare + convFee) * travelers;
+        setPriceChangeInfo({ oldTotal: totalBase, newTotal, newRawPrice: newRawPerPerson, newBaseFare, resolvedBookingId });
+        setSubmitting(false);
+        setSubmitStep("");
+        return;
+      }
+      // Price consistent — skip the network block entirely; SSR will use resolvedBookingId
+    } else {
 
     // Helper: one fareQuote network call
     const callFareQuote = async (bookingId: string) => {
@@ -283,6 +311,7 @@ export default function FlightBooking() {
       setSubmitStep("");
       return;
     }
+    } // end else (no pre-fetch)
 
     // ── Step 2: SSR — seats & baggage (optional — failure shows empty state) ──
     setSubmitStep("Fetching seats & baggage…");

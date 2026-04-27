@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useLocation, useSearch } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { useAuth } from "@/contexts/auth-context";
 import { useAbandonedLeadTracker } from "@/hooks/use-abandoned-lead-tracker";
 import { useMarketing } from "@/hooks/use-marketing";
@@ -26,7 +26,9 @@ import {
   ChevronRight,
   ChevronDown,
   Tag,
+  Loader2,
 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -104,6 +106,95 @@ export default function FlightResults() {
   const [expandedFlight,   setExpandedFlight]  = useState<number | null>(null);
 
   const { user, isAgent } = useAuth();
+  const { toast } = useToast();
+  const [bookingLoadingId, setBookingLoadingId] = useState<string | null>(null);
+
+  // ── Pre-fetch fareQuote on flight/fare selection ────────────────────────────
+  // Calls fareQuote before navigating to the passenger page so we know the
+  // fare is still live. Retries once on failure. Only blocks navigation if
+  // both attempts fail (genuine sold-out), so false "unavailable" errors are
+  // eliminated before the user even sees the passenger form.
+  async function handleSelectFlight(fareKey: string, urlParams: URLSearchParams) {
+    setBookingLoadingId(fareKey);
+    // Clear any stale cached data from a previous selection
+    sessionStorage.removeItem("ww_tj_farequote");
+    sessionStorage.removeItem("ww_tj_booking_id");
+    sessionStorage.removeItem("ww_tj_farequote_key");
+
+    const apiBase = (import.meta.env.VITE_API_BASE_URL as string) ?? "";
+    const doFQ = async () => {
+      const res = await fetch(`${apiBase}/api/tj-farequote`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ bookingId: fareKey }),
+      });
+      return { res, data: await res.json() };
+    };
+
+    let fqRes: Response | undefined;
+    let fqData: any;
+    let attempt = 1;
+
+    try {
+      ({ res: fqRes, data: fqData } = await doFQ());
+      console.info(`[fareQuote/prefetch] attempt ${attempt}:`, fqRes.status, "| fareKey:", fareKey);
+    } catch {
+      // Network error on attempt 1 — retry immediately
+      attempt = 2;
+      try {
+        ({ res: fqRes, data: fqData } = await doFQ());
+        console.info(`[fareQuote/prefetch] attempt ${attempt} (after network error):`, fqRes.status);
+      } catch {
+        setBookingLoadingId(null);
+        toast({ variant: "destructive", title: "Network error", description: "Could not reach the airline. Please check your connection." });
+        return;
+      }
+    }
+
+    const isApiError = !fqRes!.ok || fqData?.status === false || fqData?.errors?.length;
+    if (isApiError && attempt === 1) {
+      // API error on attempt 1 — retry once after a brief pause
+      console.info("[fareQuote/prefetch] attempt 1 failed — retrying…");
+      await new Promise<void>((r) => setTimeout(r, 1000));
+      attempt = 2;
+      try {
+        const retry = await doFQ();
+        console.info("[fareQuote/prefetch] attempt 2:", retry.res.status, "| fareKey:", fareKey);
+        const retryError = !retry.res.ok || retry.data?.status === false || retry.data?.errors?.length;
+        if (retryError) {
+          setBookingLoadingId(null);
+          toast({ variant: "destructive", title: "Flight sold out", description: "This fare is no longer available. Please select another flight." });
+          return;
+        }
+        fqRes  = retry.res;
+        fqData = retry.data;
+      } catch {
+        setBookingLoadingId(null);
+        toast({ variant: "destructive", title: "Network error", description: "Could not verify fare. Please try again." });
+        return;
+      }
+    }
+
+    // ── FareQuote succeeded — cache and navigate ─────────────────────────────
+    const resolvedId = fqData?.data?.bookingId || fareKey;
+    // If the airline updated the fare price, pass the updated price in the URL
+    const tf: number = fqData?.data?.totalPriceInfo?.totalFareDetail?.fC?.TF ?? 0;
+    if (tf > 0) {
+      const travelersCount = parseInt(urlParams.get("travelers") || "1", 10);
+      const newRawPerPerson = Math.round(tf / travelersCount);
+      // Update price params so the passenger page starts with the correct fare
+      urlParams.set("price", String(newRawPerPerson));
+      const markup = parseInt(urlParams.get("markup") || "0", 10);
+      urlParams.set("priceWithMarkup", String(newRawPerPerson + markup));
+    }
+    sessionStorage.setItem("ww_tj_farequote",     JSON.stringify(fqData));
+    sessionStorage.setItem("ww_tj_booking_id",    resolvedId);
+    sessionStorage.setItem("ww_tj_farequote_key", fareKey);
+    console.info("[fareQuote/prefetch] cached — resolvedId:", resolvedId, "| navigating to passenger page");
+    setBookingLoadingId(null);
+    setLocation(`/booking/flight?${urlParams.toString()}`);
+  }
+
   useAbandonedLeadTracker("flight");
   const { fireSearchEvent } = useMarketing();
   useEffect(() => {
@@ -717,30 +808,36 @@ export default function FlightResults() {
                                     <ChevronDown className={cn("w-4 h-4 ml-auto transition-transform", expandedFlight === flight.id && "rotate-180")} />
                                   </Button>
                                 ) : (
-                                  <Link
-                                    href={`/booking/flight?${new URLSearchParams({
-                                      id:             String(flight.id),
-                                      airline:        flight.airline,
-                                      flightNumber:   flight.flightNumber,
-                                      from:           flight.origin,
-                                      to:             flight.destination,
-                                      departure:      flight.departureTime,
-                                      arrival:        flight.arrivalTime,
-                                      duration:       String(flight.duration),
-                                      date:           date || "",
-                                      price:          String(flight.price),
-                                      markup:         String(effectiveMarkup),
-                                      priceWithMarkup:String(finalPrice),
-                                      normalMarkup:   String(normalMarkup),
-                                      agentSavings:   String(savings ?? 0),
-                                      travelers:      String(travelers),
-                                    }).toString()}`}
-                                    className="w-full block"
+                                  <Button
+                                    size="lg"
+                                    disabled={bookingLoadingId !== null}
+                                    onClick={() => handleSelectFlight(
+                                      String(flight.id),
+                                      new URLSearchParams({
+                                        id:             String(flight.id),
+                                        airline:        flight.airline,
+                                        flightNumber:   flight.flightNumber,
+                                        from:           flight.origin,
+                                        to:             flight.destination,
+                                        departure:      flight.departureTime,
+                                        arrival:        flight.arrivalTime,
+                                        duration:       String(flight.duration),
+                                        date:           date || "",
+                                        price:          String(flight.price),
+                                        markup:         String(effectiveMarkup),
+                                        priceWithMarkup:String(finalPrice),
+                                        normalMarkup:   String(normalMarkup),
+                                        agentSavings:   String(savings ?? 0),
+                                        travelers:      String(travelers),
+                                      }),
+                                    )}
+                                    className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm gap-1.5 shadow-sm"
                                   >
-                                    <Button size="lg" className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm gap-1.5 shadow-sm">
-                                      Book Now <ChevronRight className="w-4 h-4" />
-                                    </Button>
-                                  </Link>
+                                    {bookingLoadingId === String(flight.id)
+                                      ? <><Loader2 className="w-4 h-4 animate-spin" /> Checking fare…</>
+                                      : <>Book Now <ChevronRight className="w-4 h-4" /></>
+                                    }
+                                  </Button>
                                 )}
                                 <p className="text-[10px] text-muted-foreground text-center">
                                   {flight.fareOptions && flight.fareOptions.length > 0
@@ -781,36 +878,49 @@ export default function FlightResults() {
                                     cabinLabel:     fare.cabinLabel,
                                     fareKey:        fare.fareId,
                                   });
+                                  const isFareLoading = bookingLoadingId === fare.fareId;
                                   return (
-                                    <Link key={fare.fareId || fare.cabinClass} href={`/booking/flight?${bookParams.toString()}`} className="block">
-                                      <div className={cn(
-                                        "p-3.5 rounded-xl border-2 bg-white hover:border-orange-400 hover:shadow-md transition-all cursor-pointer group",
+                                    <div
+                                      key={fare.fareId || fare.cabinClass}
+                                      onClick={() => !bookingLoadingId && handleSelectFlight(fare.fareId, bookParams)}
+                                      className={cn(
+                                        "p-3.5 rounded-xl border-2 bg-white transition-all group",
+                                        bookingLoadingId
+                                          ? "opacity-60 cursor-not-allowed"
+                                          : "hover:border-orange-400 hover:shadow-md cursor-pointer",
                                         fare.cabinClass === "BUSINESS" || fare.cabinClass === "FIRST"
                                           ? "border-purple-200"
                                           : "border-slate-200"
-                                      )}>
-                                        <div className="flex items-start justify-between gap-2 mb-2">
-                                          <div>
-                                            <p className="font-bold text-sm text-slate-800">{fare.cabinLabel}</p>
-                                            <p className={cn(
-                                              "text-[10px] font-semibold mt-0.5",
-                                              fare.seatsLeft <= 5 ? "text-red-500" : "text-slate-400"
-                                            )}>
-                                              {fare.seatsLeft <= 5 ? `🔥 Only ${fare.seatsLeft} left` : `${fare.seatsLeft} seats available`}
-                                            </p>
-                                          </div>
-                                          <div className="text-right shrink-0">
-                                            <p className="text-xl font-extrabold text-blue-700 tabular-nums leading-none">
-                                              ₹{fareWithMarkup.toLocaleString("en-IN")}
-                                            </p>
-                                            <p className="text-[10px] text-muted-foreground">per person</p>
-                                          </div>
+                                      )}
+                                    >
+                                      <div className="flex items-start justify-between gap-2 mb-2">
+                                        <div>
+                                          <p className="font-bold text-sm text-slate-800">{fare.cabinLabel}</p>
+                                          <p className={cn(
+                                            "text-[10px] font-semibold mt-0.5",
+                                            fare.seatsLeft <= 5 ? "text-red-500" : "text-slate-400"
+                                          )}>
+                                            {fare.seatsLeft <= 5 ? `🔥 Only ${fare.seatsLeft} left` : `${fare.seatsLeft} seats available`}
+                                          </p>
                                         </div>
-                                        <Button size="sm" className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs h-8 gap-1 group-hover:shadow-sm">
-                                          Select <ChevronRight className="w-3.5 h-3.5" />
-                                        </Button>
+                                        <div className="text-right shrink-0">
+                                          <p className="text-xl font-extrabold text-blue-700 tabular-nums leading-none">
+                                            ₹{fareWithMarkup.toLocaleString("en-IN")}
+                                          </p>
+                                          <p className="text-[10px] text-muted-foreground">per person</p>
+                                        </div>
                                       </div>
-                                    </Link>
+                                      <Button
+                                        size="sm"
+                                        disabled={!!bookingLoadingId}
+                                        className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs h-8 gap-1 group-hover:shadow-sm"
+                                      >
+                                        {isFareLoading
+                                          ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Checking…</>
+                                          : <>Select <ChevronRight className="w-3.5 h-3.5" /></>
+                                        }
+                                      </Button>
+                                    </div>
                                   );
                                 })}
                               </div>
