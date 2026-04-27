@@ -28,6 +28,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -158,16 +159,40 @@ export default function FlightResults() {
         body:    JSON.stringify({ bookingId: fareKey, traceId: ti, resultIndex: ri }),
       });
       const data = await res.json().catch(() => ({}));
-      console.info("[fareQuote/select] status:", res.status, "| fareKey:", fareKey);
+      console.info(
+        "[fareQuote/select] status:", res.status,
+        "| fareKey:", fareKey,
+        "| response:", data,
+      );
 
-      // ── HTTP 4xx / 5xx — fare could not be verified; treat as unavailable ──
+      // ── Helper: re-trigger this fare selection (used by Retry buttons) ────
+      const retry = () => {
+        userClickedRef.current = true;
+        handleSelectFlight(fareKey, urlParams, isTjFare, resultIndex, searchTraceId);
+      };
+
+      // ── HTTP-level errors ─────────────────────────────────────────────────
       if (!res.ok) {
         setBookingLoadingId(null);
-        if (userClickedRef.current) {
+        if (!userClickedRef.current) return;
+
+        // 5xx / 408 / 429 = server or timeout — transient, offer retry
+        const isTransient = res.status >= 500 || res.status === 408 || res.status === 429;
+        if (isTransient) {
+          console.warn("[fareQuote/select] server error", res.status, "— transient, retryable");
           toast({
             variant:     "destructive",
-            title:       "Flight sold out",
-            description: "This fare is no longer available. Please select another flight.",
+            title:       "Server busy",
+            description: "Could not reach the airline right now. Please try again.",
+            action:      <ToastAction altText="Retry" onClick={retry}>Retry</ToastAction>,
+          });
+        } else {
+          // 4xx — bad request / auth issue; not a sold-out but not retryable either
+          console.warn("[fareQuote/select] client error", res.status);
+          toast({
+            variant:     "destructive",
+            title:       "Could not verify fare",
+            description: "Please go back and select the flight again.",
           });
         }
         return;
@@ -175,13 +200,16 @@ export default function FlightResults() {
 
       // ── TripJack application-level error ──────────────────────────────────
       if (data?.status === false || data?.errors?.length) {
-        const msg: string  = (data?.errors?.[0]?.message || data?.message || "").toLowerCase();
-        const tf: number   = data?.data?.totalPriceInfo?.totalFareDetail?.fC?.TF ?? 0;
+        const rawMsg: string = data?.errors?.[0]?.message || data?.message || "";
+        const msg = rawMsg.toLowerCase();
+        const tf: number = data?.data?.totalPriceInfo?.totalFareDetail?.fC?.TF ?? 0;
+        console.warn("[fareQuote/select] TripJack error:", rawMsg || "(no message)", "| tf:", tf);
+
+        // Price changed — still valid, let passenger page handle the dialog
         const isPriceChange = tf > 0 &&
           (msg.includes("price") || msg.includes("fare chang") || msg.includes("revised") || msg.includes("updated"));
 
         if (isPriceChange) {
-          // Cache the updated fare and let the passenger page show the price-change dialog
           const resolvedId = data?.data?.bookingId || fareKey;
           const travelersCount = parseInt(urlParams.get("travelers") || "1", 10);
           const newRawPerPerson = Math.round(tf / travelersCount);
@@ -195,9 +223,25 @@ export default function FlightResults() {
           return;
         }
 
-        // Fare genuinely sold out (TripJack said so explicitly)
         setBookingLoadingId(null);
-        if (userClickedRef.current) {
+        if (!userClickedRef.current) return;
+
+        // Classify by error message: server hiccup vs genuine unavailability
+        const SERVER_SIGNALS  = ["timeout", "server error", "internal", "try again", "gateway", "service", "session expired", "system error", "overload"];
+        const SOLDOUT_SIGNALS = ["not available", "sold out", "no inventory", "unavailable", "no seat", "fare not", "inventory", "cannot", "no fare"];
+
+        const isServerHiccup = SERVER_SIGNALS.some(s => msg.includes(s));
+        const isSoldOut      = SOLDOUT_SIGNALS.some(s => msg.includes(s));
+
+        if (isServerHiccup && !isSoldOut) {
+          toast({
+            variant:     "destructive",
+            title:       "Server busy",
+            description: "The airline server is temporarily unavailable. Please try again.",
+            action:      <ToastAction altText="Retry" onClick={retry}>Retry</ToastAction>,
+          });
+        } else {
+          // Explicit sold out OR unrecognised error (safest default)
           toast({
             variant:     "destructive",
             title:       "Flight sold out",
@@ -208,8 +252,8 @@ export default function FlightResults() {
       }
 
       // ── Success — cache and navigate ──────────────────────────────────────
-      const resolvedId     = data?.data?.bookingId || fareKey;
-      const tf: number     = data?.data?.totalPriceInfo?.totalFareDetail?.fC?.TF ?? 0;
+      const resolvedId = data?.data?.bookingId || fareKey;
+      const tf: number = data?.data?.totalPriceInfo?.totalFareDetail?.fC?.TF ?? 0;
       if (tf > 0) {
         const travelersCount  = parseInt(urlParams.get("travelers") || "1", 10);
         const newRawPerPerson = Math.round(tf / travelersCount);
@@ -223,12 +267,16 @@ export default function FlightResults() {
       setBookingLoadingId(null);
       setLocation(`/booking/flight?${urlParams.toString()}`);
 
-    } catch {
+    } catch (err: any) {
+      // Network failure, DNS error, AbortError (timeout), etc.
+      console.error("[fareQuote/select] network/fetch error:", err?.message ?? err);
       setBookingLoadingId(null);
+      if (!userClickedRef.current) return;
       toast({
         variant:     "destructive",
-        title:       "Network error",
-        description: "Could not reach the airline. Please check your connection.",
+        title:       "Server busy",
+        description: "Could not reach the airline. Please check your connection and try again.",
+        action:      <ToastAction altText="Retry" onClick={retry}>Retry</ToastAction>,
       });
     }
   }
