@@ -103,6 +103,10 @@ export default function FlightBooking() {
   const normalMarkupUrl    = parseInt(p.get("normalMarkup")    || "-1", 10);
   const agentSavingsUrl    = parseInt(p.get("agentSavings")    || "0",  10);
   const travelers          = parseInt(p.get("travelers")       || "1",  10);
+  const cabinClass         = p.get("cabinClass")               || "ECONOMY";
+  const cabinLabel         = p.get("cabinLabel")               || "Economy";
+  // TripJack fareId from the selected fare option — used as bookingId for fareQuote / SSR
+  const fareKey            = p.get("fareKey")                  || flightId;
 
   const hiddenMarkup   = markupFromUrl >= 0 ? markupFromUrl : getHiddenMarkupAmount(rawPrice, "flights");
   const baseFare       = priceWithMarkupUrl > 0 ? priceWithMarkupUrl : rawPrice + hiddenMarkup;
@@ -169,32 +173,37 @@ export default function FlightBooking() {
       isAgent, agentSavings: agentSavingsUrl, normalMarkup: normalMarkupUrl >= 0 ? normalMarkupUrl : hiddenMarkup,
       agentId:    isAgent ? user?.id    : undefined,
       agentEmail: isAgent ? user?.email : undefined,
+      cabinClass,
+      cabinLabel,
+      tjBookingId: fareKey,
     });
 
     setSubmitting(true);
     const apiBase = (import.meta.env.VITE_API_BASE_URL as string) ?? "";
     try {
-      let tjBookingId = flightId;
+      // Use the TripJack fareId (fareKey) as the bookingId for fareQuote
+      let resolvedBookingId = fareKey;
       try {
         const fqRes = await fetch(`${apiBase}/api/tj-farequote`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ bookingId: flightId }),
+          body: JSON.stringify({ bookingId: fareKey }),
         });
         const fqData = await fqRes.json();
-        if (fqData?.data?.bookingId) tjBookingId = fqData.data.bookingId;
+        // TripJack may return a new bookingId; prefer that if present
+        if (fqData?.data?.bookingId) resolvedBookingId = fqData.data.bookingId;
         sessionStorage.setItem("ww_tj_farequote", JSON.stringify(fqData));
       } catch { /* ignore – addons page uses fallback */ }
       try {
         const ssrRes = await fetch(`${apiBase}/api/tj-ssr`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ bookingId: tjBookingId }),
+          body: JSON.stringify({ bookingId: resolvedBookingId }),
         });
         const ssrData = await ssrRes.json();
         sessionStorage.setItem("ww_ssr_data", JSON.stringify(ssrData));
       } catch { /* ignore */ }
-      sessionStorage.setItem("ww_tj_booking_id", tjBookingId);
+      sessionStorage.setItem("ww_tj_booking_id", resolvedBookingId);
     } finally {
       setSubmitting(false);
     }
@@ -269,7 +278,7 @@ export default function FlightBooking() {
                       <p className="font-bold text-slate-900">{airline}</p>
                       <p className="text-xs text-muted-foreground">{flightNum}</p>
                     </div>
-                    <Badge className="ml-auto bg-slate-100 text-slate-600 border-0">Economy</Badge>
+                    <Badge className="ml-auto bg-slate-100 text-slate-600 border-0">{cabinLabel}</Badge>
                   </div>
                   <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-xl mb-4">
                     <div>

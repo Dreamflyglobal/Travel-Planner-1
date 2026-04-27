@@ -40,6 +40,9 @@ export type FlightBookingSession = {
   normalMarkup: number;
   agentId?: string;
   agentEmail?: string;
+  cabinClass: string;
+  cabinLabel: string;
+  tjBookingId: string;
 };
 
 export type BusBookingSession = {

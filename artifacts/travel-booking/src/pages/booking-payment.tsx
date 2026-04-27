@@ -56,7 +56,7 @@ function FlightSummary({ s }: { s: FlightBookingSession }) {
             <p className="font-bold text-slate-900">{s.airline}</p>
             <p className="text-xs text-muted-foreground">{s.flightNum}</p>
           </div>
-          <Badge className="ml-auto bg-slate-100 text-slate-600 border-0">Economy</Badge>
+          <Badge className="ml-auto bg-slate-100 text-slate-600 border-0">{s.cabinLabel || "Economy"}</Badge>
         </div>
         <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-xl">
           <div>

@@ -747,6 +747,7 @@ export default function FlightResults() {
                                     travelers:      String(travelers),
                                     cabinClass:     fare.cabinClass,
                                     cabinLabel:     fare.cabinLabel,
+                                    fareKey:        fare.fareId,
                                   });
                                   return (
                                     <Link key={fare.fareId || fare.cabinClass} href={`/booking/flight?${bookParams.toString()}`} className="block">
