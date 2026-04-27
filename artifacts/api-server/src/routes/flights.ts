@@ -179,30 +179,41 @@ function mapTripJackFlight(item: any, idx: number, fromIata: string, toIata: str
 // ── POST /api/flights — TripJack live search ───────────────────────────────
 const TRIPJACK_BASE = "https://apitest.tripjack.com";
 
+// Map our cabin class values → TripJack cabin class codes
+function resolveCabinClass(raw?: string): string {
+  const v = (raw || "ECONOMY").toUpperCase().replace(/[\s-]/g, "_");
+  if (v === "BUSINESS")        return "BUSINESS";
+  if (v === "FIRST")           return "FIRST";
+  if (v.includes("PREMIUM"))   return "PREMIUM_ECONOMY";
+  return "ECONOMY";
+}
+
 router.post("/flights", async (req, res): Promise<void> => {
   const {
+    // Legacy single-route params (kept for backward compat)
     from,
     to,
     date,
     passengers = 1,
-    class: requestedClass = "ECONOMY",
+    class: requestedClass,
+    // Extended params
+    tripType     = "ONEWAY",
+    routeInfos   : incomingRoutes,
+    paxInfo      : incomingPax,
+    cabinClass   : incomingCabinClass,
+    returnDate,
   } = req.body as {
     from?: string;
     to?: string;
     date?: string;
     passengers?: number;
     class?: string;
+    tripType?: string;
+    routeInfos?: Array<{ from: string; to: string; date: string }>;
+    paxInfo?: { ADULT?: number; CHILD?: number; INFANT?: number };
+    cabinClass?: string;
+    returnDate?: string;
   };
-
-  const fromIata = resolveIata(from || "");
-  const toIata   = resolveIata(to   || "");
-
-  if (!fromIata || !toIata) {
-    res.status(400).json({
-      error: `Could not find airport for "${!fromIata ? from : to}". Please use a valid city or IATA code.`,
-    });
-    return;
-  }
 
   const apiKey = process.env.TRIPJACK_API_KEY;
   if (!apiKey) {
@@ -210,18 +221,68 @@ router.post("/flights", async (req, res): Promise<void> => {
     return;
   }
 
-  const travelDate = date || new Date().toISOString().slice(0, 10);
-  const adultCount = Math.max(1, Number(passengers) || 1);
-  const cabinClass = String(requestedClass).toUpperCase() === "BUSINESS" ? "BUSINESS" : "ECONOMY";
+  // ── Resolve cabin class ──────────────────────────────────────────────────
+  const cabinClass = resolveCabinClass(incomingCabinClass || requestedClass);
+
+  // ── Resolve paxInfo ──────────────────────────────────────────────────────
+  const adultCount = incomingPax?.ADULT  ?? Math.max(1, Number(passengers) || 1);
+  const childCount = incomingPax?.CHILD  ?? 0;
+  const infantCount= incomingPax?.INFANT ?? 0;
+  const paxInfo    = { ADULT: adultCount, CHILD: childCount, INFANT: infantCount };
+
+  // ── Build routeInfos ─────────────────────────────────────────────────────
+  let resolvedRoutes: Array<{ fromIata: string; toIata: string; travelDate: string }>;
+
+  if (Array.isArray(incomingRoutes) && incomingRoutes.length > 0) {
+    // Multi-city or explicit routes provided by the new frontend
+    const mapped = incomingRoutes.map((r) => ({
+      fromIata  : resolveIata(r.from || "") || "",
+      toIata    : resolveIata(r.to   || "") || "",
+      travelDate: r.date || new Date().toISOString().slice(0, 10),
+    }));
+    const bad = mapped.find((r) => !r.fromIata || !r.toIata);
+    if (bad) {
+      res.status(400).json({ error: `Could not resolve airport code for one of the routes.` });
+      return;
+    }
+    resolvedRoutes = mapped;
+  } else {
+    // Backward-compat: single route from from/to/date
+    const fromIata = resolveIata(from || "");
+    const toIata   = resolveIata(to   || "");
+
+    if (!fromIata || !toIata) {
+      res.status(400).json({
+        error: `Could not find airport for "${!fromIata ? from : to}". Please use a valid city or IATA code.`,
+      });
+      return;
+    }
+
+    const travelDate = date || new Date().toISOString().slice(0, 10);
+    resolvedRoutes = [{ fromIata, toIata, travelDate }];
+
+    // Round trip: add the return leg
+    if (String(tripType).toUpperCase() === "ROUNDTRIP" && returnDate) {
+      resolvedRoutes.push({ fromIata: toIata, toIata: fromIata, travelDate: returnDate });
+    }
+  }
+
+  const searchRouteInfos = resolvedRoutes.map((r) => ({
+    fromCityOrAirport: { code: r.fromIata },
+    toCityOrAirport:   { code: r.toIata   },
+    travelDate:        r.travelDate,
+  }));
 
   const searchBody = {
     searchQuery: {
       cabinClass,
-      paxInfo: { ADULT: adultCount, CHILD: 0, INFANT: 0 },
-      routeInfos: [{ fromCityOrAirport: { code: fromIata }, toCityOrAirport: { code: toIata }, travelDate }],
+      paxInfo,
+      routeInfos: searchRouteInfos,
       searchModifiers: { isDirectFlight: false, isConnectingFlight: false },
     },
   };
+
+  const logLabel = resolvedRoutes.map((r) => `${r.fromIata}→${r.toIata} on ${r.travelDate}`).join(" | ");
 
   try {
     const apiRes = await fetch(`${TRIPJACK_BASE}/fms/v1/air-search-all`, {
@@ -241,11 +302,12 @@ router.post("/flights", async (req, res): Promise<void> => {
     }
 
     // TripJack wraps results under searchResult.tripInfos
+    const { fromIata: f0, toIata: t0 } = resolvedRoutes[0];
     const onward: any[] = data?.searchResult?.tripInfos?.ONWARD
       || data?.tripInfos?.ONWARD
       || [];
-    const flights = onward.map((item, idx) => mapTripJackFlight(item, idx, fromIata, toIata));
-    console.log(`[flights/tripjack] ${fromIata}→${toIata} on ${travelDate}: ${flights.length} flights`);
+    const flights = onward.map((item, idx) => mapTripJackFlight(item, idx, f0, t0));
+    console.log(`[flights/tripjack] ${logLabel}: ${flights.length} flights (${cabinClass}, A${adultCount}C${childCount}I${infantCount})`);
 
     res.json({ flights, total: flights.length, source: "tripjack" });
   } catch (err: any) {

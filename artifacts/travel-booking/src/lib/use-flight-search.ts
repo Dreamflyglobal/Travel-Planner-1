@@ -26,27 +26,72 @@ interface LiveSearchResult {
   error?: string;
 }
 
-async function fetchLiveFlights(from: string, to: string, date: string): Promise<LiveSearchResult> {
+export interface FlightSearchOptions {
+  tripType?   : string;
+  routeInfos? : Array<{ from: string; to: string; date: string }>;
+  paxInfo?    : { ADULT: number; CHILD: number; INFANT: number };
+  cabinClass? : string;
+  returnDate? : string;
+  adults?     : number;
+  children?   : number;
+  infants?    : number;
+}
+
+async function fetchLiveFlights(
+  from: string,
+  to: string,
+  date: string,
+  opts: FlightSearchOptions = {},
+): Promise<LiveSearchResult> {
+  const { tripType, routeInfos, paxInfo, cabinClass, returnDate, adults, children, infants } = opts;
+
+  // Build paxInfo: prefer explicit paxInfo object, else build from individual counts
+  const resolvedPax = paxInfo || (
+    (adults !== undefined || children !== undefined || infants !== undefined)
+      ? { ADULT: adults ?? 1, CHILD: children ?? 0, INFANT: infants ?? 0 }
+      : undefined
+  );
+
+  const body: Record<string, unknown> = { from, to, date };
+  if (tripType)      body.tripType   = tripType;
+  if (routeInfos)    body.routeInfos = routeInfos;
+  if (resolvedPax)   body.paxInfo    = resolvedPax;
+  if (cabinClass)    body.cabinClass = cabinClass;
+  if (returnDate)    body.returnDate = returnDate;
+
   const res = await fetch("/api/flights", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ from, to, date }),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body?.error || `Server error ${res.status}`);
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(errBody?.error || `Server error ${res.status}`);
   }
 
   return res.json() as Promise<LiveSearchResult>;
 }
 
-export function useFlightSearch(from: string, to: string, date: string) {
+export function useFlightSearch(
+  from: string,
+  to: string,
+  date: string,
+  opts: FlightSearchOptions = {},
+) {
   const enabled = Boolean(from.trim() && to.trim());
 
   const query = useQuery<LiveSearchResult, Error>({
-    queryKey: ["flights-live-search", from, to, date],
-    queryFn: () => fetchLiveFlights(from, to, date),
+    queryKey: [
+      "flights-live-search",
+      from, to, date,
+      opts.tripType, opts.returnDate,
+      JSON.stringify(opts.routeInfos),
+      JSON.stringify(opts.paxInfo),
+      opts.cabinClass,
+      opts.adults, opts.children, opts.infants,
+    ],
+    queryFn: () => fetchLiveFlights(from, to, date, opts),
     enabled,
     retry: 1,
     staleTime: 2 * 60 * 1000,

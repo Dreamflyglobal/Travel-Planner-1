@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { useAbandonedLeadTracker } from "@/hooks/use-abandoned-lead-tracker";
 import { useMarketing } from "@/hooks/use-marketing";
 import { getHiddenMarkupAmount } from "@/lib/pricing";
-import { useFlightSearch } from "@/lib/use-flight-search";
+import { useFlightSearch, type FlightSearchOptions } from "@/lib/use-flight-search";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
@@ -57,6 +57,33 @@ export default function FlightResults() {
   const date      = params.get("date")     || "";
   const travelers = parseInt(params.get("travelers") || "1", 10);
 
+  // Extended search params passed from the new search UI
+  const tripType   = params.get("tripType")   || "oneway";
+  const returnDate = params.get("returnDate") || undefined;
+  const cabinClass = params.get("cabinClass") || undefined;
+  const adults     = params.get("adults")     ? parseInt(params.get("adults")!,   10) : undefined;
+  const children   = params.get("children")   ? parseInt(params.get("children")!, 10) : undefined;
+  const infants    = params.get("infants")    ? parseInt(params.get("infants")!,  10) : undefined;
+
+  // Multi-city: mc=FROM1:TO1:DATE1|FROM2:TO2:DATE2
+  const mcParam = params.get("mc");
+  const routeInfos: FlightSearchOptions["routeInfos"] = mcParam
+    ? mcParam.split("|").map((seg) => {
+        const [f, t, d] = seg.split(":");
+        return { from: f || "", to: t || "", date: d || "" };
+      })
+    : undefined;
+
+  const searchOpts: FlightSearchOptions = {
+    tripType,
+    ...(returnDate  && { returnDate  }),
+    ...(cabinClass  && { cabinClass  }),
+    ...(adults      !== undefined && { adults   }),
+    ...(children    !== undefined && { children }),
+    ...(infants     !== undefined && { infants  }),
+    ...(routeInfos  && { routeInfos }),
+  };
+
   const {
     flights: allFlights,
     isLoading,
@@ -64,7 +91,7 @@ export default function FlightResults() {
     source,
     fallbackMessage,
     refetch,
-  } = useFlightSearch(from, to, date);
+  } = useFlightSearch(from, to, date, searchOpts);
 
   const [priceRange,       setPriceRange]       = useState([0, 50000]);
   const [selectedAirlines, setSelectedAirlines] = useState<string[]>([]);
