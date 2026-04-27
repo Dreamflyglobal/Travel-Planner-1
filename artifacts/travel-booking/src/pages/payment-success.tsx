@@ -51,6 +51,8 @@ interface BookingDetails {
   flightArrival?: string;
   flightDuration?: string;
   tjPnr?: string;
+  tjBookingRef?: string;
+  tjBookingError?: string;
 }
 
 export default function PaymentSuccess() {
@@ -298,10 +300,28 @@ export default function PaymentSuccess() {
             <p className="text-sm text-muted-foreground">
               Booking ID: <span className="font-mono font-bold text-primary">{bookingDetails.bookingId}</span>
             </p>
-            {bookingDetails.tjPnr && (
-              <p className="text-sm text-muted-foreground mt-1">
-                PNR: <span className="font-mono font-bold text-green-700 text-base">{bookingDetails.tjPnr}</span>
-              </p>
+            {bookingDetails.bookingType === "flight" && (
+              bookingDetails.tjPnr ? (
+                <div className="mt-3 inline-flex items-center gap-2 bg-green-100 border border-green-300 text-green-800 px-5 py-2 rounded-full text-sm font-semibold">
+                  <CheckCircle className="w-4 h-4 flex-shrink-0" />
+                  Airline PNR:&nbsp;
+                  <span className="font-mono font-bold text-green-900 text-base tracking-widest">
+                    {bookingDetails.tjPnr}
+                  </span>
+                </div>
+              ) : bookingDetails.tjBookingRef ? (
+                <div className="mt-3 inline-flex items-center gap-2 bg-blue-50 border border-blue-200 text-blue-800 px-5 py-2 rounded-full text-sm font-semibold">
+                  <CheckCircle className="w-4 h-4 flex-shrink-0" />
+                  Airline Booking Ref:&nbsp;
+                  <span className="font-mono font-bold text-blue-900 text-base">
+                    {bookingDetails.tjBookingRef}
+                  </span>
+                </div>
+              ) : bookingDetails.tjBookingError ? (
+                <p className="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 max-w-md mx-auto">
+                  Airline confirmation is being processed. Your payment is received — quote your Booking ID to support if needed.
+                </p>
+              ) : null
             )}
           </div>
 

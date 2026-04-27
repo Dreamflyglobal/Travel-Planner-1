@@ -381,6 +381,9 @@ export default function BookingPayment() {
         creditApplied:   creditApplied || undefined,
         paymentMethod:   paymentId.startsWith("wallet") ? "wallet" : creditApplied > 0 ? "credits+razorpay" : "razorpay",
         paymentId, bookingRef, createdAt: new Date().toISOString(),
+        cabinClass:  s.cabinClass  || undefined,
+        cabinLabel:  s.cabinLabel  || undefined,
+        tjBookingId: s.tjBookingId || undefined,
         flightInfo: { airline: s.airline, flightNum: s.flightNum, from: s.from, to: s.to, departure: s.departure, arrival: s.arrival, duration: s.duration, date: s.date },
       },
     };
@@ -465,9 +468,11 @@ export default function BookingPayment() {
     };
   }
 
-  async function attemptTjBook(s: FlightBookingSession): Promise<string | undefined> {
+  async function attemptTjBook(
+    s: FlightBookingSession,
+  ): Promise<{ pnr?: string; tjBookingRef?: string; error?: string }> {
     const tjId = sessionStorage.getItem("ww_tj_booking_id");
-    if (!tjId) return undefined;
+    if (!tjId) return { error: "No TripJack booking ID found" };
     const apiBase = (import.meta.env.VITE_API_BASE_URL as string) ?? "";
     try {
       const res = await fetch(`${apiBase}/api/tj-book`, {
@@ -491,8 +496,22 @@ export default function BookingPayment() {
       });
       const data = await res.json();
       sessionStorage.removeItem("ww_tj_booking_id");
-      return data?.data?.pnr || data?.data?.bookingId || undefined;
-    } catch { return undefined; }
+
+      // TripJack API-level failure — payment is still confirmed, booking pending
+      if (!res.ok || data?.status === false || data?.errors?.length) {
+        const msg = data?.errors?.[0]?.message
+          || data?.message
+          || "Airline confirmation pending — your payment was received.";
+        return { error: msg };
+      }
+
+      return {
+        pnr:          data?.data?.pnr       || undefined,
+        tjBookingRef: data?.data?.bookingId || undefined,
+      };
+    } catch {
+      return { error: "Could not reach airline system — your payment was received. Contact support for confirmation." };
+    }
   }
 
   async function handleWalletPay() {
@@ -592,8 +611,13 @@ export default function BookingPayment() {
       flightBaggageCost:session.type === "flight" ? (session as FlightBookingSession).extraBaggageCost : undefined,
       discount:         discount || undefined,
     };
-    const wTjPnr = session.type === "flight" ? await attemptTjBook(session as FlightBookingSession) : undefined;
-    if (wTjPnr) (wLastSuccessful as any).tjPnr = wTjPnr;
+    const wTjResult = session.type === "flight" ? await attemptTjBook(session as FlightBookingSession) : undefined;
+    if (wTjResult?.pnr)          (wLastSuccessful as any).tjPnr         = wTjResult.pnr;
+    if (wTjResult?.tjBookingRef) (wLastSuccessful as any).tjBookingRef  = wTjResult.tjBookingRef;
+    if (wTjResult?.error) {
+      toast({ title: "Airline booking note", description: `Payment confirmed. ${wTjResult.error}`, duration: 8000 });
+      (wLastSuccessful as any).tjBookingError = wTjResult.error;
+    }
     localStorage.setItem("lastSuccessfulBooking", JSON.stringify(wLastSuccessful));
     paymentDoneRef.current = true;
     clearBookingSession();
@@ -710,8 +734,13 @@ export default function BookingPayment() {
         flightBaggageCost:session.type === "flight" ? (session as FlightBookingSession).extraBaggageCost : undefined,
         discount:         discount || undefined,
       };
-      const cTjPnr = session.type === "flight" ? await attemptTjBook(session as FlightBookingSession) : undefined;
-      if (cTjPnr) (cLastSuccessful as any).tjPnr = cTjPnr;
+      const cTjResult = session.type === "flight" ? await attemptTjBook(session as FlightBookingSession) : undefined;
+      if (cTjResult?.pnr)          (cLastSuccessful as any).tjPnr         = cTjResult.pnr;
+      if (cTjResult?.tjBookingRef) (cLastSuccessful as any).tjBookingRef  = cTjResult.tjBookingRef;
+      if (cTjResult?.error) {
+        toast({ title: "Airline booking note", description: `Payment confirmed. ${cTjResult.error}`, duration: 8000 });
+        (cLastSuccessful as any).tjBookingError = cTjResult.error;
+      }
       localStorage.setItem("lastSuccessfulBooking", JSON.stringify(cLastSuccessful));
       paymentDoneRef.current = true;
       clearBookingSession();
@@ -893,8 +922,13 @@ export default function BookingPayment() {
           flightBaggageKg:  session.type === "flight" ? (session as FlightBookingSession).extraBaggageKg   : undefined,
           flightBaggageCost:session.type === "flight" ? (session as FlightBookingSession).extraBaggageCost : undefined,
         };
-        const rzTjPnr = session.type === "flight" ? await attemptTjBook(session as FlightBookingSession) : undefined;
-        if (rzTjPnr) (lastSuccessful as any).tjPnr = rzTjPnr;
+        const rzTjResult = session.type === "flight" ? await attemptTjBook(session as FlightBookingSession) : undefined;
+        if (rzTjResult?.pnr)          (lastSuccessful as any).tjPnr         = rzTjResult.pnr;
+        if (rzTjResult?.tjBookingRef) (lastSuccessful as any).tjBookingRef  = rzTjResult.tjBookingRef;
+        if (rzTjResult?.error) {
+          toast({ title: "Airline booking note", description: `Payment confirmed. ${rzTjResult.error}`, duration: 8000 });
+          (lastSuccessful as any).tjBookingError = rzTjResult.error;
+        }
         localStorage.setItem("lastSuccessfulBooking", JSON.stringify(lastSuccessful));
         paymentDoneRef.current = true;
         clearBookingSession();
