@@ -16,7 +16,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import {
   Plane, ArrowLeft, Clock, Calendar, Users, CheckCircle2,
-  ChevronRight, AlertCircle, UserPlus, Armchair, Luggage,
+  ChevronRight, AlertCircle, UserPlus, Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -73,19 +73,6 @@ function airlineGradient(name: string) {
   return "from-slate-500 to-slate-700";
 }
 
-// ── Seat map config ──────────────────────────────────────────────────────────
-const SEAT_ROWS = 6;
-const SEAT_COLS = ["A", "B", "C", "D", "E", "F"];
-// Some seats are pre-occupied (fake)
-const TAKEN_SEATS = new Set(["1A","1B","2C","2F","3D","4A","4E","5B","5F","6C"]);
-
-const BAGGAGE_OPTIONS = [
-  { kg: 0,  label: "No extra baggage",  price: 0,    tag: "Free" },
-  { kg: 15, label: "+15 kg baggage",    price: 799,  tag: "+₹799" },
-  { kg: 20, label: "+20 kg baggage",    price: 1099, tag: "+₹1,099" },
-  { kg: 30, label: "+30 kg baggage",    price: 1499, tag: "+₹1,499" },
-];
-
 const DOMESTIC_CITIES = new Set([
   "delhi","mumbai","bangalore","bengaluru","chennai","kolkata",
   "hyderabad","pune","ahmedabad","jaipur","lucknow","bhopal",
@@ -122,11 +109,9 @@ export default function FlightBooking() {
   const convFee        = getConvenienceFee(rawPrice, "flights");
   const savings        = (isAgent && agentSavingsUrl > 0) ? agentSavingsUrl : 0;
 
-  const [passengers,    setPassengers]    = useState<Passenger[]>(Array.from({ length: travelers }, emptyPassenger));
-  const [errors,        setErrors]        = useState<FieldErrors[]>(Array.from({ length: travelers }, () => ({})));
-  const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
-  const [extraBaggageKg,  setExtraBaggageKg]  = useState(0);
-  const [extraBaggageCost,setExtraBaggageCost]= useState(0);
+  const [passengers, setPassengers] = useState<Passenger[]>(Array.from({ length: travelers }, emptyPassenger));
+  const [errors,     setErrors]     = useState<FieldErrors[]>(Array.from({ length: travelers }, () => ({})));
+  const [submitting, setSubmitting] = useState(false);
 
   // Pre-fill from logged-in user
   useEffect(() => {
@@ -160,26 +145,9 @@ export default function FlightBooking() {
     setErrors((prev)     => { const next = [...prev]; next[i] = { ...next[i], [field]: undefined }; return next; });
   }
 
-  function toggleSeat(seat: string) {
-    if (TAKEN_SEATS.has(seat)) return;
-    setSelectedSeats((prev) => {
-      if (prev.includes(seat)) return prev.filter((s) => s !== seat);
-      if (prev.length >= travelers) {
-        toast({ title: `Max ${travelers} seat${travelers>1?"s":""}`, description: "Remove a seat first to change selection.", variant: "destructive" });
-        return prev;
-      }
-      return [...prev, seat];
-    });
-  }
+  const totalBase = (baseFare + convFee) * travelers;
 
-  function selectBaggage(kg: number, price: number) {
-    setExtraBaggageKg(kg);
-    setExtraBaggageCost(price);
-  }
-
-  const totalBase = (baseFare + convFee) * travelers + extraBaggageCost;
-
-  function handleContinue() {
+  async function handleContinue() {
     const validated = validatePassengers(passengers);
     if (validated.some((e) => Object.keys(e).length > 0)) {
       setErrors(validated);
@@ -193,15 +161,45 @@ export default function FlightBooking() {
       type: "flight",
       flightId, airline, flightNum,
       from, to, date, departure, arrival, duration,
-      passengers, travelers, selectedSeats,
-      extraBaggageKg, extraBaggageCost,
+      passengers, travelers,
+      selectedSeats: [],
+      extraBaggageKg: 0,
+      extraBaggageCost: 0,
       rawPrice, hiddenMarkup, baseFare, convFee, totalBase,
       isAgent, agentSavings: agentSavingsUrl, normalMarkup: normalMarkupUrl >= 0 ? normalMarkupUrl : hiddenMarkup,
       agentId:    isAgent ? user?.id    : undefined,
       agentEmail: isAgent ? user?.email : undefined,
     });
 
-    setLocation("/booking/payment");
+    setSubmitting(true);
+    const apiBase = (import.meta.env.VITE_API_BASE_URL as string) ?? "";
+    try {
+      let tjBookingId = flightId;
+      try {
+        const fqRes = await fetch(`${apiBase}/api/tj-farequote`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bookingId: flightId }),
+        });
+        const fqData = await fqRes.json();
+        if (fqData?.data?.bookingId) tjBookingId = fqData.data.bookingId;
+        sessionStorage.setItem("ww_tj_farequote", JSON.stringify(fqData));
+      } catch { /* ignore – addons page uses fallback */ }
+      try {
+        const ssrRes = await fetch(`${apiBase}/api/tj-ssr`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bookingId: tjBookingId }),
+        });
+        const ssrData = await ssrRes.json();
+        sessionStorage.setItem("ww_ssr_data", JSON.stringify(ssrData));
+      } catch { /* ignore */ }
+      sessionStorage.setItem("ww_tj_booking_id", tjBookingId);
+    } finally {
+      setSubmitting(false);
+    }
+
+    setLocation("/booking/flight-addons");
   }
 
   const gradient = airlineGradient(airline);
@@ -219,7 +217,7 @@ export default function FlightBooking() {
           </button>
 
           <div className="flex items-center gap-2 text-sm mb-5">
-            {["Flight Selection", "Passenger Details", "Payment"].map((step, i) => (
+            {["Flight Selection", "Passenger Details", "Add-ons", "Payment"].map((step, i) => (
               <div key={step} className="flex items-center gap-2">
                 <div className={cn(
                   "w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border-2",
@@ -230,13 +228,13 @@ export default function FlightBooking() {
                   {i < 1 ? <CheckCircle2 className="w-3.5 h-3.5" /> : i + 1}
                 </div>
                 <span className={cn("hidden sm:inline", i === 1 ? "font-bold" : "text-blue-300")}>{step}</span>
-                {i < 2 && <ChevronRight className="w-4 h-4 text-blue-400" />}
+                {i < 3 && <ChevronRight className="w-4 h-4 text-blue-400" />}
               </div>
             ))}
           </div>
 
           <h1 className="text-2xl font-extrabold">Passenger Details</h1>
-          <p className="text-blue-200 text-sm mt-0.5">Fill in details, choose seats & baggage, then continue to payment</p>
+          <p className="text-blue-200 text-sm mt-0.5">Fill in your details — seats & baggage are selected in the next step</p>
         </div>
       </div>
 
@@ -306,128 +304,6 @@ export default function FlightBooking() {
                         <p className="text-xs font-bold text-slate-800 mt-0.5 leading-tight">{value}</p>
                       </div>
                     ))}
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Seat Selection */}
-              <Card className="shadow-sm border">
-                <CardHeader className="pb-3 pt-5 px-5">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center shrink-0">
-                      <Armchair className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-base">Seat Selection</CardTitle>
-                      <p className="text-xs text-muted-foreground mt-0.5">Select up to {travelers} seat{travelers>1?"s":""} · optional</p>
-                    </div>
-                    {selectedSeats.length > 0 && (
-                      <Badge className="ml-auto bg-blue-100 text-blue-700 border-0">
-                        {selectedSeats.join(", ")}
-                      </Badge>
-                    )}
-                  </div>
-                </CardHeader>
-                <CardContent className="px-5 pb-5">
-                  {/* Legend */}
-                  <div className="flex items-center flex-wrap gap-3 mb-4 text-xs text-slate-500">
-                    <div className="flex items-center gap-1.5"><div className="w-5 h-5 rounded bg-slate-100 border border-slate-300" />Available</div>
-                    <div className="flex items-center gap-1.5"><div className="w-5 h-5 rounded bg-blue-500" />Selected</div>
-                    <div className="flex items-center gap-1.5"><div className="w-5 h-5 rounded bg-slate-300" />Taken</div>
-                  </div>
-
-                  {/* Seat grid with horizontal scroll on very small screens */}
-                  <div className="overflow-x-auto">
-                  {/* Column headers */}
-                  <div className="mb-2">
-                    <div className="flex gap-1 justify-center">
-                      {SEAT_COLS.map((col, ci) => (
-                        <div key={col} className={cn("w-9 text-center text-[10px] font-bold text-slate-400", ci === 2 && "mr-3")}>
-                          {col}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Seat grid */}
-                  <div className="space-y-1.5">
-                    {Array.from({ length: SEAT_ROWS }).map((_, row) => (
-                      <div key={row} className="flex gap-1 items-center justify-center">
-                        <span className="text-[10px] text-slate-400 w-4 text-right mr-1">{row+1}</span>
-                        {SEAT_COLS.map((col, ci) => {
-                          const seat = `${row+1}${col}`;
-                          const taken    = TAKEN_SEATS.has(seat);
-                          const selected = selectedSeats.includes(seat);
-                          return (
-                            <button
-                              key={seat}
-                              onClick={() => toggleSeat(seat)}
-                              disabled={taken}
-                              title={seat}
-                              className={cn(
-                                "w-9 h-9 rounded text-[10px] font-bold border transition-all",
-                                ci === 2 && "mr-3",
-                                taken    ? "bg-slate-200 border-slate-300 text-slate-400 cursor-not-allowed"
-                                : selected ? "bg-blue-500 border-blue-600 text-white shadow-md scale-105"
-                                : "bg-white border-slate-300 text-slate-600 hover:bg-blue-50 hover:border-blue-400 cursor-pointer"
-                              )}
-                            >
-                              {seat}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="mt-3 text-center text-[11px] text-muted-foreground">
-                    ✈ Front of aircraft
-                  </div>
-                  </div>{/* end overflow-x-auto */}
-                </CardContent>
-              </Card>
-
-              {/* Extra Baggage */}
-              <Card className="shadow-sm border">
-                <CardHeader className="pb-3 pt-5 px-5">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-orange-500 text-white flex items-center justify-center shrink-0">
-                      <Luggage className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-base">Extra Baggage</CardTitle>
-                      <p className="text-xs text-muted-foreground mt-0.5">Cabin bag (7kg) included free for all passengers</p>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="px-5 pb-5">
-                  <div className="grid grid-cols-2 gap-3">
-                    {BAGGAGE_OPTIONS.map(({ kg, label, price, tag }) => {
-                      const selected = extraBaggageKg === kg;
-                      return (
-                        <button
-                          key={kg}
-                          onClick={() => selectBaggage(kg, price)}
-                          className={cn(
-                            "flex flex-col items-start p-3 rounded-xl border-2 text-left transition-all",
-                            selected
-                              ? "border-orange-500 bg-orange-50"
-                              : "border-slate-200 bg-white hover:border-orange-300 hover:bg-orange-50/50"
-                          )}
-                        >
-                          <div className="flex items-center justify-between w-full mb-1">
-                            <span className={cn("text-sm font-bold", selected ? "text-orange-700" : "text-slate-700")}>
-                              {kg === 0 ? "None" : `${kg}kg`}
-                            </span>
-                            <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full",
-                              selected ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-500"
-                            )}>{tag}</span>
-                          </div>
-                          <span className="text-xs text-muted-foreground">{label}</span>
-                          {selected && <CheckCircle2 className="w-4 h-4 text-orange-500 mt-1.5" />}
-                        </button>
-                      );
-                    })}
                   </div>
                 </CardContent>
               </Card>
@@ -564,12 +440,6 @@ export default function FlightBooking() {
                           <span className="font-medium">+₹{(convFee * travelers).toLocaleString("en-IN")}</span>
                         </div>
                       )}
-                      {extraBaggageCost > 0 && (
-                        <div className="flex justify-between text-sm text-slate-600">
-                          <span>Extra Baggage ({extraBaggageKg}kg)</span>
-                          <span className="font-medium">+₹{extraBaggageCost.toLocaleString("en-IN")}</span>
-                        </div>
-                      )}
                       {isAgent && savings > 0 && (
                         <div className="flex justify-between text-xs text-emerald-600 bg-emerald-50 rounded-lg px-2 py-1.5">
                           <span className="font-medium">Commission saved × {travelers}</span>
@@ -586,9 +456,13 @@ export default function FlightBooking() {
                     <Button
                       size="lg"
                       onClick={handleContinue}
+                      disabled={submitting}
                       className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold h-12 text-base gap-2 shadow-md mt-2"
                     >
-                      Continue to Payment <ChevronRight className="w-4 h-4" />
+                      {submitting
+                        ? <><Loader2 className="w-4 h-4 animate-spin" /> Preparing add-ons…</>
+                        : <>Continue to Add-ons <ChevronRight className="w-4 h-4" /></>
+                      }
                     </Button>
 
                     {!isAuthenticated && (

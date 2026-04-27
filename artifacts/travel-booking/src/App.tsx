@@ -77,6 +77,7 @@ import StaffLogin from "@/pages/staff-login";
 import AgentSignup from "@/pages/agent-signup";
 import InvoiceView from "@/pages/invoice-view";
 import TJAddonsBooking from "@/pages/tj-addons-booking";
+import FlightAddons from "@/pages/flight-addons";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -102,6 +103,7 @@ function Router() {
       <Route path="/flights" component={Flights} />
       <Route path="/flights/results" component={FlightResults} />
       <Route path="/booking/flight" component={FlightBooking} />
+      <Route path="/booking/flight-addons" component={FlightAddons} />
       <Route path="/booking/tj-addons" component={TJAddonsBooking} />
       <Route path="/booking/payment" component={BookingPayment} />
       <Route path="/master-admin">

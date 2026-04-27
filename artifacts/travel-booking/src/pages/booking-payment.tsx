@@ -465,6 +465,36 @@ export default function BookingPayment() {
     };
   }
 
+  async function attemptTjBook(s: FlightBookingSession): Promise<string | undefined> {
+    const tjId = sessionStorage.getItem("ww_tj_booking_id");
+    if (!tjId) return undefined;
+    const apiBase = (import.meta.env.VITE_API_BASE_URL as string) ?? "";
+    try {
+      const res = await fetch(`${apiBase}/api/tj-book`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bookingId: tjId,
+          paymentInfos: [{ paymentMode: "ONLINE_PAYMENT", amount: totalAfterCoupon, currency: "INR" }],
+          travellerInfo: s.passengers.map((p, idx) => ({
+            fn: p.name.split(" ")[0] || p.name,
+            ln: p.name.split(" ").slice(1).join(" ") || ".",
+            ti: "MR", dob: "", pNum: p.phone, eml: p.email, pt: "ADULT",
+            ssrSeatInfos:   s.selectedSeats[idx] ? [{ key: s.selectedSeats[idx], code: s.selectedSeats[idx] }] : [],
+            ssrBaggageInfos: s.extraBaggageKg > 0 ? [{ key: String(s.extraBaggageKg), code: String(s.extraBaggageKg) }] : [],
+          })),
+          deliveryInfo: {
+            emails:  [s.passengers[0].email],
+            mobiles: [{ countryCode: "91", number: s.passengers[0].phone }],
+          },
+        }),
+      });
+      const data = await res.json();
+      sessionStorage.removeItem("ww_tj_booking_id");
+      return data?.data?.pnr || data?.data?.bookingId || undefined;
+    } catch { return undefined; }
+  }
+
   async function handleWalletPay() {
     if (!session || !user || !isAuthenticated) return;
     setWalletPaying(true);
@@ -562,6 +592,8 @@ export default function BookingPayment() {
       flightBaggageCost:session.type === "flight" ? (session as FlightBookingSession).extraBaggageCost : undefined,
       discount:         discount || undefined,
     };
+    const wTjPnr = session.type === "flight" ? await attemptTjBook(session as FlightBookingSession) : undefined;
+    if (wTjPnr) (wLastSuccessful as any).tjPnr = wTjPnr;
     localStorage.setItem("lastSuccessfulBooking", JSON.stringify(wLastSuccessful));
     paymentDoneRef.current = true;
     clearBookingSession();
@@ -678,6 +710,8 @@ export default function BookingPayment() {
         flightBaggageCost:session.type === "flight" ? (session as FlightBookingSession).extraBaggageCost : undefined,
         discount:         discount || undefined,
       };
+      const cTjPnr = session.type === "flight" ? await attemptTjBook(session as FlightBookingSession) : undefined;
+      if (cTjPnr) (cLastSuccessful as any).tjPnr = cTjPnr;
       localStorage.setItem("lastSuccessfulBooking", JSON.stringify(cLastSuccessful));
       paymentDoneRef.current = true;
       clearBookingSession();
@@ -859,6 +893,8 @@ export default function BookingPayment() {
           flightBaggageKg:  session.type === "flight" ? (session as FlightBookingSession).extraBaggageKg   : undefined,
           flightBaggageCost:session.type === "flight" ? (session as FlightBookingSession).extraBaggageCost : undefined,
         };
+        const rzTjPnr = session.type === "flight" ? await attemptTjBook(session as FlightBookingSession) : undefined;
+        if (rzTjPnr) (lastSuccessful as any).tjPnr = rzTjPnr;
         localStorage.setItem("lastSuccessfulBooking", JSON.stringify(lastSuccessful));
         paymentDoneRef.current = true;
         clearBookingSession();

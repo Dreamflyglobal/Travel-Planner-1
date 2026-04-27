@@ -50,6 +50,7 @@ interface BookingDetails {
   flightDeparture?: string;
   flightArrival?: string;
   flightDuration?: string;
+  tjPnr?: string;
 }
 
 export default function PaymentSuccess() {
@@ -297,6 +298,11 @@ export default function PaymentSuccess() {
             <p className="text-sm text-muted-foreground">
               Booking ID: <span className="font-mono font-bold text-primary">{bookingDetails.bookingId}</span>
             </p>
+            {bookingDetails.tjPnr && (
+              <p className="text-sm text-muted-foreground mt-1">
+                PNR: <span className="font-mono font-bold text-green-700 text-base">{bookingDetails.tjPnr}</span>
+              </p>
+            )}
           </div>
 
           {/* Booking Details Card */}
