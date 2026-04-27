@@ -22,6 +22,7 @@ import currencyRouter         from "./currency";
 import marketingRouter        from "./marketing";
 import apiKeysRouter          from "./api-keys";
 import adminBookingsRouter    from "./admin-bookings";
+import tripjackRouter         from "./tripjack";
 
 const router: IRouter = Router();
 
@@ -48,5 +49,6 @@ router.use(currencyRouter);
 router.use(marketingRouter);
 router.use(apiKeysRouter);
 router.use(adminBookingsRouter);
+router.use(tripjackRouter);
 
 export default router;
