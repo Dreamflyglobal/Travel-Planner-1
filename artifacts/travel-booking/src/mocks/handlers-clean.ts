@@ -237,6 +237,11 @@ export const handlers = [
     return HttpResponse.json(mockPackages, { status: 200 });
   }),
 
+  // TripJack add-ons flow — always pass through to real backend
+  http.post('/api/tj-farequote', () => passthrough()),
+  http.post('/api/tj-ssr',       () => passthrough()),
+  http.post('/api/tj-book',      () => passthrough()),
+
   // Passthrough payment, ticket, WhatsApp & OTP endpoints — handled by the real API server
   http.post('/api/payments/create-order',  () => passthrough()),
   http.post('/api/payments/verify',        () => passthrough()),
