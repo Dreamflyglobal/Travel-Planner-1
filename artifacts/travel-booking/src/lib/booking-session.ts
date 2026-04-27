@@ -30,6 +30,7 @@ export type FlightBookingSession = {
   selectedSeats: string[];
   extraBaggageKg: number;
   extraBaggageCost: number;
+  extraBaggageCode: string;
   rawPrice: number;
   hiddenMarkup: number;
   baseFare: number;

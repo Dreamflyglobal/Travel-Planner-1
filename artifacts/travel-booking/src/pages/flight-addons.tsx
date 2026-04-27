@@ -109,8 +109,9 @@ export default function FlightAddons() {
     const updated: FlightBookingSession = {
       ...session,
       selectedSeats,
-      extraBaggageKg:   selectedBaggage?.kg   ?? 0,
-      extraBaggageCost: selectedBaggage?.amount ?? 0,
+      extraBaggageKg:   selectedBaggage?.kg     ?? 0,
+      extraBaggageCost: selectedBaggage?.amount  ?? 0,
+      extraBaggageCode: selectedBaggage?.code    ?? "",
       totalBase: totalWithAddons,
     };
     saveBookingSession(updated);
