@@ -116,6 +116,7 @@ export default function FlightBooking() {
   const [passengers, setPassengers] = useState<Passenger[]>(Array.from({ length: travelers }, emptyPassenger));
   const [errors,     setErrors]     = useState<FieldErrors[]>(Array.from({ length: travelers }, () => ({})));
   const [submitting, setSubmitting] = useState(false);
+  const [submitStep, setSubmitStep] = useState("");
 
   // Pre-fill from logged-in user
   useEffect(() => {
@@ -180,34 +181,63 @@ export default function FlightBooking() {
 
     setSubmitting(true);
     const apiBase = (import.meta.env.VITE_API_BASE_URL as string) ?? "";
+
+    // ── Step 1: Fare Quote (mandatory — stops flow on failure) ────────────────
+    setSubmitStep("Confirming fare…");
+    let resolvedBookingId = fareKey;
     try {
-      // Use the TripJack fareId (fareKey) as the bookingId for fareQuote
-      let resolvedBookingId = fareKey;
-      try {
-        const fqRes = await fetch(`${apiBase}/api/tj-farequote`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ bookingId: fareKey }),
-        });
-        const fqData = await fqRes.json();
-        // TripJack may return a new bookingId; prefer that if present
-        if (fqData?.data?.bookingId) resolvedBookingId = fqData.data.bookingId;
-        sessionStorage.setItem("ww_tj_farequote", JSON.stringify(fqData));
-      } catch { /* ignore – addons page uses fallback */ }
-      try {
-        const ssrRes = await fetch(`${apiBase}/api/tj-ssr`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ bookingId: resolvedBookingId }),
-        });
-        const ssrData = await ssrRes.json();
-        sessionStorage.setItem("ww_ssr_data", JSON.stringify(ssrData));
-      } catch { /* ignore */ }
-      sessionStorage.setItem("ww_tj_booking_id", resolvedBookingId);
-    } finally {
+      const fqRes = await fetch(`${apiBase}/api/tj-farequote`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bookingId: fareKey }),
+      });
+      const fqData = await fqRes.json();
+
+      // Treat HTTP errors or TripJack-level errors as fatal
+      if (!fqRes.ok || fqData?.status === false || fqData?.errors?.length) {
+        const msg = fqData?.errors?.[0]?.message
+          || fqData?.message
+          || "Fare confirmation failed. The fare may no longer be available.";
+        toast({ variant: "destructive", title: "Fare unavailable", description: msg });
+        setSubmitting(false);
+        setSubmitStep("");
+        return;
+      }
+
+      // TripJack may return a refreshed bookingId — use that for SSR / booking
+      if (fqData?.data?.bookingId) resolvedBookingId = fqData.data.bookingId;
+      sessionStorage.setItem("ww_tj_farequote", JSON.stringify(fqData));
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Fare check failed",
+        description: "Could not reach the airline system. Please check your connection and try again.",
+      });
       setSubmitting(false);
+      setSubmitStep("");
+      return;
     }
 
+    // ── Step 2: SSR — seats & baggage (optional — failure shows empty state) ──
+    setSubmitStep("Fetching seats & baggage…");
+    try {
+      const ssrRes = await fetch(`${apiBase}/api/tj-ssr`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bookingId: resolvedBookingId }),
+      });
+      const ssrData = await ssrRes.json();
+      // Store even if data is empty — add-ons page will show "not available" cleanly
+      sessionStorage.setItem("ww_ssr_data", JSON.stringify(ssrData));
+    } catch {
+      // SSR failure is non-fatal; clear any stale SSR data so add-ons shows empty state
+      sessionStorage.removeItem("ww_ssr_data");
+    }
+
+    // Persist the resolved booking ID for downstream pages (add-ons, payment)
+    sessionStorage.setItem("ww_tj_booking_id", resolvedBookingId);
+    setSubmitting(false);
+    setSubmitStep("");
     setLocation("/booking/flight-addons");
   }
 
@@ -469,7 +499,7 @@ export default function FlightBooking() {
                       className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold h-12 text-base gap-2 shadow-md mt-2"
                     >
                       {submitting
-                        ? <><Loader2 className="w-4 h-4 animate-spin" /> Preparing add-ons…</>
+                        ? <><Loader2 className="w-4 h-4 animate-spin" /> {submitStep || "Please wait…"}</>
                         : <>Continue to Add-ons <ChevronRight className="w-4 h-4" /></>
                       }
                     </Button>
