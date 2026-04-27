@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useLocation, useSearch } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { useAuth } from "@/contexts/auth-context";
 import { useAbandonedLeadTracker } from "@/hooks/use-abandoned-lead-tracker";
 import { useMarketing } from "@/hooks/use-marketing";
