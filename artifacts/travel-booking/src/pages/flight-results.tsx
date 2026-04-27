@@ -98,7 +98,7 @@ export default function FlightResults() {
   const [priceRange,       setPriceRange]       = useState([0, 50000]);
   const [selectedAirlines, setSelectedAirlines] = useState<string[]>([]);
   const [departureFilter,  setDepartureFilter]  = useState<string[]>([]);
-  const [nonStopOnly,      setNonStopOnly]      = useState(false);
+  const [stopsFilter,      setStopsFilter]      = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<"cheapest" | "fastest" | "earliest" | "latest">("cheapest");
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [expandedFlight,   setExpandedFlight]  = useState<number | null>(null);
@@ -144,7 +144,8 @@ export default function FlightResults() {
       : flight.stopsLabel === "1 Stop"                       ? 1
       : flight.stopsLabel                                    ? 2
       : -1; // unknown — excluded when filter is active
-    const matchesNonStop = !nonStopOnly || resolvedStops === 0;
+    const stopsLabelNorm = resolvedStops === 0 ? "Non-stop" : resolvedStops === 1 ? "1 Stop" : "2+ Stops";
+    const matchesNonStop = stopsFilter.length === 0 || stopsFilter.includes(stopsLabelNorm);
 
     // For today: hide flights that departed more than 15 minutes ago
     const notPast = (() => {
@@ -195,7 +196,7 @@ export default function FlightResults() {
     setSelectedAirlines([]);
     setPriceRange([0, 50000]);
     setDepartureFilter([]);
-    setNonStopOnly(false);
+    setStopsFilter([]);
   };
 
   const goToModify = () => {
@@ -208,7 +209,7 @@ export default function FlightResults() {
     selectedAirlines.length +
     departureFilter.length +
     (priceRange[0] > 0 || priceRange[1] < 50000 ? 1 : 0) +
-    (nonStopOnly ? 1 : 0);
+    stopsFilter.length;
 
   const formatDate = (d: string) => {
     if (!d) return "";
@@ -234,17 +235,35 @@ export default function FlightResults() {
           )}
         </div>
 
-        {/* Non-stop */}
+        {/* Stops */}
         <div className="pb-5 border-b">
           <h4 className="font-semibold mb-3 text-xs uppercase tracking-wide text-muted-foreground">Stops</h4>
-          <label className="flex items-center gap-2.5 cursor-pointer group">
-            <Checkbox
-              checked={nonStopOnly}
-              onCheckedChange={(v) => setNonStopOnly(!!v)}
-              className="rounded"
-            />
-            <span className="text-sm font-medium group-hover:text-primary transition-colors">Non-stop only</span>
-          </label>
+          <div className="flex flex-col gap-2">
+            {[
+              { label: "Non-stop", color: "text-green-700 border-green-300 bg-green-50", activeColor: "bg-green-600 text-white border-green-600" },
+              { label: "1 Stop",   color: "text-amber-700 border-amber-300 bg-amber-50",  activeColor: "bg-amber-500 text-white border-amber-500"  },
+              { label: "2+ Stops", color: "text-slate-600 border-slate-300 bg-slate-50", activeColor: "bg-slate-600 text-white border-slate-600" },
+            ].map(({ label, color, activeColor }) => {
+              const active = stopsFilter.includes(label);
+              return (
+                <button
+                  key={label}
+                  onClick={() =>
+                    setStopsFilter((prev) =>
+                      prev.includes(label) ? prev.filter((s) => s !== label) : [...prev, label]
+                    )
+                  }
+                  className={cn(
+                    "flex items-center justify-between px-3 py-2 rounded-lg border text-sm font-medium transition-all",
+                    active ? activeColor : color + " hover:border-primary/40"
+                  )}
+                >
+                  <span>{label}</span>
+                  {active && <span className="text-xs opacity-80">✓</span>}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Price Range */}
@@ -594,7 +613,20 @@ export default function FlightResults() {
                                     </div>
                                     <div className="flex-1 h-px bg-slate-200" />
                                   </div>
-                                  <p className="text-[10px] text-green-600 font-bold mt-1 uppercase tracking-wide">{flight.stopsLabel ?? (flight.stops === 0 ? "Non-stop" : flight.stops === 1 ? "1 Stop" : "Multi-stop")}</p>
+                                  {(() => {
+                                    const raw = flight.stopsLabel ?? (flight.stops === 0 ? "Non-stop" : flight.stops === 1 ? "1 Stop" : "2+ Stops");
+                                    const label = raw === "Multi-stop" ? "2+ Stops" : raw;
+                                    return (
+                                      <p className={cn(
+                                        "text-[10px] font-bold mt-1 uppercase tracking-wide",
+                                        label === "Non-stop" ? "text-green-600" :
+                                        label === "1 Stop"   ? "text-amber-600" :
+                                                               "text-slate-500"
+                                      )}>
+                                        {label}
+                                      </p>
+                                    );
+                                  })()}
                                 </div>
 
                                 {/* Arrival */}
