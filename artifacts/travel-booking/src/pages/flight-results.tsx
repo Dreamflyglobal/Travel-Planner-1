@@ -146,14 +146,12 @@ export default function FlightResults() {
       const data = await res.json().catch(() => ({}));
       console.info("[fareQuote/select] status:", res.status, "| fareKey:", fareKey);
 
-      // ── HTTP 4xx / 5xx — service/auth error, NOT a sold-out signal ───────
+      // ── HTTP 4xx / 5xx — service/auth issue, not a sold-out signal ──────
+      // Navigate through anyway so the user is not blocked on the search page.
+      // The passenger page will call fareQuote again and handle the error there.
       if (!res.ok) {
         setBookingLoadingId(null);
-        toast({
-          variant:     "destructive",
-          title:       "Service unavailable",
-          description: "Could not verify this fare right now. Please try again.",
-        });
+        setLocation(`/booking/flight?${urlParams.toString()}`);
         return;
       }
 
