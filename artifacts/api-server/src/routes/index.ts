@@ -24,6 +24,7 @@ import apiKeysRouter          from "./api-keys";
 import adminBookingsRouter    from "./admin-bookings";
 import tripjackRouter         from "./tripjack";
 import tripjackRoutesRouter   from "./tripjackRoutes";
+import tboRouter              from "./tbo";
 
 const router: IRouter = Router();
 
@@ -52,5 +53,6 @@ router.use(apiKeysRouter);
 router.use(adminBookingsRouter);
 router.use(tripjackRouter);
 router.use(tripjackRoutesRouter);
+router.use(tboRouter);
 
 export default router;

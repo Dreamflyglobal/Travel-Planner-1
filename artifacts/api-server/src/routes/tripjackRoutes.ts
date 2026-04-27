@@ -1,14 +1,17 @@
 import { Router, type IRouter } from "express";
 import axios from "axios";
+import { getProviderConfig } from "../lib/provider-config.js";
 
 const router: IRouter = Router();
 
 const BASE_URL = "https://apitest.tripjack.com";
 
-function buildHeaders() {
+async function buildHeaders() {
+  const cfg = await getProviderConfig();
+  const key = cfg.flightApiKey;
   return {
     "Content-Type": "application/json",
-    apikey: process.env.TRIPJACK_API_KEY || "",
+    apikey: key,
   };
 }
 
@@ -16,7 +19,7 @@ function buildHeaders() {
 router.post("/tj-search", async (req, res): Promise<void> => {
   try {
     const response = await axios.post(`${BASE_URL}/fms/v1/air/search`, req.body, {
-      headers: buildHeaders(),
+      headers: await buildHeaders(),
     });
     res.json(response.data);
   } catch (err: any) {
@@ -28,7 +31,7 @@ router.post("/tj-search", async (req, res): Promise<void> => {
 router.post("/tj-farequote", async (req, res): Promise<void> => {
   try {
     const response = await axios.post(`${BASE_URL}/fms/v1/air/farequote`, req.body, {
-      headers: buildHeaders(),
+      headers: await buildHeaders(),
     });
     res.json(response.data);
   } catch (err: any) {
@@ -40,7 +43,7 @@ router.post("/tj-farequote", async (req, res): Promise<void> => {
 router.post("/tj-ssr", async (req, res): Promise<void> => {
   try {
     const response = await axios.post(`${BASE_URL}/fms/v1/air/ssr`, req.body, {
-      headers: buildHeaders(),
+      headers: await buildHeaders(),
     });
     res.json(response.data);
   } catch (err: any) {
@@ -52,7 +55,7 @@ router.post("/tj-ssr", async (req, res): Promise<void> => {
 router.post("/tj-book", async (req, res): Promise<void> => {
   try {
     const response = await axios.post(`${BASE_URL}/fms/v1/air/book`, req.body, {
-      headers: buildHeaders(),
+      headers: await buildHeaders(),
     });
     res.json(response.data);
   } catch (err: any) {

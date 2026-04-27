@@ -11,6 +11,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Key,
   Save,
   RotateCcw,
@@ -19,7 +26,6 @@ import {
   Plane,
   Bus,
   Building2,
-  CreditCard,
   CheckCircle2,
   AlertCircle,
   ShieldCheck,
@@ -32,66 +38,51 @@ type KeyMeta = { masked: string; set: boolean; source: "db" | "env" | "none" };
 type KeysResponse = {
   success: boolean;
   keys: {
-    flightApiKey: KeyMeta;
-    busApiKey: KeyMeta;
-    hotelApiKey: KeyMeta;
-    paymentApiKey: KeyMeta;
-    paymentApiSecret: KeyMeta;
+    flightApiKey:  KeyMeta;
+    busApiKey:     KeyMeta;
+    hotelApiKey:   KeyMeta;
+    tboApiKey:     KeyMeta;
   };
+  flightProvider: string;
   updatedAt: string | null;
 };
 
-type FieldKey =
-  | "flightApiKey"
-  | "busApiKey"
-  | "hotelApiKey"
-  | "paymentApiKey"
-  | "paymentApiSecret";
+type FieldKey = "flightApiKey" | "busApiKey" | "hotelApiKey" | "tboApiKey";
 
 const FIELDS: Array<{
   key: FieldKey;
   label: string;
   description: string;
   Icon: typeof Plane;
-  group: "flight" | "bus" | "hotel" | "payment";
-  readOnly?: boolean;
+  group: "flight" | "bus" | "hotel" | "tbo";
 }> = [
   {
-    key: "flightApiKey",
-    label: "Flight API Key",
-    description: "TripJack or other flight provider key.",
-    Icon: Plane,
-    group: "flight",
+    key:         "flightApiKey",
+    label:       "TripJack API Key",
+    description: "API key for TripJack flight search, fare-quote, SSR and booking.",
+    Icon:        Plane,
+    group:       "flight",
   },
   {
-    key: "busApiKey",
-    label: "Bus API Key",
+    key:         "tboApiKey",
+    label:       "TBO API Key",
+    description: "API key for Travel Boutique Online (TBO) flight provider.",
+    Icon:        Plane,
+    group:       "tbo",
+  },
+  {
+    key:         "busApiKey",
+    label:       "Bus API Key",
     description: "RapidAPI / bus provider key.",
-    Icon: Bus,
-    group: "bus",
+    Icon:        Bus,
+    group:       "bus",
   },
   {
-    key: "hotelApiKey",
-    label: "Hotel API Key",
+    key:         "hotelApiKey",
+    label:       "Hotel API Key",
     description: "Hotelbeds or other hotel provider key.",
-    Icon: Building2,
-    group: "hotel",
-  },
-  {
-    key: "paymentApiKey",
-    label: "Razorpay Key ID",
-    description: "Public payment key ID (safe to display masked).",
-    Icon: CreditCard,
-    group: "payment",
-    readOnly: true,
-  },
-  {
-    key: "paymentApiSecret",
-    label: "Razorpay Key Secret",
-    description: "Server-side payment secret. Always masked.",
-    Icon: CreditCard,
-    group: "payment",
-    readOnly: true,
+    Icon:        Building2,
+    group:       "hotel",
   },
 ];
 
@@ -107,26 +98,19 @@ function getAuthHeader(): Record<string, string> {
 
 export function ApiKeysSection() {
   const { toast } = useToast();
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [data, setData] = useState<KeysResponse | null>(null);
-  const [drafts, setDrafts] = useState<Record<FieldKey, string>>({
-    flightApiKey: "",
-    busApiKey: "",
-    hotelApiKey: "",
-    paymentApiKey: "",
-    paymentApiSecret: "",
+  const [loading,      setLoading]      = useState(true);
+  const [saving,       setSaving]       = useState(false);
+  const [error,        setError]        = useState<string | null>(null);
+  const [data,         setData]         = useState<KeysResponse | null>(null);
+  const [drafts,       setDrafts]       = useState<Record<FieldKey, string>>({
+    flightApiKey: "", busApiKey: "", hotelApiKey: "", tboApiKey: "",
   });
-  const [reveal, setReveal] = useState<Record<FieldKey, boolean>>({
-    flightApiKey: false,
-    busApiKey: false,
-    hotelApiKey: false,
-    paymentApiKey: false,
-    paymentApiSecret: false,
+  const [reveal,       setReveal]       = useState<Record<FieldKey, boolean>>({
+    flightApiKey: false, busApiKey: false, hotelApiKey: false, tboApiKey: false,
   });
-  const [savedFlash, setSavedFlash] = useState(false);
-  const [testing, setTesting] = useState<string | null>(null);
+  const [providerDraft, setProviderDraft] = useState<string>("");
+  const [savedFlash,   setSavedFlash]   = useState(false);
+  const [testing,      setTesting]      = useState<string | null>(null);
 
   async function fetchKeys() {
     setLoading(true);
@@ -143,6 +127,7 @@ export function ApiKeysSection() {
       }
       const json = (await res.json()) as KeysResponse;
       setData(json);
+      setProviderDraft(json.flightProvider ?? "tripjack");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load API keys");
     } finally {
@@ -152,7 +137,6 @@ export function ApiKeysSection() {
 
   useEffect(() => {
     fetchKeys();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function patchDraft(key: FieldKey, value: string) {
@@ -163,7 +147,9 @@ export function ApiKeysSection() {
     setReveal((prev) => ({ ...prev, [key]: !prev[key] }));
   }
 
-  const dirty = FIELDS.some((f) => !f.readOnly && drafts[f.key].trim().length > 0);
+  const keysDirty    = FIELDS.some((f) => drafts[f.key].trim().length > 0);
+  const providerDirty = providerDraft !== (data?.flightProvider ?? "tripjack");
+  const dirty        = keysDirty || providerDirty;
 
   async function handleSave() {
     if (!dirty) return;
@@ -171,15 +157,15 @@ export function ApiKeysSection() {
     try {
       const payload: Record<string, string> = {};
       for (const f of FIELDS) {
-        if (f.readOnly) continue;
         const v = drafts[f.key];
         if (v.trim().length > 0) payload[f.key] = v.trim();
       }
+      if (providerDirty) payload.flightProvider = providerDraft;
 
       const res = await fetch("/api/admin/api-keys", {
-        method: "POST",
+        method:  "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeader() },
-        body: JSON.stringify(payload),
+        body:    JSON.stringify(payload),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
@@ -187,24 +173,16 @@ export function ApiKeysSection() {
       }
       const json = (await res.json()) as KeysResponse;
       setData(json);
-      setDrafts({
-        flightApiKey: "",
-        busApiKey: "",
-        hotelApiKey: "",
-        paymentApiKey: "",
-        paymentApiSecret: "",
-      });
+      setProviderDraft(json.flightProvider ?? "tripjack");
+      setDrafts({ flightApiKey: "", busApiKey: "", hotelApiKey: "", tboApiKey: "" });
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 3000);
-      toast({
-        title: "API keys saved",
-        description: "New keys are stored securely on the server.",
-      });
+      toast({ title: "Settings saved", description: "API keys and provider stored securely on the server." });
     } catch (e) {
       toast({
-        title: "Save failed",
+        title:       "Save failed",
         description: e instanceof Error ? e.message : "Could not save API keys.",
-        variant: "destructive",
+        variant:     "destructive",
       });
     } finally {
       setSaving(false);
@@ -212,43 +190,30 @@ export function ApiKeysSection() {
   }
 
   function handleDiscard() {
-    setDrafts({
-      flightApiKey: "",
-      busApiKey: "",
-      hotelApiKey: "",
-      paymentApiKey: "",
-      paymentApiSecret: "",
-    });
+    setDrafts({ flightApiKey: "", busApiKey: "", hotelApiKey: "", tboApiKey: "" });
+    setProviderDraft(data?.flightProvider ?? "tripjack");
   }
 
-  async function handleTest(group: "flight" | "bus" | "hotel" | "payment") {
+  async function handleTest(group: string) {
     setTesting(group);
     try {
       const res = await fetch("/api/admin/api-keys/test", {
-        method: "POST",
+        method:  "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeader() },
-        body: JSON.stringify({ which: group }),
+        body:    JSON.stringify({ which: group }),
       });
       const json = await res.json();
       if (!res.ok || !json.success) {
-        toast({
-          title: "Test failed",
-          description: json.error || json.message || "Could not test the key.",
-          variant: "destructive",
-        });
+        toast({ title: "Test failed", description: json.error || json.message || "Could not test the key.", variant: "destructive" });
         return;
       }
       toast({
-        title: json.ok ? "Key looks good" : "Key not usable",
+        title:       json.ok ? "Key looks good" : "Key not usable",
         description: json.message,
-        variant: json.ok ? "default" : "destructive",
+        variant:     json.ok ? "default" : "destructive",
       });
     } catch (e) {
-      toast({
-        title: "Test failed",
-        description: e instanceof Error ? e.message : "Could not reach the server.",
-        variant: "destructive",
-      });
+      toast({ title: "Test failed", description: e instanceof Error ? e.message : "Could not reach the server.", variant: "destructive" });
     } finally {
       setTesting(null);
     }
@@ -259,21 +224,19 @@ export function ApiKeysSection() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <Key className="w-4 h-4 text-indigo-600" />
-          API Keys Management
+          API Keys &amp; Provider Settings
         </CardTitle>
         <CardDescription className="flex items-center gap-1.5">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-          Stored securely on the server. Existing keys are never sent back to the browser.
+          Stored securely on the server. Keys are never sent back to the browser.
         </CardDescription>
       </CardHeader>
+
       <CardContent className="space-y-6">
         {savedFlash && (
-          <div
-            className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-medium"
-            data-testid="api-keys-saved-flash"
-          >
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-medium" data-testid="api-keys-saved-flash">
             <CheckCircle2 className="w-4 h-4" />
-            API keys saved successfully.
+            Settings saved successfully.
           </div>
         )}
 
@@ -287,46 +250,67 @@ export function ApiKeysSection() {
         {loading ? (
           <div className="flex items-center gap-2 text-sm text-slate-500 py-6">
             <Loader2 className="w-4 h-4 animate-spin" />
-            Loading current API keys…
+            Loading current settings…
           </div>
         ) : (
-          <div className="space-y-5">
-            {FIELDS.map(({ key, label, description, Icon, group, readOnly }) => {
-              const meta = data?.keys?.[key];
-              const isSet = !!meta?.set;
-              const masked = meta?.masked ?? "";
-              const draft = drafts[key];
-              const showDraft = reveal[key];
-              const placeholder = isSet
-                ? `Current: ${masked} (leave blank to keep)`
-                : "Not set — paste a new key";
+          <div className="space-y-6">
 
-              return (
-                <div key={key} className="space-y-1.5" data-testid={`api-key-row-${key}`}>
-                  <Label
-                    htmlFor={`api-key-${key}`}
-                    className="flex items-center gap-2 text-sm font-medium"
-                  >
-                    <Icon className="w-3.5 h-3.5 text-slate-500" />
-                    {label}
-                    {isSet && (
-                      <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
-                        <CheckCircle2 className="w-3 h-3" />
-                        {masked}
-                      </span>
-                    )}
-                    {!isSet && (
-                      <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                        Not set
-                      </span>
-                    )}
-                  </Label>
-                  <p className="text-[11px] text-slate-500">{description}</p>
-                  {readOnly ? (
-                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-mono text-slate-600">
-                      {isSet ? masked : "—"}
-                    </div>
-                  ) : (
+            {/* Flight Provider selector */}
+            <div className="space-y-2" data-testid="flight-provider-row">
+              <Label className="flex items-center gap-2 text-sm font-semibold">
+                <Plane className="w-3.5 h-3.5 text-blue-500" />
+                Active Flight Provider
+              </Label>
+              <p className="text-[11px] text-slate-500">
+                All flight search, fare-quote, SSR and booking requests will use this provider.
+              </p>
+              <Select value={providerDraft} onValueChange={setProviderDraft}>
+                <SelectTrigger className="w-48" data-testid="select-flight-provider">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="tripjack">TripJack</SelectItem>
+                  <SelectItem value="tbo">TBO (Travel Boutique Online)</SelectItem>
+                </SelectContent>
+              </Select>
+              {data?.flightProvider && (
+                <p className="text-[11px] text-slate-400">
+                  Currently active: <strong className="text-slate-600">{data.flightProvider === "tbo" ? "TBO" : "TripJack"}</strong>
+                </p>
+              )}
+            </div>
+
+            <Separator />
+
+            {/* API key fields */}
+            <div className="space-y-5">
+              {FIELDS.map(({ key, label, description, Icon, group }) => {
+                const meta      = (data?.keys as any)?.[key] as KeyMeta | undefined;
+                const isSet     = !!meta?.set;
+                const masked    = meta?.masked ?? "";
+                const draft     = drafts[key];
+                const showDraft = reveal[key];
+                const placeholder = isSet
+                  ? `Current: ${masked} (leave blank to keep)`
+                  : "Not set — paste a new key";
+
+                return (
+                  <div key={key} className="space-y-1.5" data-testid={`api-key-row-${key}`}>
+                    <Label htmlFor={`api-key-${key}`} className="flex items-center gap-2 text-sm font-medium">
+                      <Icon className="w-3.5 h-3.5 text-slate-500" />
+                      {label}
+                      {isSet ? (
+                        <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
+                          <CheckCircle2 className="w-3 h-3" />
+                          {masked}
+                        </span>
+                      ) : (
+                        <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                          Not set
+                        </span>
+                      )}
+                    </Label>
+                    <p className="text-[11px] text-slate-500">{description}</p>
                     <div className="flex items-center gap-2">
                       <div className="relative flex-1">
                         <Input
@@ -346,11 +330,7 @@ export function ApiKeysSection() {
                           tabIndex={-1}
                           aria-label={showDraft ? "Hide value" : "Show value"}
                         >
-                          {showDraft ? (
-                            <EyeOff className="w-4 h-4" />
-                          ) : (
-                            <Eye className="w-4 h-4" />
-                          )}
+                          {showDraft ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
                       </div>
                       <Button
@@ -361,17 +341,13 @@ export function ApiKeysSection() {
                         disabled={testing === group}
                         data-testid={`button-test-${group}`}
                       >
-                        {testing === group ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          "Test"
-                        )}
+                        {testing === group ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Test"}
                       </Button>
                     </div>
-                  )}
-                </div>
-              );
-            })}
+                  </div>
+                );
+              })}
+            </div>
 
             <Separator />
 
@@ -379,7 +355,7 @@ export function ApiKeysSection() {
               <p className="text-[11px] text-slate-500">
                 {data?.updatedAt
                   ? `Last updated: ${new Date(data.updatedAt).toLocaleString()}`
-                  : "No keys saved in the database yet."}
+                  : "No settings saved in the database yet."}
               </p>
               <div className="flex gap-2">
                 <Button
@@ -400,19 +376,14 @@ export function ApiKeysSection() {
                   data-testid="button-api-keys-save"
                 >
                   {saving ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Saving…
-                    </>
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving…</>
                   ) : (
-                    <>
-                      <Save className="w-4 h-4 mr-2" />
-                      Save API Keys
-                    </>
+                    <><Save className="w-4 h-4 mr-2" />Save Settings</>
                   )}
                 </Button>
               </div>
             </div>
+
           </div>
         )}
       </CardContent>

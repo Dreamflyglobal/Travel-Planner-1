@@ -7,6 +7,8 @@ export const apiKeysTable = pgTable("api_keys", {
   hotelApiKey: text("hotel_api_key"),
   paymentApiKey: text("payment_api_key"),
   paymentApiSecret: text("payment_api_secret"),
+  flightProvider: text("flight_provider").default("tripjack"),
+  tboApiKey: text("tbo_api_key"),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
