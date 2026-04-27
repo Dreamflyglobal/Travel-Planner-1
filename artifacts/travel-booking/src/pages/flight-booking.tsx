@@ -261,7 +261,7 @@ export default function FlightBooking() {
       }
 
       if (classification === "unavailable") {
-        setFareUnavailable("Flight sold out, please select another flight.");
+        setFareUnavailable("Flight no longer available.");
         setSubmitting(false);
         setSubmitStep("");
         return;
