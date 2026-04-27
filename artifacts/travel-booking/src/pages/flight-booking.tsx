@@ -117,6 +117,14 @@ export default function FlightBooking() {
   const [errors,     setErrors]     = useState<FieldErrors[]>(Array.from({ length: travelers }, () => ({})));
   const [submitting, setSubmitting] = useState(false);
   const [submitStep, setSubmitStep] = useState("");
+  const [fareUnavailable, setFareUnavailable] = useState<string | null>(null);
+  const [priceChangeInfo, setPriceChangeInfo] = useState<{
+    oldTotal: number;
+    newTotal: number;
+    newRawPrice: number;
+    newBaseFare: number;
+    resolvedBookingId: string;
+  } | null>(null);
 
   // Pre-fill from logged-in user
   useEffect(() => {
@@ -153,6 +161,8 @@ export default function FlightBooking() {
   const totalBase = (baseFare + convFee) * travelers;
 
   async function handleContinue() {
+    setFareUnavailable(null);
+    setPriceChangeInfo(null);
     const validated = validatePassengers(passengers);
     if (validated.some((e) => Object.keys(e).length > 0)) {
       setErrors(validated);
@@ -193,19 +203,56 @@ export default function FlightBooking() {
       });
       const fqData = await fqRes.json();
 
-      // Treat HTTP errors or TripJack-level errors as fatal
+      // TripJack may return a refreshed bookingId — use that for SSR / booking
+      if (fqData?.data?.bookingId) resolvedBookingId = fqData.data.bookingId;
+
+      // Extract the airline's returned total fare (all passengers combined)
+      const fqTotalFare: number = fqData?.data?.totalPriceInfo?.totalFareDetail?.fC?.TF ?? 0;
+
+      // ── Error response ────────────────────────────────────────────────────────
       if (!fqRes.ok || fqData?.status === false || fqData?.errors?.length) {
-        const msg = fqData?.errors?.[0]?.message
+        const msg: string = fqData?.errors?.[0]?.message
           || fqData?.message
-          || "Fare confirmation failed. The fare may no longer be available.";
-        toast({ variant: "destructive", title: "Fare unavailable", description: msg });
+          || "Fare confirmation failed.";
+        const msgLower = msg.toLowerCase();
+        const looksLikePriceChange =
+          msgLower.includes("price") || msgLower.includes("fare chang") ||
+          msgLower.includes("revised") || msgLower.includes("updated");
+
+        if (looksLikePriceChange && fqTotalFare > 0) {
+          // Price changed — show the accept/decline modal instead of crashing
+          const newRawPerPerson = Math.round(fqTotalFare / travelers);
+          const newBaseFare     = newRawPerPerson + hiddenMarkup;
+          const newTotal        = (newBaseFare + convFee) * travelers;
+          sessionStorage.setItem("ww_tj_farequote", JSON.stringify(fqData));
+          setPriceChangeInfo({ oldTotal: totalBase, newTotal, newRawPrice: newRawPerPerson, newBaseFare, resolvedBookingId });
+          setSubmitting(false);
+          setSubmitStep("");
+          return;
+        }
+
+        // Genuinely unavailable — show inline message, do not crash
+        setFareUnavailable("This fare is no longer available. Please go back and select another flight.");
         setSubmitting(false);
         setSubmitStep("");
         return;
       }
 
-      // TripJack may return a refreshed bookingId — use that for SSR / booking
-      if (fqData?.data?.bookingId) resolvedBookingId = fqData.data.bookingId;
+      // ── Success — check if TripJack silently returned a different price ───────
+      if (fqTotalFare > 0) {
+        const oldRawTotal = rawPrice * travelers;
+        if (Math.abs(fqTotalFare - oldRawTotal) > 1) {
+          const newRawPerPerson = Math.round(fqTotalFare / travelers);
+          const newBaseFare     = newRawPerPerson + hiddenMarkup;
+          const newTotal        = (newBaseFare + convFee) * travelers;
+          sessionStorage.setItem("ww_tj_farequote", JSON.stringify(fqData));
+          setPriceChangeInfo({ oldTotal: totalBase, newTotal, newRawPrice: newRawPerPerson, newBaseFare, resolvedBookingId });
+          setSubmitting(false);
+          setSubmitStep("");
+          return;
+        }
+      }
+
       sessionStorage.setItem("ww_tj_farequote", JSON.stringify(fqData));
     } catch (err: any) {
       toast({
@@ -235,6 +282,56 @@ export default function FlightBooking() {
     }
 
     // Persist the resolved booking ID for downstream pages (add-ons, payment)
+    sessionStorage.setItem("ww_tj_booking_id", resolvedBookingId);
+    setSubmitting(false);
+    setSubmitStep("");
+    setLocation("/booking/flight-addons");
+  }
+
+  async function handleAcceptPriceChange() {
+    if (!priceChangeInfo) return;
+    const { newRawPrice, newBaseFare, newTotal, resolvedBookingId } = priceChangeInfo;
+    setPriceChangeInfo(null);
+    setSubmitting(true);
+    setSubmitStep("Fetching seats & baggage…");
+
+    // Update booking session with the accepted new price
+    saveBookingSession({
+      type: "flight",
+      flightId, airline, flightNum,
+      from, to, date, departure, arrival, duration,
+      passengers, travelers,
+      selectedSeats: [],
+      extraBaggageKg: 0,
+      extraBaggageCost: 0,
+      rawPrice:    newRawPrice,
+      hiddenMarkup,
+      baseFare:    newBaseFare,
+      convFee,
+      totalBase:   newTotal,
+      isAgent, agentSavings: agentSavingsUrl,
+      normalMarkup: normalMarkupUrl >= 0 ? normalMarkupUrl : hiddenMarkup,
+      agentId:    isAgent ? user?.id    : undefined,
+      agentEmail: isAgent ? user?.email : undefined,
+      cabinClass,
+      cabinLabel,
+      tjBookingId: resolvedBookingId,
+    });
+
+    // SSR (re-fetch with the resolved booking ID)
+    const apiBase = (import.meta.env.VITE_API_BASE_URL as string) ?? "";
+    try {
+      const ssrRes = await fetch(`${apiBase}/api/tj-ssr`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bookingId: resolvedBookingId }),
+      });
+      const ssrData = await ssrRes.json();
+      sessionStorage.setItem("ww_ssr_data", JSON.stringify(ssrData));
+    } catch {
+      sessionStorage.removeItem("ww_ssr_data");
+    }
+
     sessionStorage.setItem("ww_tj_booking_id", resolvedBookingId);
     setSubmitting(false);
     setSubmitStep("");
@@ -492,6 +589,70 @@ export default function FlightBooking() {
                       <p className="text-xs text-muted-foreground">Coupons & credits applied on next step</p>
                     </div>
 
+                    {/* ── Fare unavailable ───────────────────────────────────── */}
+                    {fareUnavailable && (
+                      <Alert className="border-red-200 bg-red-50">
+                        <AlertCircle className="h-4 w-4 text-red-600" />
+                        <AlertDescription className="text-red-800 text-sm">
+                          <p className="font-semibold mb-2">{fareUnavailable}</p>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="w-full border-red-300 text-red-700 hover:bg-red-50"
+                            onClick={() => window.history.back()}
+                          >
+                            ← Back to Flight Results
+                          </Button>
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    {/* ── Price changed ──────────────────────────────────────── */}
+                    {priceChangeInfo && (
+                      <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 space-y-3">
+                        <div className="flex items-start gap-2">
+                          <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                          <p className="text-amber-800 font-semibold text-sm leading-snug">
+                            The fare price has been updated by the airline
+                          </p>
+                        </div>
+                        <div className="flex items-center justify-between gap-3 bg-white rounded-lg px-4 py-3 border border-amber-200">
+                          <div className="text-center">
+                            <p className="text-[10px] text-slate-400 mb-0.5 uppercase tracking-wide">Original</p>
+                            <p className="text-base font-bold text-slate-400 line-through">
+                              ₹{priceChangeInfo.oldTotal.toLocaleString("en-IN")}
+                            </p>
+                          </div>
+                          <div className="text-amber-400 font-bold text-lg">→</div>
+                          <div className="text-center">
+                            <p className="text-[10px] text-slate-500 mb-0.5 uppercase tracking-wide">Updated</p>
+                            <p className="text-xl font-extrabold text-amber-700">
+                              ₹{priceChangeInfo.newTotal.toLocaleString("en-IN")}
+                            </p>
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          onClick={handleAcceptPriceChange}
+                          disabled={submitting}
+                          className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold gap-2 h-10"
+                        >
+                          {submitting
+                            ? <><Loader2 className="w-4 h-4 animate-spin" /> {submitStep || "Please wait…"}</>
+                            : "Accept & Continue"
+                          }
+                        </Button>
+                        <button
+                          onClick={() => { setPriceChangeInfo(null); window.history.back(); }}
+                          className="w-full text-xs text-slate-500 hover:text-slate-700 underline underline-offset-2"
+                        >
+                          Decline — go back to results
+                        </button>
+                      </div>
+                    )}
+
+                    {/* ── Normal continue button (hidden when price-change/unavail shows) ── */}
+                    {!fareUnavailable && !priceChangeInfo && (
                     <Button
                       size="lg"
                       onClick={handleContinue}
@@ -503,6 +664,7 @@ export default function FlightBooking() {
                         : <>Continue to Add-ons <ChevronRight className="w-4 h-4" /></>
                       }
                     </Button>
+                    )}
 
                     {!isAuthenticated && (
                       <p className="text-[11px] text-center text-slate-500">
