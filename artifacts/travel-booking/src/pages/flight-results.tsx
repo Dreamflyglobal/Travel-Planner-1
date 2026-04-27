@@ -109,90 +109,110 @@ export default function FlightResults() {
   const { toast } = useToast();
   const [bookingLoadingId, setBookingLoadingId] = useState<string | null>(null);
 
-  // ── Pre-fetch fareQuote on flight/fare selection ────────────────────────────
-  // Calls fareQuote before navigating to the passenger page so we know the
-  // fare is still live. Retries once on failure. Only blocks navigation if
-  // both attempts fail (genuine sold-out), so false "unavailable" errors are
-  // eliminated before the user even sees the passenger form.
-  async function handleSelectFlight(fareKey: string, urlParams: URLSearchParams) {
+  // ── Reset loading state whenever the search changes ──────────────────────
+  useEffect(() => {
+    setBookingLoadingId(null);
+  }, [searchString]);
+
+  // ── fareQuote on fare/flight selection ────────────────────────────────────
+  // `isTjFare` must be true only when fareKey is a real TripJack price-list ID
+  // (i.e. the user picked a specific fare class from the expanded panel).
+  // Direct "Book Now" flights use a sequential DB id that TripJack won't
+  // recognise — those skip fareQuote and go straight to the passenger page.
+  async function handleSelectFlight(
+    fareKey: string,
+    urlParams: URLSearchParams,
+    isTjFare: boolean,
+  ) {
     setBookingLoadingId(fareKey);
-    // Clear any stale cached data from a previous selection
     sessionStorage.removeItem("ww_tj_farequote");
     sessionStorage.removeItem("ww_tj_booking_id");
     sessionStorage.removeItem("ww_tj_farequote_key");
 
+    // No valid TripJack bookingId → skip fareQuote, navigate directly
+    if (!isTjFare) {
+      setBookingLoadingId(null);
+      setLocation(`/booking/flight?${urlParams.toString()}`);
+      return;
+    }
+
     const apiBase = (import.meta.env.VITE_API_BASE_URL as string) ?? "";
-    const doFQ = async () => {
-      const res = await fetch(`${apiBase}/api/tj-farequote`, {
+    try {
+      const res  = await fetch(`${apiBase}/api/tj-farequote`, {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ bookingId: fareKey }),
       });
-      return { res, data: await res.json() };
-    };
+      const data = await res.json().catch(() => ({}));
+      console.info("[fareQuote/select] status:", res.status, "| fareKey:", fareKey);
 
-    let fqRes: Response | undefined;
-    let fqData: any;
-    let attempt = 1;
-
-    try {
-      ({ res: fqRes, data: fqData } = await doFQ());
-      console.info(`[fareQuote/prefetch] attempt ${attempt}:`, fqRes.status, "| fareKey:", fareKey);
-    } catch {
-      // Network error on attempt 1 — retry immediately
-      attempt = 2;
-      try {
-        ({ res: fqRes, data: fqData } = await doFQ());
-        console.info(`[fareQuote/prefetch] attempt ${attempt} (after network error):`, fqRes.status);
-      } catch {
+      // ── HTTP 4xx / 5xx — service/auth error, NOT a sold-out signal ───────
+      if (!res.ok) {
         setBookingLoadingId(null);
-        toast({ variant: "destructive", title: "Network error", description: "Could not reach the airline. Please check your connection." });
+        toast({
+          variant:     "destructive",
+          title:       "Service unavailable",
+          description: "Could not verify this fare right now. Please try again.",
+        });
         return;
       }
-    }
 
-    const isApiError = !fqRes!.ok || fqData?.status === false || fqData?.errors?.length;
-    if (isApiError && attempt === 1) {
-      // API error on attempt 1 — retry once after a brief pause
-      console.info("[fareQuote/prefetch] attempt 1 failed — retrying…");
-      await new Promise<void>((r) => setTimeout(r, 1000));
-      attempt = 2;
-      try {
-        const retry = await doFQ();
-        console.info("[fareQuote/prefetch] attempt 2:", retry.res.status, "| fareKey:", fareKey);
-        const retryError = !retry.res.ok || retry.data?.status === false || retry.data?.errors?.length;
-        if (retryError) {
+      // ── TripJack application-level error ──────────────────────────────────
+      if (data?.status === false || data?.errors?.length) {
+        const msg: string  = (data?.errors?.[0]?.message || data?.message || "").toLowerCase();
+        const tf: number   = data?.data?.totalPriceInfo?.totalFareDetail?.fC?.TF ?? 0;
+        const isPriceChange = tf > 0 &&
+          (msg.includes("price") || msg.includes("fare chang") || msg.includes("revised") || msg.includes("updated"));
+
+        if (isPriceChange) {
+          // Cache the updated fare and let the passenger page show the price-change dialog
+          const resolvedId = data?.data?.bookingId || fareKey;
+          const travelersCount = parseInt(urlParams.get("travelers") || "1", 10);
+          const newRawPerPerson = Math.round(tf / travelersCount);
+          urlParams.set("price", String(newRawPerPerson));
+          urlParams.set("priceWithMarkup", String(newRawPerPerson + parseInt(urlParams.get("markup") || "0", 10)));
+          sessionStorage.setItem("ww_tj_farequote",     JSON.stringify(data));
+          sessionStorage.setItem("ww_tj_booking_id",    resolvedId);
+          sessionStorage.setItem("ww_tj_farequote_key", fareKey);
           setBookingLoadingId(null);
-          toast({ variant: "destructive", title: "Flight sold out", description: "This fare is no longer available. Please select another flight." });
+          setLocation(`/booking/flight?${urlParams.toString()}`);
           return;
         }
-        fqRes  = retry.res;
-        fqData = retry.data;
-      } catch {
+
+        // Fare genuinely sold out (TripJack said so explicitly)
         setBookingLoadingId(null);
-        toast({ variant: "destructive", title: "Network error", description: "Could not verify fare. Please try again." });
+        toast({
+          variant:     "destructive",
+          title:       "Flight sold out",
+          description: "This fare is no longer available. Please select another flight.",
+        });
         return;
       }
-    }
 
-    // ── FareQuote succeeded — cache and navigate ─────────────────────────────
-    const resolvedId = fqData?.data?.bookingId || fareKey;
-    // If the airline updated the fare price, pass the updated price in the URL
-    const tf: number = fqData?.data?.totalPriceInfo?.totalFareDetail?.fC?.TF ?? 0;
-    if (tf > 0) {
-      const travelersCount = parseInt(urlParams.get("travelers") || "1", 10);
-      const newRawPerPerson = Math.round(tf / travelersCount);
-      // Update price params so the passenger page starts with the correct fare
-      urlParams.set("price", String(newRawPerPerson));
-      const markup = parseInt(urlParams.get("markup") || "0", 10);
-      urlParams.set("priceWithMarkup", String(newRawPerPerson + markup));
+      // ── Success — cache and navigate ──────────────────────────────────────
+      const resolvedId     = data?.data?.bookingId || fareKey;
+      const tf: number     = data?.data?.totalPriceInfo?.totalFareDetail?.fC?.TF ?? 0;
+      if (tf > 0) {
+        const travelersCount  = parseInt(urlParams.get("travelers") || "1", 10);
+        const newRawPerPerson = Math.round(tf / travelersCount);
+        urlParams.set("price", String(newRawPerPerson));
+        urlParams.set("priceWithMarkup", String(newRawPerPerson + parseInt(urlParams.get("markup") || "0", 10)));
+      }
+      sessionStorage.setItem("ww_tj_farequote",     JSON.stringify(data));
+      sessionStorage.setItem("ww_tj_booking_id",    resolvedId);
+      sessionStorage.setItem("ww_tj_farequote_key", fareKey);
+      console.info("[fareQuote/select] cached — resolvedId:", resolvedId);
+      setBookingLoadingId(null);
+      setLocation(`/booking/flight?${urlParams.toString()}`);
+
+    } catch {
+      setBookingLoadingId(null);
+      toast({
+        variant:     "destructive",
+        title:       "Network error",
+        description: "Could not reach the airline. Please check your connection.",
+      });
     }
-    sessionStorage.setItem("ww_tj_farequote",     JSON.stringify(fqData));
-    sessionStorage.setItem("ww_tj_booking_id",    resolvedId);
-    sessionStorage.setItem("ww_tj_farequote_key", fareKey);
-    console.info("[fareQuote/prefetch] cached — resolvedId:", resolvedId, "| navigating to passenger page");
-    setBookingLoadingId(null);
-    setLocation(`/booking/flight?${urlParams.toString()}`);
   }
 
   useAbandonedLeadTracker("flight");
@@ -830,6 +850,7 @@ export default function FlightResults() {
                                         agentSavings:   String(savings ?? 0),
                                         travelers:      String(travelers),
                                       }),
+                                      false, // sequential DB id — skip fareQuote
                                     )}
                                     className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm gap-1.5 shadow-sm"
                                   >
@@ -882,7 +903,7 @@ export default function FlightResults() {
                                   return (
                                     <div
                                       key={fare.fareId || fare.cabinClass}
-                                      onClick={() => !bookingLoadingId && handleSelectFlight(fare.fareId, bookParams)}
+                                      onClick={() => !bookingLoadingId && handleSelectFlight(fare.fareId, bookParams, true)}
                                       className={cn(
                                         "p-3.5 rounded-xl border-2 bg-white transition-all group",
                                         bookingLoadingId
