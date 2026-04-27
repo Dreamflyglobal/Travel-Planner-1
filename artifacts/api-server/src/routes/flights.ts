@@ -156,6 +156,12 @@ function mapTripJackFlight(item: any, idx: number, fromIata: string, toIata: str
     PREMIUM_ECONOMY: "Premium Economy",
   };
 
+  // Flight-level resultIndex — used as fallback when a fare entry has no own resultIndex.
+  const flightResultIndex: string =
+    item.resultIndex  ??
+    item.sI?.[0]?.rI  ??
+    String(idx);
+
   const fareOptions = (item.totalPriceList || [])
     .map((pl: any) => {
       const adultFd = pl?.fd?.ADULT;
@@ -163,12 +169,21 @@ function mapTripJackFlight(item: any, idx: number, fromIata: string, toIata: str
       const rawFare = adultFd?.fC?.TF || adultFd?.fC?.BF || 0;
       if (!rawFare) return null;
       const cc = (adultFd?.cc || "ECONOMY").toUpperCase();
+
+      // Each fare entry in totalPriceList may have its own resultIndex.
+      // Use it when present; fall back to the flight-level value.
+      const fareResultIndex: string =
+        pl.resultIndex    ??
+        pl.rI             ??
+        flightResultIndex;
+
       return {
-        fareId:     pl.id || pl.fareIdentifier || cc,
-        cabinClass: cc,
-        cabinLabel: CABIN_LABEL[cc] || cc,
-        totalFare:  rawFare,
-        seatsLeft:  adultFd?.sR ?? 9,
+        fareId:      pl.id || pl.fareIdentifier || cc,
+        cabinClass:  cc,
+        cabinLabel:  CABIN_LABEL[cc] || cc,
+        totalFare:   rawFare,
+        seatsLeft:   adultFd?.sR ?? 9,
+        resultIndex: fareResultIndex,   // ← per-fare TripJack result identifier
       };
     })
     .filter(Boolean);

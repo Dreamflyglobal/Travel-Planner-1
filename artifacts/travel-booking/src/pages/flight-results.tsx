@@ -914,7 +914,12 @@ export default function FlightResults() {
                                   return (
                                     <div
                                       key={fare.fareId || fare.cabinClass}
-                                      onClick={() => !bookingLoadingId && handleSelectFlight(fare.fareId, bookParams, true, flight.resultIndex, traceId)}
+                                      onClick={() => {
+                                        if (bookingLoadingId) return;
+                                        const ri = fare.resultIndex || flight.resultIndex;
+                                        console.log("[fareSelect] selectedFare.resultIndex:", fare.resultIndex, "| flight.resultIndex:", flight.resultIndex, "| using:", ri);
+                                        handleSelectFlight(fare.fareId, bookParams, true, ri, traceId);
+                                      }}
                                       className={cn(
                                         "p-3.5 rounded-xl border-2 bg-white transition-all group",
                                         bookingLoadingId

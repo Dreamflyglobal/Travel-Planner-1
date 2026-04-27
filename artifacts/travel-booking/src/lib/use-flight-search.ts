@@ -1,11 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 
 export interface FareOption {
-  fareId:     string;
-  cabinClass: string;
-  cabinLabel: string;
-  totalFare:  number;
-  seatsLeft:  number;
+  fareId:      string;
+  cabinClass:  string;
+  cabinLabel:  string;
+  totalFare:   number;
+  seatsLeft:   number;
+  resultIndex?: string;  // per-fare TripJack result identifier for fareQuote/SSR/book
 }
 
 export interface LiveFlight {
