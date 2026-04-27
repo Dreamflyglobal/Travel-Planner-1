@@ -11,6 +11,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+  DialogDescription, DialogFooter,
+} from "@/components/ui/dialog";
+import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
@@ -257,7 +261,7 @@ export default function FlightBooking() {
       }
 
       if (classification === "unavailable") {
-        setFareUnavailable("This fare is no longer available. Please go back and select another flight.");
+        setFareUnavailable("Flight sold out, please select another flight.");
         setSubmitting(false);
         setSubmitStep("");
         return;
@@ -618,55 +622,8 @@ export default function FlightBooking() {
                       </Alert>
                     )}
 
-                    {/* ── Price changed ──────────────────────────────────────── */}
-                    {priceChangeInfo && (
-                      <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 space-y-3">
-                        <div className="flex items-start gap-2">
-                          <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
-                          <p className="text-amber-800 font-semibold text-sm leading-snug">
-                            Price updated from{" "}
-                            <span className="line-through text-slate-500">₹{priceChangeInfo.oldTotal.toLocaleString("en-IN")}</span>
-                            {" "}to{" "}
-                            <span className="text-amber-900 font-extrabold">₹{priceChangeInfo.newTotal.toLocaleString("en-IN")}</span>
-                          </p>
-                        </div>
-                        <div className="flex items-center justify-between gap-3 bg-white rounded-lg px-4 py-3 border border-amber-200">
-                          <div className="text-center">
-                            <p className="text-[10px] text-slate-400 mb-0.5 uppercase tracking-wide">Original</p>
-                            <p className="text-base font-bold text-slate-400 line-through">
-                              ₹{priceChangeInfo.oldTotal.toLocaleString("en-IN")}
-                            </p>
-                          </div>
-                          <div className="text-amber-400 font-bold text-lg">→</div>
-                          <div className="text-center">
-                            <p className="text-[10px] text-slate-500 mb-0.5 uppercase tracking-wide">Updated</p>
-                            <p className="text-xl font-extrabold text-amber-700">
-                              ₹{priceChangeInfo.newTotal.toLocaleString("en-IN")}
-                            </p>
-                          </div>
-                        </div>
-                        <Button
-                          size="sm"
-                          onClick={handleAcceptPriceChange}
-                          disabled={submitting}
-                          className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold gap-2 h-10"
-                        >
-                          {submitting
-                            ? <><Loader2 className="w-4 h-4 animate-spin" /> {submitStep || "Please wait…"}</>
-                            : "Accept & Continue"
-                          }
-                        </Button>
-                        <button
-                          onClick={() => { setPriceChangeInfo(null); window.history.back(); }}
-                          className="w-full text-xs text-slate-500 hover:text-slate-700 underline underline-offset-2"
-                        >
-                          Decline — go back to results
-                        </button>
-                      </div>
-                    )}
-
-                    {/* ── Normal continue button (hidden when price-change/unavail shows) ── */}
-                    {!fareUnavailable && !priceChangeInfo && (
+                    {/* ── Normal continue button ──────────────────────────────── */}
+                    {!fareUnavailable && (
                     <Button
                       size="lg"
                       onClick={handleContinue}
@@ -701,6 +658,80 @@ export default function FlightBooking() {
           </div>
         </div>
       </div>
+      {/* ── Price Updated Modal ─────────────────────────────────────────────── */}
+      <Dialog
+        open={!!priceChangeInfo}
+        onOpenChange={(open) => {
+          if (!open && priceChangeInfo) {
+            setPriceChangeInfo(null);
+            window.history.back();
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader className="items-center text-center gap-3 pb-1">
+            <div className="flex items-center justify-center w-12 h-12 rounded-full bg-amber-100">
+              <AlertCircle className="h-6 w-6 text-amber-600" />
+            </div>
+            <DialogTitle className="text-xl font-bold text-slate-800">
+              Price Updated
+            </DialogTitle>
+            <DialogDescription asChild>
+              <div className="text-center space-y-3 pt-1">
+                <p className="text-slate-600 text-sm">
+                  The price has changed from{" "}
+                  <span className="font-semibold text-slate-500 line-through">
+                    ₹{priceChangeInfo?.oldTotal.toLocaleString("en-IN")}
+                  </span>{" "}
+                  to{" "}
+                  <span className="font-bold text-slate-900">
+                    ₹{priceChangeInfo?.newTotal.toLocaleString("en-IN")}
+                  </span>
+                </p>
+                <div className="flex items-center justify-center gap-4 bg-slate-50 rounded-lg px-6 py-3 border">
+                  <div className="text-center">
+                    <p className="text-[10px] text-slate-400 uppercase tracking-wide mb-0.5">Was</p>
+                    <p className="text-base font-bold text-slate-400 line-through">
+                      ₹{priceChangeInfo?.oldTotal.toLocaleString("en-IN")}
+                    </p>
+                  </div>
+                  <div className="text-amber-500 font-bold text-xl">→</div>
+                  <div className="text-center">
+                    <p className="text-[10px] text-slate-500 uppercase tracking-wide mb-0.5">Now</p>
+                    <p className="text-xl font-extrabold text-amber-700">
+                      ₹{priceChangeInfo?.newTotal.toLocaleString("en-IN")}
+                    </p>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-400">
+                  This fare is still available — would you like to continue with the updated price?
+                </p>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col gap-2 pt-2 sm:flex-col">
+            <Button
+              onClick={handleAcceptPriceChange}
+              disabled={submitting}
+              className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold h-11 gap-2"
+            >
+              {submitting
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> {submitStep || "Please wait…"}</>
+                : <>Continue <ChevronRight className="w-4 h-4" /></>
+              }
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => { setPriceChangeInfo(null); window.history.back(); }}
+              disabled={submitting}
+              className="w-full h-11 border-slate-200 text-slate-600 hover:bg-slate-50"
+            >
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </Layout>
   );
 }
