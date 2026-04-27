@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AutocompleteInput } from "@/components/autocomplete-input";
 import { citySuggestions, busCitySuggestions, hotelCitySuggestions, packageDestinations } from "@/lib/city-suggestions";
 import { loadAirports, searchAirports, type AirportEntry, type AirportSuggestion } from "@/lib/airport-search";
-import { Plane, Bus, Building2, Map, Search, ArrowLeftRight } from "lucide-react";
+import { Plane, Bus, Building2, Map, Search, ArrowLeftRight, Users, ChevronDown, Plus, Minus, X } from "lucide-react";
 
 interface SearchTabsProps {
   defaultTab?: "flights" | "hotels" | "buses" | "packages";
@@ -31,6 +31,42 @@ export function SearchTabs({
   const [flightFrom, setFlightFrom] = useState(initialFrom);
   const [flightTo,   setFlightTo]   = useState(initialTo);
   const [flightDate, setFlightDate] = useState(initialDate || today);
+
+  const [tripType,    setTripType]    = useState<"oneway" | "roundtrip" | "multicity">("oneway");
+  const [returnDate,  setReturnDate]  = useState(tomorrow);
+  const [adults,      setAdults]      = useState(1);
+  const [children,    setChildren]    = useState(0);
+  const [infants,     setInfants]     = useState(0);
+  const [cabinClass,  setCabinClass]  = useState("economy");
+  const [paxOpen,     setPaxOpen]     = useState(false);
+  const paxRef = useRef<HTMLDivElement>(null);
+
+  const [mcRoutes, setMcRoutes] = useState([
+    { from: initialFrom, to: initialTo,   date: initialDate || today },
+    { from: "",          to: "",           date: tomorrow             },
+  ]);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (paxRef.current && !paxRef.current.contains(e.target as Node)) {
+        setPaxOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const totalPax = adults + children + infants;
+  const paxLabel = [
+    `${adults} Adult${adults !== 1 ? "s" : ""}`,
+    children > 0 ? `${children} Child${children !== 1 ? "ren" : ""}` : "",
+    infants  > 0 ? `${infants} Infant${infants  !== 1 ? "s"   : ""}` : "",
+  ].filter(Boolean).join(", ");
+
+  const addMcRoute    = () => setMcRoutes(r => r.length < 4 ? [...r, { from: "", to: "", date: today }] : r);
+  const removeMcRoute = (i: number) => setMcRoutes(r => r.length > 2 ? r.filter((_, idx) => idx !== i) : r);
+  const updateMcRoute = (i: number, field: "from" | "to" | "date", val: string) =>
+    setMcRoutes(r => r.map((rt, idx) => idx === i ? { ...rt, [field]: val } : rt));
 
   const [airportData,      setAirportData]      = useState<AirportEntry[]>([]);
   const [fromSuggestions,  setFromSuggestions]  = useState<AirportSuggestion[]>([]);
@@ -74,7 +110,14 @@ export function SearchTabs({
   const [busError,    setBusError]    = useState(false);
 
   const handleFlightSearch = (e: React.MouseEvent) => {
-    if (!flightFrom.trim() || !flightTo.trim() || !flightDate.trim()) {
+    let invalid = false;
+    if (tripType === "oneway" || tripType === "roundtrip") {
+      invalid = !flightFrom.trim() || !flightTo.trim() || !flightDate.trim();
+      if (tripType === "roundtrip") invalid = invalid || !returnDate.trim();
+    } else {
+      invalid = mcRoutes.some(r => !r.from.trim() || !r.to.trim() || !r.date.trim());
+    }
+    if (invalid) {
       e.preventDefault();
       setFlightError(true);
       setTimeout(() => setFlightError(false), 3000);
@@ -107,9 +150,21 @@ export function SearchTabs({
   const handleBusSwap = () => { const t = busFrom; setBusFrom(busTo); setBusTo(t); };
   const handleFlightSwap = () => { const t = flightFrom; setFlightFrom(flightTo); setFlightTo(t); };
 
-  const flightsUrl = (flightFrom.trim() && flightTo.trim() && flightDate.trim())
-    ? `/flights/results?from=${encodeURIComponent(flightFrom)}&to=${encodeURIComponent(flightTo)}&date=${encodeURIComponent(flightDate)}&travelers=1`
-    : "#";
+  const commonPaxParams = `&travelers=${totalPax}&adults=${adults}&children=${children}&infants=${infants}&cabinClass=${cabinClass}&tripType=${tripType}`;
+
+  const flightsUrl = (() => {
+    if (tripType === "oneway") {
+      if (!flightFrom.trim() || !flightTo.trim() || !flightDate.trim()) return "#";
+      return `/flights/results?from=${encodeURIComponent(flightFrom)}&to=${encodeURIComponent(flightTo)}&date=${encodeURIComponent(flightDate)}${commonPaxParams}`;
+    }
+    if (tripType === "roundtrip") {
+      if (!flightFrom.trim() || !flightTo.trim() || !flightDate.trim() || !returnDate.trim()) return "#";
+      return `/flights/results?from=${encodeURIComponent(flightFrom)}&to=${encodeURIComponent(flightTo)}&date=${encodeURIComponent(flightDate)}&returnDate=${encodeURIComponent(returnDate)}${commonPaxParams}`;
+    }
+    if (mcRoutes.some(r => !r.from.trim() || !r.to.trim() || !r.date.trim())) return "#";
+    const mc = encodeURIComponent(mcRoutes.map(r => `${r.from}:${r.to}:${r.date}`).join("|"));
+    return `/flights/results?from=${encodeURIComponent(mcRoutes[0].from)}&to=${encodeURIComponent(mcRoutes[0].to)}&date=${encodeURIComponent(mcRoutes[0].date)}&mc=${mc}${commonPaxParams}`;
+  })();
 
   // Use hotelSearchCity (the actual city) for search — differs when hotel brand is selected
   const hotelCityForSearch = hotelSearchCity.trim() || hotelLocation.trim();
@@ -144,38 +199,201 @@ export function SearchTabs({
           </TabsList>
 
           {/* ── Flights ── */}
-          <TabsContent value="flights" className="pt-6 pb-2 px-2">
-            <div className="flex flex-col lg:grid lg:grid-cols-4 gap-4">
-              {/* FROM + swap + TO — vertical on mobile, row on desktop */}
-              <div className="lg:col-span-2 flex flex-col sm:flex-row sm:items-end gap-1.5 sm:gap-2">
-                <div className="flex-1 min-w-0 space-y-1">
-                  <label className={labelCls}>From</label>
-                  <AutocompleteInput placeholder="City or Airport" suggestions={fromSuggestions} value={flightFrom} onChange={setFlightFrom} maxSuggestions={6} />
-                </div>
-                <button onClick={handleFlightSwap}
-                  className="w-9 h-9 rounded-full border border-gray-200 bg-white text-gray-400 hover:text-gray-600 hover:scale-105 active:scale-95 transition-all duration-150 flex items-center justify-center shadow-sm shrink-0 self-center sm:self-auto sm:mb-0.5 my-0 sm:my-0"
-                  title="Swap cities">
-                  <ArrowLeftRight className="w-4 h-4" />
+          <TabsContent value="flights" className="pt-4 pb-2 px-2 space-y-4">
+
+            {/* Trip type pills */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {(["oneway", "roundtrip", "multicity"] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setTripType(t)}
+                  className={`px-4 py-1.5 rounded-full text-xs font-semibold border transition-all duration-150 ${
+                    tripType === t
+                      ? "bg-primary text-white border-primary shadow-sm"
+                      : "bg-white text-muted-foreground border-gray-200 hover:border-primary/40 hover:text-primary"
+                  }`}
+                >
+                  {t === "oneway" ? "One Way" : t === "roundtrip" ? "Round Trip" : "Multi City"}
                 </button>
-                <div className="flex-1 min-w-0 space-y-1">
-                  <label className={labelCls}>To</label>
-                  <AutocompleteInput placeholder="City or Airport" suggestions={toSuggestions} value={flightTo} onChange={setFlightTo} maxSuggestions={6} />
+              ))}
+            </div>
+
+            {/* One Way / Round Trip form */}
+            {tripType !== "multicity" && (
+              <div className="flex flex-col lg:grid lg:grid-cols-4 gap-4">
+                <div className="lg:col-span-2 flex flex-col sm:flex-row sm:items-end gap-1.5 sm:gap-2">
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <label className={labelCls}>From</label>
+                    <AutocompleteInput placeholder="City or Airport" suggestions={fromSuggestions} value={flightFrom} onChange={setFlightFrom} maxSuggestions={6} />
+                  </div>
+                  <button onClick={handleFlightSwap}
+                    className="w-9 h-9 rounded-full border border-gray-200 bg-white text-gray-400 hover:text-gray-600 hover:scale-105 active:scale-95 transition-all duration-150 flex items-center justify-center shadow-sm shrink-0 self-center sm:self-auto sm:mb-0.5"
+                    title="Swap cities">
+                    <ArrowLeftRight className="w-4 h-4" />
+                  </button>
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <label className={labelCls}>To</label>
+                    <AutocompleteInput placeholder="City or Airport" suggestions={toSuggestions} value={flightTo} onChange={setFlightTo} maxSuggestions={6} />
+                  </div>
+                </div>
+
+                {/* Date(s) */}
+                {tripType === "oneway" ? (
+                  <div className="space-y-1">
+                    <label className={labelCls}>Departure Date</label>
+                    <input type="date" value={flightDate} min={today} onChange={(e) => setFlightDate(e.target.value)} className={inputCls} />
+                  </div>
+                ) : (
+                  <div className="flex gap-2 lg:col-span-1">
+                    <div className="flex-1 space-y-1">
+                      <label className={labelCls}>Depart</label>
+                      <input type="date" value={flightDate} min={today} onChange={(e) => setFlightDate(e.target.value)} className={inputCls} />
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <label className={labelCls}>Return</label>
+                      <input type="date" value={returnDate} min={flightDate || today} onChange={(e) => setReturnDate(e.target.value)} className={inputCls} />
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-1">
+                  <label className={labelCls + " invisible hidden sm:block"}>Search</label>
+                  <Button asChild size="lg" className="w-full h-12 text-base font-bold">
+                    <Link href={flightsUrl} onClick={handleFlightSearch}>
+                      <Search className="w-5 h-5 mr-2" /> Search Flights
+                    </Link>
+                  </Button>
+                  {flightError && <p className="text-red-600 text-xs mt-2 font-medium">⚠️ Please fill all fields</p>}
                 </div>
               </div>
-              <div className="space-y-1">
-                <label className={labelCls}>Date</label>
-                <input type="date" value={flightDate} min={today} onChange={(e) => setFlightDate(e.target.value)} className={inputCls} />
+            )}
+
+            {/* Multi City form */}
+            {tripType === "multicity" && (
+              <div className="space-y-3">
+                {mcRoutes.map((route, i) => (
+                  <div key={i} className="flex flex-col sm:flex-row sm:items-end gap-2 p-3 rounded-xl bg-gray-50 border relative">
+                    <span className="absolute top-2 left-3 text-xs font-bold text-muted-foreground">Flight {i + 1}</span>
+                    <div className="flex-1 pt-4 sm:pt-0 space-y-1">
+                      <label className={labelCls}>From</label>
+                      <input
+                        type="text"
+                        placeholder="City or Airport"
+                        value={route.from}
+                        onChange={(e) => updateMcRoute(i, "from", e.target.value)}
+                        className={inputCls}
+                      />
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <label className={labelCls}>To</label>
+                      <input
+                        type="text"
+                        placeholder="City or Airport"
+                        value={route.to}
+                        onChange={(e) => updateMcRoute(i, "to", e.target.value)}
+                        className={inputCls}
+                      />
+                    </div>
+                    <div className="w-full sm:w-40 space-y-1">
+                      <label className={labelCls}>Date</label>
+                      <input type="date" value={route.date} min={today} onChange={(e) => updateMcRoute(i, "date", e.target.value)} className={inputCls} />
+                    </div>
+                    {mcRoutes.length > 2 && (
+                      <button onClick={() => removeMcRoute(i)}
+                        className="sm:mb-0.5 w-9 h-9 rounded-full border border-gray-200 bg-white text-gray-400 hover:text-red-500 hover:border-red-300 flex items-center justify-center shrink-0 self-center sm:self-auto transition-colors"
+                        title="Remove this flight">
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <div className="flex items-center gap-3 flex-wrap">
+                  {mcRoutes.length < 4 && (
+                    <button onClick={addMcRoute}
+                      className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-primary border border-primary/40 rounded-full hover:bg-primary/5 transition-colors">
+                      <Plus className="w-3.5 h-3.5" /> Add Another Flight
+                    </button>
+                  )}
+                  <div className="ml-auto">
+                    <Button asChild size="lg" className="h-10 px-6 text-sm font-bold">
+                      <Link href={flightsUrl} onClick={handleFlightSearch}>
+                        <Search className="w-4 h-4 mr-2" /> Search Multi-City
+                      </Link>
+                    </Button>
+                  </div>
+                </div>
+                {flightError && <p className="text-red-600 text-xs font-medium">⚠️ Please fill all route fields</p>}
               </div>
-              <div className="space-y-1">
-                <label className={labelCls + " invisible hidden sm:block"}>Search</label>
-                <Button asChild size="lg" className="w-full h-12 text-base font-bold">
-                  <Link href={flightsUrl} onClick={handleFlightSearch}>
-                    <Search className="w-5 h-5 mr-2" /> Search Flights
-                  </Link>
-                </Button>
-                {flightError && <p className="text-red-600 text-xs mt-2 font-medium">⚠️ Please fill all fields</p>}
+            )}
+
+            {/* Passengers + Cabin Class row */}
+            <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-gray-100">
+              {/* Passenger selector */}
+              <div className="relative" ref={paxRef}>
+                <button
+                  onClick={() => setPaxOpen(o => !o)}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white hover:border-primary/40 transition-colors text-sm font-medium text-foreground"
+                >
+                  <Users className="w-4 h-4 text-muted-foreground" />
+                  <span>{paxLabel}</span>
+                  <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${paxOpen ? "rotate-180" : ""}`} />
+                </button>
+                {paxOpen && (
+                  <div className="absolute top-full mt-1.5 left-0 z-50 w-64 rounded-xl border bg-white shadow-xl p-4 space-y-4">
+                    {([
+                      { label: "Adults",   sub: "12+ years",  val: adults,   set: setAdults,   min: 1 },
+                      { label: "Children", sub: "2–11 years", val: children, set: setChildren, min: 0 },
+                      { label: "Infants",  sub: "Under 2",    val: infants,  set: setInfants,  min: 0 },
+                    ] as const).map(({ label, sub, val, set, min }) => (
+                      <div key={label} className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">{label}</p>
+                          <p className="text-xs text-muted-foreground">{sub}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => set(v => Math.max(min, v - 1))}
+                            disabled={val <= min}
+                            className="w-7 h-7 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:border-primary/40 hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                          >
+                            <Minus className="w-3.5 h-3.5" />
+                          </button>
+                          <span className="w-5 text-center text-sm font-bold">{val}</span>
+                          <button
+                            onClick={() => set(v => v + 1)}
+                            disabled={totalPax >= 9}
+                            className="w-7 h-7 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:border-primary/40 hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => setPaxOpen(false)}
+                      className="w-full mt-1 py-2 rounded-lg bg-primary text-white text-xs font-bold hover:bg-primary/90 transition-colors"
+                    >
+                      Done
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Cabin class */}
+              <div className="flex items-center gap-2">
+                <select
+                  value={cabinClass}
+                  onChange={(e) => setCabinClass(e.target.value)}
+                  className="h-9 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer hover:border-primary/40 transition-colors"
+                >
+                  <option value="economy">Economy</option>
+                  <option value="premium_economy">Premium Economy</option>
+                  <option value="business">Business</option>
+                  <option value="first">First</option>
+                </select>
               </div>
             </div>
+
           </TabsContent>
 
           {/* ── Hotels ── */}
