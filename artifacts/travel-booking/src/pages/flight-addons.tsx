@@ -13,16 +13,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const FALLBACK_ROWS = 6;
-const FALLBACK_COLS = ["A", "B", "C", "D", "E", "F"];
-const FALLBACK_TAKEN = new Set(["1A","1B","2C","2F","3D","4A","4E","5B","5F","6C"]);
-
-const FALLBACK_BAGGAGE = [
-  { code: "NONE",  desc: "No extra baggage",  amount: 0,    kg: 0  },
-  { code: "BG15",  desc: "+15 kg baggage",    amount: 799,  kg: 15 },
-  { code: "BG20",  desc: "+20 kg baggage",    amount: 1099, kg: 20 },
-  { code: "BG30",  desc: "+30 kg baggage",    amount: 1499, kg: 30 },
-];
 
 type SeatInfo   = { code: string; available: boolean; amount: number; seatType?: string; rowNo?: number };
 type BaggageInfo = { code: string; desc: string; amount: number; kg: number };
@@ -57,7 +47,7 @@ export default function FlightAddons() {
   const [baggage, setBaggage] = useState<BaggageInfo[]>([]);
 
   const [selectedSeats,   setSelectedSeats]   = useState<string[]>([]);
-  const [selectedBaggage, setSelectedBaggage] = useState<BaggageInfo>(FALLBACK_BAGGAGE[0]);
+  const [selectedBaggage, setSelectedBaggage] = useState<BaggageInfo | null>(null);
 
   useEffect(() => {
     const s = loadBookingSession();
@@ -73,24 +63,14 @@ export default function FlightAddons() {
 
     if (parsedSeats && parsedSeats.length > 0) {
       setSeats(parsedSeats);
-    } else {
-      const fallback: SeatInfo[] = [];
-      for (let r = 1; r <= FALLBACK_ROWS; r++) {
-        for (const c of FALLBACK_COLS) {
-          const code = `${r}${c}`;
-          fallback.push({ code, available: !FALLBACK_TAKEN.has(code), amount: 0 });
-        }
-      }
-      setSeats(fallback);
     }
+    // else: seats remains [] → "not available" message shown in UI
 
     if (parsedBaggage && parsedBaggage.length > 0) {
       setBaggage(parsedBaggage);
       setSelectedBaggage({ ...parsedBaggage[0] });
-    } else {
-      setBaggage(FALLBACK_BAGGAGE);
-      setSelectedBaggage(FALLBACK_BAGGAGE[0]);
     }
+    // else: baggage remains [], selectedBaggage stays null → "not available" message shown in UI
   }, []);
 
   if (!session) {
@@ -121,7 +101,7 @@ export default function FlightAddons() {
     const s = seats.find((x) => x.code === code);
     return sum + (s?.amount ?? 0);
   }, 0);
-  const baggageAddOn = selectedBaggage.amount;
+  const baggageAddOn    = selectedBaggage?.amount ?? 0;
   const totalWithAddons = session.totalBase + seatAddOn + baggageAddOn;
 
   function handleConfirm() {
@@ -129,8 +109,8 @@ export default function FlightAddons() {
     const updated: FlightBookingSession = {
       ...session,
       selectedSeats,
-      extraBaggageKg:   selectedBaggage.kg,
-      extraBaggageCost: baggageAddOn,
+      extraBaggageKg:   selectedBaggage?.kg   ?? 0,
+      extraBaggageCost: selectedBaggage?.amount ?? 0,
       totalBase: totalWithAddons,
     };
     saveBookingSession(updated);
@@ -234,7 +214,9 @@ export default function FlightAddons() {
                     <div>
                       <CardTitle className="text-base">Seat Selection</CardTitle>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        Select up to {travelers} seat{travelers > 1 ? "s" : ""} · optional
+                        {seats.length > 0
+                          ? `Select up to ${travelers} seat${travelers > 1 ? "s" : ""} · optional`
+                          : "Seat map from airline"}
                       </p>
                     </div>
                     {selectedSeats.length > 0 && (
@@ -245,41 +227,53 @@ export default function FlightAddons() {
                   </div>
                 </CardHeader>
                 <CardContent className="px-5 pb-5">
-                  <div className="flex items-center flex-wrap gap-3 mb-4 text-xs text-slate-500">
-                    <div className="flex items-center gap-1.5"><div className="w-5 h-5 rounded bg-slate-100 border border-slate-300" />Available</div>
-                    <div className="flex items-center gap-1.5"><div className="w-5 h-5 rounded bg-blue-500" />Selected</div>
-                    <div className="flex items-center gap-1.5"><div className="w-5 h-5 rounded bg-slate-300" />Taken</div>
-                  </div>
-                  <div className="overflow-x-auto">
-                    {sortedRows.map((rowSeats, ri) => (
-                      <div key={ri} className="flex gap-1 items-center justify-center mb-1.5">
-                        <span className="text-[10px] text-slate-400 w-4 text-right mr-1">{ri + 1}</span>
-                        {rowSeats.map((seat, ci) => {
-                          const selected = selectedSeats.includes(seat.code);
-                          return (
-                            <button
-                              key={seat.code}
-                              onClick={() => toggleSeat(seat)}
-                              disabled={!seat.available}
-                              title={seat.amount > 0 ? `${seat.code} (+₹${seat.amount})` : seat.code}
-                              className={cn(
-                                "w-9 h-9 rounded text-[10px] font-bold border transition-all",
-                                ci === 2 && "mr-3",
-                                !seat.available
-                                  ? "bg-slate-200 border-slate-300 text-slate-400 cursor-not-allowed"
-                                  : selected
-                                  ? "bg-blue-500 border-blue-600 text-white shadow-md scale-105"
-                                  : "bg-white border-slate-300 text-slate-600 hover:bg-blue-50 hover:border-blue-400 cursor-pointer"
-                              )}
-                            >
-                              {seat.code}
-                            </button>
-                          );
-                        })}
+                  {seats.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-8 gap-3 text-center">
+                      <Armchair className="w-10 h-10 text-slate-300" />
+                      <p className="text-sm font-semibold text-slate-500">Seat map not available</p>
+                      <p className="text-xs text-muted-foreground max-w-xs">
+                        Seat selection is not available for this flight. You may be assigned a seat at check-in.
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center flex-wrap gap-3 mb-4 text-xs text-slate-500">
+                        <div className="flex items-center gap-1.5"><div className="w-5 h-5 rounded bg-slate-100 border border-slate-300" />Available</div>
+                        <div className="flex items-center gap-1.5"><div className="w-5 h-5 rounded bg-blue-500" />Selected</div>
+                        <div className="flex items-center gap-1.5"><div className="w-5 h-5 rounded bg-slate-300" />Taken</div>
                       </div>
-                    ))}
-                    <p className="mt-3 text-center text-[11px] text-muted-foreground">✈ Front of aircraft</p>
-                  </div>
+                      <div className="overflow-x-auto">
+                        {sortedRows.map((rowSeats, ri) => (
+                          <div key={ri} className="flex gap-1 items-center justify-center mb-1.5">
+                            <span className="text-[10px] text-slate-400 w-4 text-right mr-1">{ri + 1}</span>
+                            {rowSeats.map((seat, ci) => {
+                              const selected = selectedSeats.includes(seat.code);
+                              return (
+                                <button
+                                  key={seat.code}
+                                  onClick={() => toggleSeat(seat)}
+                                  disabled={!seat.available}
+                                  title={seat.amount > 0 ? `${seat.code} (+₹${seat.amount})` : seat.code}
+                                  className={cn(
+                                    "w-9 h-9 rounded text-[10px] font-bold border transition-all",
+                                    ci === 2 && "mr-3",
+                                    !seat.available
+                                      ? "bg-slate-200 border-slate-300 text-slate-400 cursor-not-allowed"
+                                      : selected
+                                      ? "bg-blue-500 border-blue-600 text-white shadow-md scale-105"
+                                      : "bg-white border-slate-300 text-slate-600 hover:bg-blue-50 hover:border-blue-400 cursor-pointer"
+                                  )}
+                                >
+                                  {seat.code}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ))}
+                        <p className="mt-3 text-center text-[11px] text-muted-foreground">✈ Front of aircraft</p>
+                      </div>
+                    </>
+                  )}
                 </CardContent>
               </Card>
 
@@ -292,42 +286,54 @@ export default function FlightAddons() {
                     </div>
                     <div>
                       <CardTitle className="text-base">Extra Baggage</CardTitle>
-                      <p className="text-xs text-muted-foreground mt-0.5">Cabin bag (7kg) included free</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {baggage.length > 0 ? "Cabin bag (7 kg) included free" : "Baggage options from airline"}
+                      </p>
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent className="px-5 pb-5">
-                  <div className="grid grid-cols-2 gap-3">
-                    {baggage.map((b) => {
-                      const selected = selectedBaggage.code === b.code;
-                      return (
-                        <button
-                          key={b.code}
-                          onClick={() => setSelectedBaggage(b)}
-                          className={cn(
-                            "flex flex-col items-start p-3 rounded-xl border-2 text-left transition-all",
-                            selected
-                              ? "border-orange-500 bg-orange-50"
-                              : "border-slate-200 bg-white hover:border-orange-300 hover:bg-orange-50/50"
-                          )}
-                        >
-                          <div className="flex items-center justify-between w-full mb-1">
-                            <span className={cn("text-sm font-bold", selected ? "text-orange-700" : "text-slate-700")}>
-                              {b.kg === 0 ? "None" : `${b.kg}kg`}
-                            </span>
-                            <span className={cn(
-                              "text-xs font-semibold px-2 py-0.5 rounded-full",
-                              selected ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-500"
-                            )}>
-                              {b.amount === 0 ? "Free" : `+₹${b.amount.toLocaleString("en-IN")}`}
-                            </span>
-                          </div>
-                          <span className="text-xs text-muted-foreground">{b.desc}</span>
-                          {selected && <CheckCircle2 className="w-4 h-4 text-orange-500 mt-1.5" />}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  {baggage.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-8 gap-3 text-center">
+                      <Luggage className="w-10 h-10 text-slate-300" />
+                      <p className="text-sm font-semibold text-slate-500">No extra baggage options available</p>
+                      <p className="text-xs text-muted-foreground max-w-xs">
+                        This airline does not offer pre-paid baggage add-ons for this route.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3">
+                      {baggage.map((b) => {
+                        const selected = selectedBaggage?.code === b.code;
+                        return (
+                          <button
+                            key={b.code}
+                            onClick={() => setSelectedBaggage(b)}
+                            className={cn(
+                              "flex flex-col items-start p-3 rounded-xl border-2 text-left transition-all",
+                              selected
+                                ? "border-orange-500 bg-orange-50"
+                                : "border-slate-200 bg-white hover:border-orange-300 hover:bg-orange-50/50"
+                            )}
+                          >
+                            <div className="flex items-center justify-between w-full mb-1">
+                              <span className={cn("text-sm font-bold", selected ? "text-orange-700" : "text-slate-700")}>
+                                {b.kg === 0 ? "None" : `${b.kg} kg`}
+                              </span>
+                              <span className={cn(
+                                "text-xs font-semibold px-2 py-0.5 rounded-full",
+                                selected ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-500"
+                              )}>
+                                {b.amount === 0 ? "Free" : `+₹${b.amount.toLocaleString("en-IN")}`}
+                              </span>
+                            </div>
+                            <span className="text-xs text-muted-foreground">{b.desc}</span>
+                            {selected && <CheckCircle2 className="w-4 h-4 text-orange-500 mt-1.5" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
