@@ -1,3 +1,4 @@
+import { APP_NAME, APP_TAGLINE } from "./app-config.js";
 import PDFDocument from "pdfkit";
 
 export interface FlightTicketData {
@@ -66,7 +67,7 @@ export function generateFlightTicketPDF(ticket: FlightTicketData): Promise<Buffe
       .font("Helvetica-Bold")
       .fontSize(22)
       .fillColor(WHITE)
-      .text("Dream Fly Global", margin, 24);
+      .text(APP_NAME, margin, 24);
 
     doc
       .font("Helvetica")
@@ -208,7 +209,7 @@ export function generateFlightTicketPDF(ticket: FlightTicketData): Promise<Buffe
       .text(
         "This is an electronically generated ticket. Please carry a valid photo ID at the airport. " +
         "Check-in closes 45 minutes before departure for domestic flights. " +
-        "For assistance call Dream Fly Global Support.",
+        "For assistance call ${APP_NAME} Support.",
         margin,
         footerY + 16,
         { width: W - margin * 2, align: "center" }
@@ -217,7 +218,7 @@ export function generateFlightTicketPDF(ticket: FlightTicketData): Promise<Buffe
       .font("Helvetica-Bold")
       .fontSize(9)
       .fillColor(WHITE)
-      .text("Dream Fly Global — Explore the world", margin, footerY + 52, { width: W - margin * 2, align: "center" });
+      .text("${APP_NAME} — ${APP_TAGLINE}", margin, footerY + 52, { width: W - margin * 2, align: "center" });
 
     doc.end();
   });

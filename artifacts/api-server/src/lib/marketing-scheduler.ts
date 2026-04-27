@@ -12,6 +12,7 @@
  */
 
 import { eq, and, sql } from "drizzle-orm";
+import { APP_NAME, APP_TAGLINE_LONG } from "./app-config.js";
 import { db, userActivityTable, marketingMessagesTable, usersTable } from "@workspace/db";
 import { sendRawMarketingWhatsApp } from "./marketing-whatsapp.js";
 
@@ -24,7 +25,7 @@ const timers = new Map<string, ReturnType<typeof setTimeout>>();
 function welcomeMessage(name: string): string {
   const first = name.split(" ")[0];
   return (
-    `✈️ *Welcome to Dream Fly Global, ${first}!* 🎉\n\n` +
+    `✈️ *Welcome to , ${first}!* 🎉\n\n` +
     `We're thrilled to have you on board!\n\n` +
     `🔥 *What we offer:*\n` +
     `• Best flight deals across India\n` +
@@ -32,7 +33,7 @@ function welcomeMessage(name: string): string {
     `• Bus tickets with seat selection\n` +
     `• Holiday packages for every budget\n\n` +
     `Start exploring and book your next adventure today! 🌍\n\n` +
-    `_Dream Fly Global ✈️ — Explore the World_`
+    `_${APP_NAME} ✈️ — ${APP_TAGLINE_LONG}_`
   );
 }
 
@@ -48,8 +49,8 @@ function searchTriggerMessage(name: string, searchType: string, from?: string, t
     `🔥 The ${typeLabel} you searched${route} is getting popular.\n\n` +
     `Prices may increase soon — book now and lock in your deal before it's gone!\n\n` +
     `💸 *Save money by booking today:*\n` +
-    `👉 Open the Dream Fly Global app now\n\n` +
-    `_Dream Fly Global ✈️ — Don't miss out!_`
+    `👉 Open the ${APP_NAME} app now\n\n` +
+    `_${APP_NAME} ✈️ — Don't miss out!_`
   );
 }
 
@@ -61,11 +62,11 @@ function bookingFollowUpMessage(name: string, bookingType: string, from?: string
       `🏨 *Hi ${first}, planning more of your trip?*\n\n` +
       `Great choice staying with us! 😊\n\n` +
       `Don't forget to book your *flights and transport* to complete your travel plan!\n\n` +
-      `🔍 Search now for the best deals on Dream Fly Global:\n` +
+      `🔍 Search now for the best deals on ${APP_NAME}:\n` +
       `• ✈️ Flights\n` +
       `• 🚌 Bus tickets\n` +
       `• 🏖️ Holiday packages\n\n` +
-      `_Dream Fly Global ✈️ — Your complete travel partner_`
+      `_${APP_NAME} ✈️ — Your complete travel partner_`
     );
   }
   const route = from && to ? `${to} → ${from}` : "your destination";
@@ -74,8 +75,8 @@ function bookingFollowUpMessage(name: string, bookingType: string, from?: string
     `Need a *return ticket* for *${route}*? 🔄\n\n` +
     `Book your return journey now and get the best prices before they fill up!\n\n` +
     `🏨 Also explore *hotels* at your destination for a complete travel experience.\n\n` +
-    `👉 Open Dream Fly Global and search now!\n\n` +
-    `_Dream Fly Global ✈️ — Complete your journey_`
+    `👉 Open ${APP_NAME} and search now!\n\n` +
+    `_${APP_NAME} ✈️ — Complete your journey_`
   );
 }
 
@@ -92,8 +93,8 @@ function dailyOfferMessage(name: string): string {
     `🚌 *Bus* — Early bird discount on overnight routes\n` +
     `🌴 *Packages* — Holiday bundles starting ₹4,999\n\n` +
     `⏰ *Offers valid today only!* Don't wait!\n\n` +
-    `👉 Open Dream Fly Global app to grab your deal now!\n\n` +
-    `_Dream Fly Global ✈️ — Explore the World_`
+    `👉 Open ${APP_NAME} app to grab your deal now!\n\n` +
+    `_${APP_NAME} ✈️ — ${APP_TAGLINE_LONG}_`
   );
 }
 

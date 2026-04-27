@@ -1,3 +1,4 @@
+import { APP_NAME } from "@/lib/app-config";
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/contexts/auth-context";
@@ -97,7 +98,7 @@ export default function AgentSignup() {
               <div className="bg-blue-600 text-white p-2 rounded-lg">
                 <Plane className="w-6 h-6" />
               </div>
-              <span className="text-2xl font-bold">Dream Fly Global</span>
+              <span className="text-2xl font-bold">{APP_NAME}</span>
             </div>
           </Link>
           <h1 className="text-3xl font-bold mb-2">Agent Registration</h1>

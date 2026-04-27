@@ -1,3 +1,4 @@
+import { APP_NAME } from "@/lib/app-config";
 import { useState, useEffect } from "react";
 import type { JSX } from "react";
 import { Link, useLocation, useSearch } from "wouter";
@@ -226,7 +227,7 @@ export default function HotelResults() {
             <div className="w-7 h-7 rounded-md bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
               <Building2 className="w-3.5 h-3.5 text-white" />
             </div>
-            <span className="font-bold text-base bg-gradient-to-r from-blue-600 to-indigo-700 bg-clip-text text-transparent hidden sm:block">Dream Fly Global</span>
+            <span className="font-bold text-base bg-gradient-to-r from-blue-600 to-indigo-700 bg-clip-text text-transparent hidden sm:block">{APP_NAME}</span>
           </Link>
 
           <div className="w-px h-6 bg-border shrink-0" />

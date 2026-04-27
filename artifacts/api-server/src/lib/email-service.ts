@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 import type { FlightTicketData } from "./ticket-pdf.js";
+import { APP_NAME, APP_TAGLINE_LONG, APP_SUPPORT_PHONE, APP_SUPPORT_EMAIL, APP_DEFAULT_FROM, APP_INITIALS } from "./app-config.js";
 
 function createTransport() {
   const user = (process.env.SMTP_USER || "").trim();
@@ -76,7 +77,7 @@ function bookingEmailHTML(ticket: FlightTicketData): string {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Booking Confirmation — Dream Fly Global</title>
+  <title>Booking Confirmation — ${APP_NAME}</title>
   <style>
     body { margin: 0; padding: 0; background: #f1f5f9; font-family: 'Helvetica Neue', Arial, sans-serif; color: #1e293b; }
     .wrapper { max-width: 620px; margin: 32px auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,.08); }
@@ -104,7 +105,7 @@ function bookingEmailHTML(ticket: FlightTicketData): string {
 <body>
 <div class="wrapper">
   <div class="header">
-    <h1>✈ Dream Fly Global</h1>
+    <h1>✈ ${APP_NAME}</h1>
     <p>Your flight ticket is confirmed!</p>
   </div>
   <div class="hero">
@@ -148,7 +149,7 @@ function bookingEmailHTML(ticket: FlightTicketData): string {
     <p style="margin:0 0 16px;color:#64748b;font-size:13px;">Your e-ticket PDF is attached to this email. Please carry a valid photo ID at the airport.</p>
   </div>
   <div class="footer">
-    <p>Dream Fly Global — Explore the world</p>
+    <p>${APP_NAME} — ${APP_TAGLINE_LONG}</p>
     <p>This is an automated message. For support, reply to this email.</p>
   </div>
 </div>
@@ -166,17 +167,17 @@ export async function sendBookingConfirmationEmail(
     return { sent: false, reason: "SMTP not configured" };
   }
 
-  const from = process.env.SMTP_FROM || process.env.SMTP_USER || "noreply@dreamflyglobal.com";
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER || "${APP_DEFAULT_FROM}";
 
   try {
     await transport.sendMail({
-      from: `"Dream Fly Global Tickets" <${from}>`,
+      from: `"${APP_NAME} Tickets" <${from}>`,
       to:   ticket.passengerEmail,
       subject: `✈ Booking Confirmed: ${ticket.from} → ${ticket.to} · ${ticket.bookingId}`,
       html: bookingEmailHTML(ticket),
       attachments: [
         {
-          filename:    `Dream Fly Global-Ticket-${ticket.bookingId}.pdf`,
+          filename:    `${APP_NAME}-Ticket-${ticket.bookingId}.pdf`,
           content:     pdfBuffer,
           contentType: "application/pdf",
         },
@@ -224,7 +225,7 @@ function generalBookingEmailHTML(data: GeneralBookingEmailData): string {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Booking Confirmation — Dream Fly Global</title>
+  <title>Booking Confirmation — ${APP_NAME}</title>
   <style>
     * { box-sizing: border-box; }
     body { margin: 0; padding: 0; background: #f1f5f9; font-family: 'Helvetica Neue', Arial, sans-serif; color: #1e293b; }
@@ -258,10 +259,10 @@ function generalBookingEmailHTML(data: GeneralBookingEmailData): string {
 <div class="wrapper">
   <div class="header">
     <div class="logo-circle">
-      <span class="logo-text">WW</span>
+      <span class="logo-text">${APP_INITIALS}</span>
     </div>
     <div class="header-info">
-      <h1>Dream Fly Global</h1>
+      <h1>${APP_NAME}</h1>
       <p>Your Ultimate Travel Companion</p>
     </div>
   </div>
@@ -310,8 +311,8 @@ function generalBookingEmailHTML(data: GeneralBookingEmailData): string {
   </div>
 
   <div class="footer">
-    <p class="brand">Dream Fly Global — Explore the World</p>
-    <p>+91 9000978856 · support@dreamflyglobal.com</p>
+    <p class="brand">${APP_NAME} — ${APP_TAGLINE_LONG}</p>
+    <p>${APP_SUPPORT_PHONE} · ${APP_SUPPORT_EMAIL}</p>
     <p>This is an automated confirmation. Do not reply to this email.</p>
   </div>
 </div>
@@ -329,13 +330,13 @@ export async function sendGeneralBookingEmail(
     return { sent: false, reason: "SMTP not configured" };
   }
 
-  const from    = process.env.SMTP_FROM || process.env.SMTP_USER || "noreply@dreamflyglobal.com";
+  const from    = process.env.SMTP_FROM || process.env.SMTP_USER || "${APP_DEFAULT_FROM}";
   const emoji   = SERVICE_EMOJI[data.bookingType] ?? "📋";
-  const subject = `${emoji} Booking Confirmed – Dream Fly Global | ${data.bookingId}`;
+  const subject = `${emoji} Booking Confirmed – ${APP_NAME} | ${data.bookingId}`;
 
   try {
     await transport.sendMail({
-      from: `"Dream Fly Global" <${from}>`,
+      from: `"${APP_NAME}" <${from}>`,
       to:   data.passengerEmail,
       subject,
       html: generalBookingEmailHTML(data),

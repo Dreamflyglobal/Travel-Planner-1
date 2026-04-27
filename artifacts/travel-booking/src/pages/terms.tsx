@@ -1,3 +1,4 @@
+import { APP_NAME } from "@/lib/app-config";
 import { Layout } from "@/components/layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,35 +14,35 @@ const TERMS = [
     color: "text-blue-600",
     bg: "bg-blue-50",
     title: "Availability",
-    body: "All bookings made through Dream Fly Global are subject to availability at the time of confirmation. We do not guarantee the availability of any specific flight, hotel, bus, or holiday package until the booking is fully confirmed.",
+    body: `All bookings made through ${APP_NAME} are subject to availability at the time of confirmation. We do not guarantee the availability of any specific flight, hotel, bus, or holiday package until the booking is fully confirmed.`,
   },
   {
     icon: TrendingUp,
     color: "text-amber-600",
     bg: "bg-amber-50",
     title: "Pricing",
-    body: "Prices displayed on Dream Fly Global are indicative and may change without prior notice due to dynamic pricing by airlines, hotels, and operators. The final price is confirmed only at the time of booking completion.",
+    body: `Prices displayed on ${APP_NAME} are indicative and may change without prior notice due to dynamic pricing by airlines, hotels, and operators. The final price is confirmed only at the time of booking completion.`,
   },
   {
     icon: UserCheck,
     color: "text-green-600",
     bg: "bg-green-50",
     title: "User Responsibility",
-    body: "Users must provide accurate personal and payment information when making a booking. Dream Fly Global is not liable for any issues arising from incorrect details provided at the time of booking, including name mismatches, date errors, or wrong contact information.",
+    body: `Users must provide accurate personal and payment information when making a booking. ${APP_NAME} is not liable for any issues arising from incorrect details provided at the time of booking, including name mismatches, date errors, or wrong contact information.`,
   },
   {
     icon: Store,
     color: "text-purple-600",
     bg: "bg-purple-50",
     title: "Platform Role",
-    body: "Dream Fly Global operates solely as a travel booking platform and aggregator. We are not the airline, hotel, bus operator, or holiday package provider. The actual service is rendered by the respective third-party providers.",
+    body: `${APP_NAME} operates solely as a travel booking platform and aggregator. We are not the airline, hotel, bus operator, or holiday package provider. The actual service is rendered by the respective third-party providers.`,
   },
   {
     icon: ShieldOff,
     color: "text-red-600",
     bg: "bg-red-50",
     title: "Limitation of Liability",
-    body: "Dream Fly Global is not responsible for any delays, cancellations, rescheduling, service disruptions, or quality issues caused by airlines, hotels, bus operators, or any third-party service provider. Any disputes regarding the service must be raised directly with the provider.",
+    body: `${APP_NAME} is not responsible for any delays, cancellations, rescheduling, service disruptions, or quality issues caused by airlines, hotels, bus operators, or any third-party service provider. Any disputes regarding the service must be raised directly with the provider.`,
   },
 ];
 
@@ -56,7 +57,7 @@ export default function Terms() {
           </div>
           <h1 className="text-3xl md:text-5xl font-extrabold mb-4 leading-tight">Terms &amp; Conditions</h1>
           <p className="text-white/70 text-base md:text-lg max-w-2xl mx-auto">
-            By using Dream Fly Global, you agree to the following terms. Please read them carefully before making a booking.
+            By using {APP_NAME}, you agree to the following terms. Please read them carefully before making a booking.
           </p>
         </div>
       </section>
@@ -69,7 +70,7 @@ export default function Terms() {
           <div>
             <p className="font-semibold text-amber-900 text-sm">Agreement to Terms</p>
             <p className="text-amber-800 text-sm mt-0.5 leading-relaxed">
-              Accessing or using Dream Fly Global's platform constitutes your acceptance of these Terms &amp; Conditions. If you do not agree, please refrain from using our services.
+              Accessing or using {APP_NAME}'s platform constitutes your acceptance of these Terms &amp; Conditions. If you do not agree, please refrain from using our services.
             </p>
           </div>
         </div>
@@ -102,7 +103,7 @@ export default function Terms() {
               ["Bookings",         "Subject to availability at time of confirmation"],
               ["Prices",           "May change without prior notice"],
               ["User information", "Must be accurate — user's responsibility"],
-              ["Dream Fly Global's role", "Booking platform only, not the service provider"],
+              [`${APP_NAME}'s role`, "Booking platform only, not the service provider"],
               ["Liability",        "Not responsible for third-party provider issues"],
             ].map(([label, value]) => (
               <div key={label} className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-sm">

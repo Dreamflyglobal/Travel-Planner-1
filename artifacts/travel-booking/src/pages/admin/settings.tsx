@@ -39,6 +39,7 @@ import {
 } from "@/contexts/website-settings-context";
 import { ApiKeysSection } from "@/pages/admin/api-keys-section";
 import { Link } from "wouter";
+import { APP_NAME } from "@/lib/app-config";
 import { ClipboardList, ArrowRight } from "lucide-react";
 import {
   Bell,
@@ -183,7 +184,7 @@ export default function AdminSettings() {
     resetSettings();
     setTimeout(() => {
       setBrandingDraft({
-        companyName: "Dream Fly Global",
+        companyName: APP_NAME,
         tagline: "Explore the world",
         logoUrl: null,
         faviconUrl: null,
@@ -261,7 +262,7 @@ export default function AdminSettings() {
                   id="company-name"
                   value={brandingDraft.companyName}
                   onChange={(e) => patchBranding({ companyName: e.target.value })}
-                  placeholder="Dream Fly Global"
+                  placeholder={APP_NAME}
                   data-testid="input-company-name"
                 />
               </div>

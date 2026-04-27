@@ -1,3 +1,4 @@
+import { APP_NAME } from "@/lib/app-config";
 import { useState, useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { Link, useParams, useLocation } from "wouter";
@@ -244,7 +245,7 @@ export default function BookingDetail() {
       busDeparture:    booking.busDeparture,
       busArrival:      booking.busArrival,
     });
-    toast({ title: "Invoice Downloaded", description: `Dream Fly Global branded PDF invoice saved.` });
+    toast({ title: "Invoice Downloaded", description: `${APP_NAME} branded PDF invoice saved.` });
   };
 
   const handleCancel = async () => {

@@ -1,3 +1,4 @@
+import { APP_NAME } from "./app-config.js";
 import PDFDocument from "pdfkit";
 
 export interface HolidayItineraryData {
@@ -103,7 +104,7 @@ export function generateHolidayItineraryPDF(data: HolidayItineraryData): Promise
 
     // Brand
     doc.font("Helvetica-Bold").fontSize(24).fillColor(WHITE)
-      .text("Dream Fly Global", margin, 22);
+      .text(APP_NAME, margin, 22);
     doc.font("Helvetica").fontSize(9).fillColor("#C4B5FD")
       .text("Explore the world", margin, 50);
 
@@ -166,7 +167,7 @@ export function generateHolidayItineraryPDF(data: HolidayItineraryData): Promise
         // Repeat header on new page
         doc.rect(0, 0, W, 30).fill(PURPLE);
         doc.font("Helvetica-Bold").fontSize(10).fillColor(WHITE)
-          .text("Dream Fly Global  •  Holiday Itinerary", margin, 10);
+          .text(`${APP_NAME}  •  Holiday Itinerary`, margin, 10);
         doc.font("Helvetica").fontSize(9).fillColor("#C4B5FD")
           .text(data.destination, W - margin - 80, 10, { width: 80, align: "right" });
         y = 45;
@@ -241,7 +242,7 @@ export function generateHolidayItineraryPDF(data: HolidayItineraryData): Promise
     const footerY = 810;
     doc.rect(0, footerY, W, 32).fill(PURPLE);
     doc.font("Helvetica-Bold").fontSize(9).fillColor(WHITE)
-      .text("Dream Fly Global ✈️  |  Explore the world with confidence", margin, footerY + 11, { align: "center", width: W - margin * 2 });
+      .text(`${APP_NAME} ✈️  |  Explore the world with confidence`, margin, footerY + 11, { align: "center", width: W - margin * 2 });
 
     doc.end();
   });

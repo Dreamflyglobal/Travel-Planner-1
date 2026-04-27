@@ -6,6 +6,7 @@ import { eq, or } from "drizzle-orm";
 import { signToken } from "../lib/jwt.js";
 import { requireAuth } from "../middlewares/auth.js";
 import { sendWelcomeMessage } from "../lib/marketing-scheduler.js";
+import { APP_NAME } from "../lib/app-config.js";
 
 const router = Router();
 
@@ -38,7 +39,7 @@ function isValidEmail(email: string): boolean {
 
 function generateReferralCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let code = "WW";
+  let code = "DFG";
   for (let i = 0; i < 5; i++) code += chars[Math.floor(Math.random() * chars.length)];
   return code;
 }
@@ -65,7 +66,7 @@ async function sendSMSOTP(phone: string, otp: string): Promise<{ sent: boolean; 
 
   const client = twilio(accountSid, authToken);
   const to     = `+91${phone}`;
-  const body   = `Your Dream Fly Global OTP is ${otp}. Valid for 5 minutes. Do not share this code.`;
+  const body   = `Your ${APP_NAME} OTP is ${otp}. Valid for 5 minutes. Do not share this code.`;
 
   const smsSender = process.env.TWILIO_SMS_FROM || "";
   if (smsSender) {
@@ -86,7 +87,7 @@ async function sendSMSOTP(phone: string, otp: string): Promise<{ sent: boolean; 
       await client.messages.create({
         from: fromWA,
         to: toWA,
-        body: `🔐 *Dream Fly Global OTP Login*\n\nYour OTP is: *${otp}*\n\nValid for 5 minutes. Do not share.`,
+        body: `🔐 *${APP_NAME} OTP Login*\n\nYour OTP is: *${otp}*\n\nValid for 5 minutes. Do not share.`,
       });
       return { sent: true };
     } catch (err: any) {

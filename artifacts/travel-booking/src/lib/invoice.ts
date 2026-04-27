@@ -1,4 +1,5 @@
 import jsPDF from "jspdf";
+import { APP_NAME, APP_SUPPORT_PHONE, APP_SUPPORT_EMAIL, APP_INITIALS } from "@/lib/app-config";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -51,13 +52,13 @@ export interface StoredInvoice extends InvoiceData {
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const COMPANY = {
-  name: "Dream Fly Global",
+  name:    APP_NAME,
   tagline: "Your Ultimate Travel Companion",
-  brand: "DreamFly Global",
-  phone: "+91 9000978856",
-  email: "support@dreamflyglobal.com",
+  brand:   APP_NAME,
+  phone:   APP_SUPPORT_PHONE,
+  email:   APP_SUPPORT_EMAIL,
   website: "www.dreamflyglobal.in",
-  gst: "GSTIN: Applied For",
+  gst:     "GSTIN: Applied For",
   address: "India",
 };
 
@@ -85,7 +86,7 @@ function storeInvoice(inv: StoredInvoice) {
 }
 
 function invoiceNumber(bookingId: string) {
-  return `WW-INV-${bookingId.replace(/[^A-Z0-9]/gi, "").toUpperCase().slice(-8)}`;
+  return `DFG-INV-${bookingId.replace(/[^A-Z0-9]/gi, "").toUpperCase().slice(-8)}`;
 }
 
 // ─── Colour palette ───────────────────────────────────────────────────────────
@@ -122,7 +123,7 @@ export function generateInvoicePDF(data: InvoiceData): void {
   doc.setTextColor(...C.white);
   doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
-  doc.text("WW", 22, 21, { align: "center" });
+  doc.text(APP_INITIALS, 22, 21, { align: "center" });
 
   // Company name
   doc.setFontSize(20);
@@ -389,7 +390,7 @@ export function generateInvoicePDF(data: InvoiceData): void {
     "Please carry a valid government-issued photo ID during your journey.",
     "Check-in opens 2 hours before departure for flights.",
     "For cancellations or changes, contact us at " + COMPANY.phone,
-    "This is a Dream Fly Global branded invoice. Provider details are not disclosed.",
+    "This is a ${APP_NAME} branded invoice. Provider details are not disclosed.",
   ];
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.5);
@@ -405,7 +406,7 @@ export function generateInvoicePDF(data: InvoiceData): void {
   doc.setTextColor(...C.white);
   doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
-  doc.text("Thank you for choosing Dream Fly Global!", W / 2, 280, { align: "center" });
+  doc.text("Thank you for choosing ${APP_NAME}!", W / 2, 280, { align: "center" });
 
   doc.setFontSize(7);
   doc.setFont("helvetica", "normal");
@@ -414,7 +415,7 @@ export function generateInvoicePDF(data: InvoiceData): void {
   doc.text(`Generated: ${new Date().toLocaleString("en-IN")}  |  ${COMPANY.gst}`, W / 2, 290.5, { align: "center" });
 
   // ── Save ──────────────────────────────────────────────────────────────────
-  doc.save(`Dream Fly Global-Invoice-${data.bookingId}.pdf`);
+  doc.save(`${APP_NAME}-Invoice-${data.bookingId}.pdf`);
 }
 
 // ─── WhatsApp helper ──────────────────────────────────────────────────────────
@@ -433,13 +434,13 @@ export function openWhatsAppConfirmation(data: InvoiceData) {
       `*Travel Date:* ${new Date(data.travelDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}\n`;
   const message =
     `Hi ${data.passengerName.split(" ")[0]}! ${serviceEmoji}\n\n` +
-    `Your booking with *Dream Fly Global* is confirmed! 🎉\n\n` +
+    `Your booking with *${APP_NAME}* is confirmed! 🎉\n\n` +
     `*Booking ID:* ${data.bookingId}\n` +
     hotelLines +
     `*Amount Paid:* ₹${data.totalAmount.toLocaleString("en-IN")}\n\n` +
-    `Your invoice has been generated and can be downloaded from My Bookings on the Dream Fly Global app.\n\n` +
+    `Your invoice has been generated and can be downloaded from My Bookings on the ${APP_NAME} app.\n\n` +
     `For support: ${COMPANY.phone}\n` +
-    `Happy Travels! 🗺️ – Team Dream Fly Global`;
+    `Happy Travels! 🗺️ – Team ${APP_NAME}`;
 
   window.open(`https://wa.me/${data.passengerPhone.replace(/\D/g, "")}?text=${encodeURIComponent(message)}`, "_blank");
 }
@@ -447,10 +448,10 @@ export function openWhatsAppConfirmation(data: InvoiceData) {
 // ─── Mailto helper ────────────────────────────────────────────────────────────
 
 export function openEmailConfirmation(data: InvoiceData) {
-  const subject = encodeURIComponent(`Booking Confirmed – Dream Fly Global | ${data.bookingId}`);
+  const subject = encodeURIComponent(`Booking Confirmed – ${APP_NAME} | ${data.bookingId}`);
   const body = encodeURIComponent(
     `Dear ${data.passengerName},\n\n` +
-    `Your booking with Dream Fly Global has been confirmed!\n\n` +
+    `Your booking with ${APP_NAME} has been confirmed!\n\n` +
     `Booking ID:    ${data.bookingId}\n` +
     (data.bookingType === "hotel"
       ? `Hotel:         ${data.hotelName || data.title}\n` +
@@ -465,12 +466,12 @@ export function openEmailConfirmation(data: InvoiceData) {
         `Passengers:    ${data.passengers}\n`) +
     `Amount Paid:   ₹${data.totalAmount.toLocaleString("en-IN")}\n` +
     `Payment ID:    ${data.paymentId}\n\n` +
-    `Please download your invoice from My Bookings on the Dream Fly Global platform.\n\n` +
+    `Please download your invoice from My Bookings on the ${APP_NAME} platform.\n\n` +
     `For any queries, reach us at:\n` +
     `📞 ${COMPANY.phone}\n` +
     `📧 ${COMPANY.email}\n\n` +
-    `Thank you for choosing Dream Fly Global!\n` +
-    `Team Dream Fly Global – DreamFly Global`
+    `Thank you for choosing ${APP_NAME}!\n` +
+    `Team ${APP_NAME}`
   );
   window.location.href = `mailto:${data.passengerEmail}?subject=${subject}&body=${body}`;
 }

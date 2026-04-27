@@ -1,4 +1,5 @@
 import twilio from "twilio";
+import { APP_NAME, APP_TAGLINE_LONG, APP_SUPPORT_PHONE, APP_SUPPORT_EMAIL } from "./app-config.js";
 
 export interface WhatsAppBookingData {
   bookingId:      string;
@@ -89,7 +90,7 @@ function buildMessage(data: WhatsAppBookingData): string {
     `📅 *Travel Date:* ${data.date}\n` +
     `💰 *Amount Paid:* ₹${amount}\n` +
     downloadLine +
-    `\n\nThank you for booking with *Dream Fly Global* ✈️\nSupport: +91 9000978856`
+    `\n\nThank you for booking with *${APP_NAME}* ✈️\nSupport: ${APP_SUPPORT_PHONE}`
   );
 }
 
@@ -186,7 +187,7 @@ function buildHolidayMessage(data: HolidayWhatsAppData, pdfUrl: string): string 
       price + "\n\n" +
       `📥 *Download Your Itinerary:*\n${pdfUrl}\n\n` +
       `Our travel expert will call you within 24 hours.\n\n` +
-      `_Dream Fly Global ✈️ — Explore the World_`
+      `_${APP_NAME} ✈️ — ${APP_TAGLINE_LONG}_`
     );
   }
 
@@ -199,7 +200,7 @@ function buildHolidayMessage(data: HolidayWhatsAppData, pdfUrl: string): string 
     "\n\n" +
     `📥 *Download Your Itinerary PDF:*\n${pdfUrl}\n\n` +
     `Our travel expert will call you within *24 hours* with the best package options.\n\n` +
-    `_Dream Fly Global ✈️ — Explore the World_`
+    `_${APP_NAME} ✈️ — ${APP_TAGLINE_LONG}_`
   );
 }
 
@@ -222,7 +223,7 @@ function buildLeadAdminAlertMessage(lead: LeadNotificationData): string {
     day: "2-digit", month: "short", year: "numeric",
   });
   return (
-    `🔔 *New Lead Alert — Dream Fly Global*\n\n` +
+    `🔔 *New Lead Alert — ${APP_NAME}*\n\n` +
     `👤 *Name:* ${lead.name}\n` +
     `📱 *Phone:* ${lead.phone}\n` +
     `🔍 *Looking for:* ${typeLabel}\n` +
@@ -241,9 +242,9 @@ function buildLeadCustomerConfirmationMessage(lead: LeadNotificationData): strin
     `👋 Hi *${firstName}*!\n\n` +
     `✅ We've received your enquiry for a *${typeLabel}* booking.\n\n` +
     `Our travel expert will contact you within *30 minutes*.\n\n` +
-    `📞 Support: +91 9000978856\n` +
-    `📧 support@dreamflyglobal.com\n\n` +
-    `_Dream Fly Global ✈️ — Explore the World_`
+    `📞 Support: ${APP_SUPPORT_PHONE}\n` +
+    `📧 ${APP_SUPPORT_EMAIL}\n\n` +
+    `_${APP_NAME} ✈️ — ${APP_TAGLINE_LONG}_`
   );
 }
 
@@ -252,11 +253,11 @@ function buildAbandonedLeadMessage(lead: LeadNotificationData): string {
   const firstName = lead.name.split(" ")[0];
   return (
     `👋 Hi *${firstName}*!\n\n` +
-    `🔍 You were searching for *${typeLabel}* on Dream Fly Global.\n\n` +
+    `🔍 You were searching for *${typeLabel}* on ${APP_NAME}.\n\n` +
     `Did you find what you were looking for? Our experts can help you find the *best deals* tailored to your needs!\n\n` +
     `📞 Call us: *+91 9000978856*\n` +
     `💬 Or reply to this message\n\n` +
-    `_Dream Fly Global ✈️ — Don't miss out on great deals!_`
+    `_${APP_NAME} ✈️ — Don't miss out on great deals!_`
   );
 }
 
@@ -268,7 +269,7 @@ function buildStaffFollowUpMessage(lead: LeadNotificationData): string {
     `🔍 *Service:* ${typeLabel}\n` +
     `🆔 *Lead ID:* ${lead.leadId}\n\n` +
     `Please reach out now to increase conversion! 🎯\n` +
-    `_Dream Fly Global CRM_`
+    `_${APP_NAME} CRM_`
   );
 }
 

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
 import { useAuth } from "@/contexts/auth-context";
+import { APP_NAME } from "@/lib/app-config";
 
 const DISMISSED_KEY = "ww_push_dismissed";
 
@@ -47,7 +48,7 @@ export function PushNotificationPrompt() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-sm text-gray-900 mb-0.5">
-                Stay updated with Dream Fly Global
+                Stay updated with {APP_NAME}
               </p>
               <p className="text-xs text-gray-500 leading-relaxed">
                 Get booking confirmations, exclusive deals, and travel offers instantly.

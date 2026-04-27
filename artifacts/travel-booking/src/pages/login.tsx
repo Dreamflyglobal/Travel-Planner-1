@@ -1,3 +1,4 @@
+import { APP_NAME } from "@/lib/app-config";
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/auth-context";
@@ -260,7 +261,7 @@ export default function Login() {
               </div>
               <div>
                 <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                  Dream Fly Global
+                  {APP_NAME}
                 </h1>
                 <p className="text-muted-foreground">Explore the world with us</p>
               </div>
@@ -313,7 +314,7 @@ export default function Login() {
                 <Sparkles className="w-7 h-7 text-white" />
               </div>
               <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                Dream Fly Global
+                {APP_NAME}
               </span>
             </div>
             <CardTitle className="text-2xl text-center">Customer Login</CardTitle>

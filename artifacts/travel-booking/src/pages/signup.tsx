@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { useAuth } from "@/contexts/auth-context";
+import { APP_NAME } from "@/lib/app-config";
 import { findUserByReferralCode } from "@/lib/referral";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -82,7 +83,7 @@ export default function Signup() {
             description: "₹50 has been added to your Travel Credits wallet!",
           });
         } else {
-          toast({ title: "Account Created!", description: "Welcome to Dream Fly Global!" });
+          toast({ title: "Account Created!", description: `Welcome to ${APP_NAME}!` });
         }
         setLocation("/bookings");
       } else if (result.error === "duplicate_email") {
@@ -111,7 +112,7 @@ export default function Signup() {
               <div className="bg-primary text-primary-foreground p-2 rounded-lg">
                 <Plane className="w-6 h-6" />
               </div>
-              <span className="text-2xl font-bold">Dream Fly Global</span>
+              <span className="text-2xl font-bold">{APP_NAME}</span>
             </div>
           </Link>
           <h1 className="text-3xl font-bold mb-2">Create Account</h1>

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { generateFlightTicketPDF, type FlightTicketData } from "../lib/ticket-pdf.js";
 import { sendBookingConfirmationEmail } from "../lib/email-service.js";
+import { APP_NAME } from "../lib/app-config.js";
 
 const router = Router();
 
@@ -20,7 +21,7 @@ router.post("/generate", async (req, res) => {
 
     res.set({
       "Content-Type":        "application/pdf",
-      "Content-Disposition": `attachment; filename="Dream Fly Global-Ticket-${ticket.bookingId}.pdf"`,
+      "Content-Disposition": `attachment; filename="${APP_NAME}-Ticket-${ticket.bookingId}.pdf"`,
       "Content-Length":      pdfBuffer.length,
     });
 

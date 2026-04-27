@@ -1,5 +1,6 @@
 import { Router } from "express";
 import nodemailer from "nodemailer";
+import { APP_NAME } from "../lib/app-config.js";
 
 const router = Router();
 
@@ -60,7 +61,7 @@ router.post("/admin/notify", async (req, res) => {
   try {
     const transport = buildTransport(user, pass);
     await transport.sendMail({
-      from: from?.trim() || `"Dream Fly Global" <${user}>`,
+      from: from?.trim() || `"${APP_NAME}" <${user}>`,
       to,
       subject,
       html: html || undefined,

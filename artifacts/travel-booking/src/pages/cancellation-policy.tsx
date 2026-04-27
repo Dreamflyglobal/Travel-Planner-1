@@ -1,3 +1,4 @@
+import { APP_NAME } from "@/lib/app-config";
 import { Layout } from "@/components/layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -84,7 +85,7 @@ export default function CancellationPolicy() {
           </div>
           <h1 className="text-3xl md:text-5xl font-extrabold mb-4 leading-tight">Cancellation Policy</h1>
           <p className="text-white/70 text-base md:text-lg max-w-2xl mx-auto">
-            Understand the cancellation and refund rules for flights, hotels, and buses booked through Dream Fly Global.
+            Understand the cancellation and refund rules for flights, hotels, and buses booked through {APP_NAME}.
           </p>
         </div>
       </section>
@@ -97,7 +98,7 @@ export default function CancellationPolicy() {
           <div>
             <p className="font-semibold text-amber-900 text-sm">Important Notice</p>
             <p className="text-amber-800 text-sm mt-0.5 leading-relaxed">
-              Cancellation charges and refund eligibility depend on the airline, hotel, or bus operator's individual rules — not Dream Fly Global's. Customers are advised to <strong>review cancellation terms carefully before confirming a booking</strong>.
+              Cancellation charges and refund eligibility depend on the airline, hotel, or bus operator's individual rules — not {APP_NAME}'s. Customers are advised to <strong>review cancellation terms carefully before confirming a booking</strong>.
             </p>
           </div>
         </div>

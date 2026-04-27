@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from "react";
+import { APP_NAME, APP_TAGLINE } from "@/lib/app-config";
 
 export type BrandingSettings = {
   companyName: string;
@@ -10,10 +11,10 @@ export type BrandingSettings = {
 const STORAGE_KEY = "branding_settings_v1";
 
 const DEFAULT_BRANDING: BrandingSettings = {
-  companyName: "Dream Fly Global",
-  tagline: "Explore the world",
-  logoUrl: null,
-  faviconUrl: null,
+  companyName: APP_NAME,
+  tagline:     APP_TAGLINE,
+  logoUrl:     null,
+  faviconUrl:  null,
 };
 
 function loadBranding(): BrandingSettings {

@@ -1,6 +1,7 @@
 import { Link } from "wouter";
 import { Phone, Mail, MapPin } from "lucide-react";
 import { FooterSocialLinks } from "@/components/footer-social-links";
+import { APP_NAME, APP_SUPPORT_PHONE, APP_SUPPORT_EMAIL } from "@/lib/app-config";
 
 export function Footer() {
   return (
@@ -10,7 +11,7 @@ export function Footer() {
 
           {/* Brand — spans wider on md */}
           <div className="sm:col-span-2 md:col-span-1 space-y-4">
-            <h3 className="text-xl font-bold text-primary font-sans">Dream Fly Global</h3>
+            <h3 className="text-xl font-bold text-primary font-sans">{APP_NAME}</h3>
             <p className="text-sm text-muted-foreground">
               Your ultimate travel companion. Book flights, buses, hotels, and holiday packages all in one place.
             </p>
@@ -75,8 +76,8 @@ export function Footer() {
         </div>
 
         <div className="mt-12 pt-8 border-t flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-muted-foreground">
-          <p>&copy; {new Date().getFullYear()} Dream Fly Global. All rights reserved.</p>
-          <p>Response time: Within 24 hours &nbsp;·&nbsp; support@dreamflyglobal.com</p>
+          <p>&copy; {new Date().getFullYear()} {APP_NAME}. All rights reserved.</p>
+          <p>Response time: Within 24 hours &nbsp;·&nbsp; {APP_SUPPORT_EMAIL}</p>
         </div>
       </div>
     </footer>

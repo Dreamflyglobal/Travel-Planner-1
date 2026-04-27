@@ -14,6 +14,7 @@
 
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
 import { getMessaging, getToken, onMessage, type Messaging } from "firebase/messaging";
+import { APP_NAME } from "@/lib/app-config";
 
 const firebaseConfig = {
   apiKey:            import.meta.env.VITE_FIREBASE_API_KEY            || "",
@@ -105,7 +106,7 @@ export function listenForForegroundMessages(
   const unsubscribe = onMessage(msg, (payload) => {
     const n = payload.notification;
     callback({
-      title: n?.title || "Dream Fly Global",
+      title: n?.title || APP_NAME,
       body:  n?.body  || "You have a new update",
       url:   (payload.data as any)?.url,
     });

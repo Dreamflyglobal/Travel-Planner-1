@@ -1,3 +1,4 @@
+import { APP_NAME } from "@/lib/app-config";
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/auth-context";
@@ -87,7 +88,7 @@ export default function MasterAdminLogin() {
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-lg">
               <ShieldCheck className="w-4 h-4 text-white" />
             </div>
-            <span className="text-white font-bold text-sm tracking-wide">Dream Fly Global · Master Admin</span>
+            <span className="text-white font-bold text-sm tracking-wide">{APP_NAME} · Master Admin</span>
           </div>
         </div>
 
@@ -179,7 +180,7 @@ export default function MasterAdminLogin() {
 
             <div className="mt-6 pt-5 border-t border-slate-100 text-center">
               <p className="text-xs text-muted-foreground">
-                🔒 This area is restricted to Dream Fly Global administrators.<br />
+                🔒 This area is restricted to {APP_NAME} administrators.<br />
                 Unauthorised access attempts are logged.
               </p>
             </div>
@@ -187,7 +188,7 @@ export default function MasterAdminLogin() {
         </Card>
 
         <p className="text-center text-xs text-white/40 mt-6">
-          © {new Date().getFullYear()} Dream Fly Global · All rights reserved
+          © {new Date().getFullYear()} {APP_NAME} · All rights reserved
         </p>
       </div>
     </div>

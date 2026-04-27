@@ -1,3 +1,4 @@
+import { APP_NAME } from "@/lib/app-config";
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -52,7 +53,7 @@ export default function StaffLogin() {
             <ShieldCheck className="w-5 h-5 text-white" />
           </div>
           <div>
-            <p className="font-bold text-white text-sm tracking-wide">Dream Fly Global</p>
+            <p className="font-bold text-white text-sm tracking-wide">{APP_NAME}</p>
             <p className="text-slate-400 text-xs uppercase tracking-widest">Staff Portal</p>
           </div>
         </div>
@@ -100,7 +101,7 @@ export default function StaffLogin() {
               <ShieldCheck className="w-4 h-4 text-white" />
             </div>
             <div>
-              <p className="font-bold text-slate-900 text-sm">Dream Fly Global</p>
+              <p className="font-bold text-slate-900 text-sm">{APP_NAME}</p>
               <p className="text-xs text-slate-400 uppercase tracking-widest">Staff Portal</p>
             </div>
           </div>

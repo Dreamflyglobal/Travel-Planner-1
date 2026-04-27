@@ -12,6 +12,7 @@ import { Router } from "express";
 import { eq, and } from "drizzle-orm";
 import { db, pushTokensTable, pushNotificationsLogTable } from "@workspace/db";
 import { sendPushToToken, sendPushToTokens } from "../lib/firebase-admin.js";
+import { APP_NAME } from "../lib/app-config.js";
 
 const router = Router();
 
@@ -53,13 +54,13 @@ router.post("/push/register", async (req, res): Promise<void> => {
     // Send welcome notification (fire-and-forget)
     sendPushToToken({
       token,
-      title: "Welcome to Dream Fly Global! ✈️",
+      title: `Welcome to ${APP_NAME}! ✈️`,
       body: "Explore flights, hotels, and holiday packages. Great deals await you!",
       url: DOMAIN(),
     }).then(async (result) => {
       await db.insert(pushNotificationsLogTable).values({
         token, type: "welcome",
-        title: "Welcome to Dream Fly Global! ✈️",
+        title: `Welcome to ${APP_NAME}! ✈️`,
         body: "Explore flights, hotels, and holiday packages. Great deals await you!",
         status: result.sent ? "sent" : "failed",
         error: result.reason ?? null,

@@ -1,3 +1,4 @@
+import { APP_NAME } from "@/lib/app-config";
 import { useEffect, useState, useRef } from "react";
 import { useLocation, Link } from "wouter";
 import { Layout } from "@/components/layout";
@@ -245,7 +246,7 @@ export default function PaymentSuccess() {
       generateInvoicePDF(bookingDetails);
       toast({
         title: "Invoice Downloaded!",
-        description: `Dream Fly Global branded invoice for ${bookingDetails.bookingId} saved as PDF.`,
+        description: `${APP_NAME} branded invoice for ${bookingDetails.bookingId} saved as PDF.`,
       });
     } catch (error) {
       console.error("Error generating invoice:", error);

@@ -1,3 +1,4 @@
+import { APP_NAME } from "@/lib/app-config";
 import { Layout } from "@/components/layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -141,7 +142,7 @@ export default function Contact() {
               const name = (form.elements.namedItem("name") as HTMLInputElement).value;
               const phone = (form.elements.namedItem("phone") as HTMLInputElement).value;
               const message = (form.elements.namedItem("message") as HTMLTextAreaElement).value;
-              const text = `Hi Dream Fly Global, I'm ${name} (${phone}). ${message}`;
+              const text = `Hi ${APP_NAME}, I'm ${name} (${phone}). ${message}`;
               window.open(`https://wa.me/919000978856?text=${encodeURIComponent(text)}`, "_blank");
             }}
             className="space-y-4"

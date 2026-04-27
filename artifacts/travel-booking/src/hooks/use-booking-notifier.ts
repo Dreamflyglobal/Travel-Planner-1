@@ -15,7 +15,7 @@ export interface NotifyParams {
   details?: string;
 }
 
-export const POPUP_EVENT = "wanderway:notification-popup";
+export const POPUP_EVENT = "dreamflyglobal:notification-popup";
 export interface PopupEventDetail {
   trigger: NotifyTrigger;
   message: string;

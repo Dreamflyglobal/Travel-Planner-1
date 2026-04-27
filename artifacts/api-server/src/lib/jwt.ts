@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET = process.env.JWT_SECRET || "wanderway_dev_secret_change_in_prod";
+const JWT_SECRET = process.env.JWT_SECRET || "dreamflyglobal_dev_secret_change_in_prod";
 const JWT_EXPIRES_IN = "30d";
 
 export interface JwtPayload {

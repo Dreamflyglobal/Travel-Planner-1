@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { generateHolidayItineraryPDF } from "../lib/holiday-pdf.js";
+import { APP_NAME } from "../lib/app-config.js";
 
 const router = Router();
 
@@ -44,7 +45,7 @@ router.get("/", async (req, res) => {
       totalPrice:     total  ? parseInt(total)  : undefined,
     });
 
-    const filename = `Dream Fly Global_${dest.replace(/\s+/g, "_")}_Itinerary.pdf`;
+    const filename = `${APP_NAME}_${dest.replace(/\s+/g, "_")}_Itinerary.pdf`;
 
     res.setHeader("Content-Type",        "application/pdf");
     res.setHeader("Content-Disposition", `inline; filename="${filename}"`);

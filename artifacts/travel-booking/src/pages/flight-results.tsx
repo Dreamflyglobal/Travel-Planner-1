@@ -1,3 +1,4 @@
+import { APP_NAME } from "@/lib/app-config";
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { useAuth } from "@/contexts/auth-context";
@@ -607,7 +608,7 @@ export default function FlightResults() {
               <Plane className="w-3.5 h-3.5 text-white" />
             </div>
             <span className="font-bold text-base bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent hidden sm:block">
-              Dream Fly Global
+              {APP_NAME}
             </span>
           </Link>
 

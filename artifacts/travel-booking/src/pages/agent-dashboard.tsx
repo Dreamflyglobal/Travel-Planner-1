@@ -1,3 +1,4 @@
+import { APP_NAME } from "@/lib/app-config";
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/contexts/auth-context";
@@ -183,7 +184,7 @@ export default function AgentDashboard() {
       name: user.name,
       email: user.email,
       phone: user.phone ?? "9999999999",
-      description: "Dream Fly Global Wallet Top-up",
+      description: ` Wallet Top-up`,
       onSuccess: () => {
         const newBalance = creditWallet(user.id, amount, `Wallet top-up ₹${amount}`);
         refreshUser();

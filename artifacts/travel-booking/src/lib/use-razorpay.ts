@@ -7,6 +7,8 @@
  *   "demo"  — no keys configured → payment simulated instantly
  */
 
+import { APP_NAME } from "@/lib/app-config";
+
 declare global {
   interface Window {
     Razorpay: any;
@@ -101,7 +103,7 @@ export async function openRazorpayCheckout(opts: RazorpayPaymentOptions) {
     key,
     amount:      order.amount,           // paise (from Razorpay API)
     currency:    order.currency || "INR",
-    name:        "Dream Fly Global",
+    name:        APP_NAME,
     description: opts.description || "Travel Booking",
     image:       "",
     order_id:    order.id,               // required — links payment to order

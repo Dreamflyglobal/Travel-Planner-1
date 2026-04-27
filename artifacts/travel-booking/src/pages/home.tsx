@@ -1,3 +1,4 @@
+import { APP_NAME } from "@/lib/app-config";
 import { Layout } from "@/components/layout";
 import { Link } from "wouter";
 import { useDestinationsWithFallback, useDealsWithFallback } from "@/lib/use-data-with-fallback";
@@ -410,7 +411,7 @@ export default function Home() {
               </Button>
             </a>
             <a
-              href={`https://wa.me/919000978856?text=${encodeURIComponent("Hi, I need help with my Dream Fly Global booking.")}`}
+              href={`https://wa.me/919000978856?text=${encodeURIComponent(`Hi, I need help with my ${APP_NAME} booking.`)}`}
               target="_blank" rel="noopener noreferrer"
             >
               <Button size="lg" variant="outline" className="font-bold gap-2 w-full sm:w-auto border-green-300 text-green-700 hover:bg-green-50">
@@ -435,11 +436,11 @@ export default function Home() {
                 <span className="text-primary text-sm font-bold uppercase tracking-widest">About Us</span>
               </div>
               <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight text-slate-900 mb-5 leading-tight">
-                Welcome to Dream Fly Global –<br className="hidden sm:block" />
+                Welcome to {APP_NAME} –<br className="hidden sm:block" />
                 <span className="text-primary">Your Trusted Travel Partner</span>
               </h2>
               <p className="text-slate-600 text-base md:text-lg leading-relaxed mb-5">
-                At Dream Fly Global, we believe travel should be easy, affordable, and memorable. Whether you're booking flights, hotels, buses, or holiday packages, we provide a seamless experience with the best prices.
+                At {APP_NAME}, we believe travel should be easy, affordable, and memorable. Whether you're booking flights, hotels, buses, or holiday packages, we provide a seamless experience with the best prices.
               </p>
               <p className="text-slate-500 text-base leading-relaxed mb-8">
                 Our mission is to simplify travel planning and help customers explore destinations without stress. With smart technology and dedicated support, we ensure a smooth booking journey from start to finish.
@@ -468,7 +469,7 @@ export default function Home() {
                   </div>
                 </div>
                 <p className="text-slate-600 text-base leading-relaxed italic border-l-4 border-primary/30 pl-4">
-                  "Dream Fly Global is not just a booking platform — it's your travel companion. We're here to make every journey unforgettable, from the first search to the final destination."
+                  {`"${APP_NAME} is not just a booking platform — it's your travel companion. We're here to make every journey unforgettable, from the first search to the final destination."`}
                 </p>
                 <div className="mt-6 pt-6 border-t border-slate-100 grid grid-cols-3 gap-4 text-center">
                   {[
@@ -488,7 +489,7 @@ export default function Home() {
 
           {/* Why Choose Us */}
           <div className="text-center mb-10">
-            <h3 className="text-2xl md:text-3xl font-extrabold text-slate-900 mb-2">Why Choose Dream Fly Global?</h3>
+            <h3 className="text-2xl md:text-3xl font-extrabold text-slate-900 mb-2">Why Choose {APP_NAME}?</h3>
             <p className="text-slate-500 text-base">Everything you need for a perfect trip, all in one place.</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">

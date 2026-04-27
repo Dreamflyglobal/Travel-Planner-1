@@ -1,3 +1,4 @@
+import { APP_NAME } from "@/lib/app-config";
 import { useState } from "react";
 import { useLocation, Link } from "wouter";
 import { useAuth } from "@/contexts/auth-context";
@@ -86,7 +87,7 @@ export default function AgentLogin() {
             <Globe className="w-7 h-7 text-white" />
           </div>
           <div>
-            <p className="text-xl font-bold tracking-tight">Dream Fly Global</p>
+            <p className="text-xl font-bold tracking-tight">{APP_NAME}</p>
             <p className="text-blue-300 text-xs font-medium uppercase tracking-widest">B2B Agent Portal</p>
           </div>
         </div>
@@ -101,7 +102,7 @@ export default function AgentLogin() {
               </span>
             </h1>
             <p className="text-blue-200 text-lg leading-relaxed">
-              Access exclusive B2B rates, track your commissions, and grow your travel business with Dream Fly Global.
+              Access exclusive B2B rates, track your commissions, and grow your travel business with {APP_NAME}.
             </p>
           </div>
 
@@ -146,7 +147,7 @@ export default function AgentLogin() {
               <Globe className="w-6 h-6 text-white" />
             </div>
             <div>
-              <p className="text-white font-bold text-lg">Dream Fly Global</p>
+              <p className="text-white font-bold text-lg">{APP_NAME}</p>
               <p className="text-blue-300 text-[10px] font-medium uppercase tracking-widest">B2B Agent Portal</p>
             </div>
           </div>
