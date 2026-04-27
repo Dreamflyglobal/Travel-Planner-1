@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { useAbandonedLeadTracker } from "@/hooks/use-abandoned-lead-tracker";
 import { useMarketing } from "@/hooks/use-marketing";
 import { getHiddenMarkupAmount } from "@/lib/pricing";
-import { useFlightSearch, type FlightSearchOptions } from "@/lib/use-flight-search";
+import { useFlightSearch, type FlightSearchOptions, type FareOption } from "@/lib/use-flight-search";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
@@ -24,6 +24,8 @@ import {
   WifiOff,
   Pencil,
   ChevronRight,
+  ChevronDown,
+  Tag,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -99,6 +101,7 @@ export default function FlightResults() {
   const [nonStopOnly,      setNonStopOnly]      = useState(false);
   const [sortBy, setSortBy] = useState<"cheapest" | "fastest" | "earliest" | "latest">("cheapest");
   const [showMobileFilters, setShowMobileFilters] = useState(false);
+  const [expandedFlight,   setExpandedFlight]  = useState<number | null>(null);
 
   const { user, isAgent } = useAuth();
   useAbandonedLeadTracker("flight");
@@ -563,7 +566,7 @@ export default function FlightResults() {
                                     </Badge>
                                   )}
                                   <Badge className="bg-slate-100 text-slate-600 border-0 text-xs font-medium hover:bg-slate-100">
-                                    Economy
+                                    {flight.class || "Economy"}
                                   </Badge>
                                   {isLive && (
                                     <Badge className="bg-blue-50 text-blue-600 border-0 text-[10px]">Live</Badge>
@@ -665,8 +668,68 @@ export default function FlightResults() {
                               </div>
 
                               <div className="w-full space-y-2">
-                                <Link
-                                  href={`/booking/flight?${new URLSearchParams({
+                                {/* ── Fare selection or direct book ── */}
+                                {flight.fareOptions && flight.fareOptions.length > 0 ? (
+                                  <Button
+                                    size="lg"
+                                    onClick={() => setExpandedFlight(expandedFlight === flight.id ? null : flight.id)}
+                                    className={cn(
+                                      "w-full font-bold text-sm gap-1.5 shadow-sm transition-all",
+                                      expandedFlight === flight.id
+                                        ? "bg-blue-700 hover:bg-blue-800 text-white"
+                                        : "bg-orange-500 hover:bg-orange-600 text-white"
+                                    )}
+                                  >
+                                    <Tag className="w-4 h-4" />
+                                    View Fares ({flight.fareOptions.length})
+                                    <ChevronDown className={cn("w-4 h-4 ml-auto transition-transform", expandedFlight === flight.id && "rotate-180")} />
+                                  </Button>
+                                ) : (
+                                  <Link
+                                    href={`/booking/flight?${new URLSearchParams({
+                                      id:             String(flight.id),
+                                      airline:        flight.airline,
+                                      flightNumber:   flight.flightNumber,
+                                      from:           flight.origin,
+                                      to:             flight.destination,
+                                      departure:      flight.departureTime,
+                                      arrival:        flight.arrivalTime,
+                                      duration:       String(flight.duration),
+                                      date:           date || "",
+                                      price:          String(flight.price),
+                                      markup:         String(effectiveMarkup),
+                                      priceWithMarkup:String(finalPrice),
+                                      normalMarkup:   String(normalMarkup),
+                                      agentSavings:   String(savings ?? 0),
+                                      travelers:      String(travelers),
+                                    }).toString()}`}
+                                    className="w-full block"
+                                  >
+                                    <Button size="lg" className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm gap-1.5 shadow-sm">
+                                      Book Now <ChevronRight className="w-4 h-4" />
+                                    </Button>
+                                  </Link>
+                                )}
+                                <p className="text-[10px] text-muted-foreground text-center">
+                                  {flight.fareOptions && flight.fareOptions.length > 0
+                                    ? "Select fare below · all taxes included"
+                                    : "Taxes & fees included"}
+                                </p>
+                              </div>
+                            </div>
+
+                          </div>
+
+                          {/* ── Expanded fare options panel ── */}
+                          {expandedFlight === flight.id && flight.fareOptions && flight.fareOptions.length > 0 && (
+                            <div className="border-t border-blue-100 bg-blue-50/60 px-5 py-4">
+                              <p className="text-[11px] font-bold text-blue-700 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                                <Tag className="w-3.5 h-3.5" /> Choose your fare class
+                              </p>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {flight.fareOptions.map((fare: FareOption) => {
+                                  const fareWithMarkup = fare.totalFare + effectiveMarkup;
+                                  const bookParams = new URLSearchParams({
                                     id:             String(flight.id),
                                     airline:        flight.airline,
                                     flightNumber:   flight.flightNumber,
@@ -676,30 +739,51 @@ export default function FlightResults() {
                                     arrival:        flight.arrivalTime,
                                     duration:       String(flight.duration),
                                     date:           date || "",
-                                    price:          String(flight.price),
+                                    price:          String(fare.totalFare),
                                     markup:         String(effectiveMarkup),
-                                    priceWithMarkup:String(finalPrice),
+                                    priceWithMarkup:String(fareWithMarkup),
                                     normalMarkup:   String(normalMarkup),
                                     agentSavings:   String(savings ?? 0),
                                     travelers:      String(travelers),
-                                  }).toString()}`}
-                                  className="w-full block"
-                                >
-                                  <Button
-                                    size="lg"
-                                    className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm gap-1.5 shadow-sm"
-                                  >
-                                    Book Now
-                                    <ChevronRight className="w-4 h-4" />
-                                  </Button>
-                                </Link>
-                                <p className="text-[10px] text-muted-foreground text-center">
-                                  Taxes & fees included
-                                </p>
+                                    cabinClass:     fare.cabinClass,
+                                    cabinLabel:     fare.cabinLabel,
+                                  });
+                                  return (
+                                    <Link key={fare.fareId || fare.cabinClass} href={`/booking/flight?${bookParams.toString()}`} className="block">
+                                      <div className={cn(
+                                        "p-3.5 rounded-xl border-2 bg-white hover:border-orange-400 hover:shadow-md transition-all cursor-pointer group",
+                                        fare.cabinClass === "BUSINESS" || fare.cabinClass === "FIRST"
+                                          ? "border-purple-200"
+                                          : "border-slate-200"
+                                      )}>
+                                        <div className="flex items-start justify-between gap-2 mb-2">
+                                          <div>
+                                            <p className="font-bold text-sm text-slate-800">{fare.cabinLabel}</p>
+                                            <p className={cn(
+                                              "text-[10px] font-semibold mt-0.5",
+                                              fare.seatsLeft <= 5 ? "text-red-500" : "text-slate-400"
+                                            )}>
+                                              {fare.seatsLeft <= 5 ? `🔥 Only ${fare.seatsLeft} left` : `${fare.seatsLeft} seats available`}
+                                            </p>
+                                          </div>
+                                          <div className="text-right shrink-0">
+                                            <p className="text-xl font-extrabold text-blue-700 tabular-nums leading-none">
+                                              ₹{fareWithMarkup.toLocaleString("en-IN")}
+                                            </p>
+                                            <p className="text-[10px] text-muted-foreground">per person</p>
+                                          </div>
+                                        </div>
+                                        <Button size="sm" className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs h-8 gap-1 group-hover:shadow-sm">
+                                          Select <ChevronRight className="w-3.5 h-3.5" />
+                                        </Button>
+                                      </div>
+                                    </Link>
+                                  );
+                                })}
                               </div>
                             </div>
+                          )}
 
-                          </div>
                         </CardContent>
                       </Card>
                     );

@@ -37,7 +37,6 @@ export function SearchTabs({
   const [adults,      setAdults]      = useState(1);
   const [children,    setChildren]    = useState(0);
   const [infants,     setInfants]     = useState(0);
-  const [cabinClass,  setCabinClass]  = useState("economy");
   const [paxOpen,     setPaxOpen]     = useState(false);
   const paxRef = useRef<HTMLDivElement>(null);
 
@@ -150,7 +149,7 @@ export function SearchTabs({
   const handleBusSwap = () => { const t = busFrom; setBusFrom(busTo); setBusTo(t); };
   const handleFlightSwap = () => { const t = flightFrom; setFlightFrom(flightTo); setFlightTo(t); };
 
-  const commonPaxParams = `&travelers=${totalPax}&adults=${adults}&children=${children}&infants=${infants}&cabinClass=${cabinClass}&tripType=${tripType}`;
+  const commonPaxParams = `&travelers=${totalPax}&adults=${adults}&children=${children}&infants=${infants}&tripType=${tripType}`;
 
   const flightsUrl = (() => {
     if (tripType === "oneway") {
@@ -379,19 +378,6 @@ export function SearchTabs({
                 )}
               </div>
 
-              {/* Cabin class */}
-              <div className="flex items-center gap-2">
-                <select
-                  value={cabinClass}
-                  onChange={(e) => setCabinClass(e.target.value)}
-                  className="h-9 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer hover:border-primary/40 transition-colors"
-                >
-                  <option value="economy">Economy</option>
-                  <option value="premium_economy">Premium Economy</option>
-                  <option value="business">Business</option>
-                  <option value="first">First</option>
-                </select>
-              </div>
             </div>
 
           </TabsContent>

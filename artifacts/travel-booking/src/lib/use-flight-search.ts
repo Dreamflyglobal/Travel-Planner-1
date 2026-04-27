@@ -1,5 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 
+export interface FareOption {
+  fareId:     string;
+  cabinClass: string;
+  cabinLabel: string;
+  totalFare:  number;
+  seatsLeft:  number;
+}
+
 export interface LiveFlight {
   id: number;
   airline: string;
@@ -16,6 +24,7 @@ export interface LiveFlight {
   stops?: number;
   stopsLabel?: string;
   status?: string;
+  fareOptions?: FareOption[];
 }
 
 interface LiveSearchResult {

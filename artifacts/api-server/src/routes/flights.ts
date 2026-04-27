@@ -148,10 +148,38 @@ function mapTripJackFlight(item: any, idx: number, fromIata: string, toIata: str
     }
   }
 
-  const priceInfo = item.totalPriceList?.[0]?.fd?.ADULT;
-  const price     = priceInfo?.fC?.TF || priceInfo?.fC?.BF || 0;
-  const cabinClass = (priceInfo?.cc || "ECONOMY") === "BUSINESS" ? "Business" : "Economy";
+  // ── All fare classes from TripJack totalPriceList ─────────────────────────
+  const CABIN_LABEL: Record<string, string> = {
+    ECONOMY:         "Economy",
+    BUSINESS:        "Business",
+    FIRST:           "First",
+    PREMIUM_ECONOMY: "Premium Economy",
+  };
+
+  const fareOptions = (item.totalPriceList || [])
+    .map((pl: any) => {
+      const adultFd = pl?.fd?.ADULT;
+      if (!adultFd) return null;
+      const rawFare = adultFd?.fC?.TF || adultFd?.fC?.BF || 0;
+      if (!rawFare) return null;
+      const cc = (adultFd?.cc || "ECONOMY").toUpperCase();
+      return {
+        fareId:     pl.id || pl.fareIdentifier || cc,
+        cabinClass: cc,
+        cabinLabel: CABIN_LABEL[cc] || cc,
+        totalFare:  rawFare,
+        seatsLeft:  adultFd?.sR ?? 9,
+      };
+    })
+    .filter(Boolean);
+
+  // Primary price = cheapest available fare (for sort/filter compatibility)
+  const priceInfo  = item.totalPriceList?.[0]?.fd?.ADULT;
+  const price      = fareOptions.length > 0
+    ? Math.min(...fareOptions.map((f: any) => f.totalFare))
+    : (priceInfo?.fC?.TF || priceInfo?.fC?.BF || 0);
   const seatsLeft  = priceInfo?.sR ?? 9;
+  const cabinClass = CABIN_LABEL[(priceInfo?.cc || "ECONOMY").toUpperCase()] ?? "Economy";
 
   const segCount = item.sI?.length ?? 1;
   const stops = Math.max(0, segCount - 1);
@@ -173,6 +201,7 @@ function mapTripJackFlight(item: any, idx: number, fromIata: string, toIata: str
     stops,
     stopsLabel,
     status: "scheduled",
+    fareOptions,   // ← all cabin classes with their prices
   };
 }
 
