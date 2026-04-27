@@ -25,7 +25,6 @@ import {
   Pencil,
   ChevronRight,
   ChevronDown,
-  Tag,
   Loader2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -834,8 +833,8 @@ export default function FlightResults() {
                                         : "bg-orange-500 hover:bg-orange-600 text-white"
                                     )}
                                   >
-                                    <Tag className="w-4 h-4" />
-                                    View Fares ({flight.fareOptions.length})
+                                    <Plane className="w-4 h-4" />
+                                    Select Flight
                                     <ChevronDown className={cn("w-4 h-4 ml-auto transition-transform", expandedFlight === flight.id && "rotate-180")} />
                                   </Button>
                                 ) : (
@@ -885,7 +884,7 @@ export default function FlightResults() {
                           {expandedFlight === flight.id && flight.fareOptions && flight.fareOptions.length > 0 && (
                             <div className="border-t border-blue-100 bg-blue-50/60 px-5 py-4">
                               <p className="text-[11px] font-bold text-blue-700 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                                <Tag className="w-3.5 h-3.5" /> Choose your fare class
+                                <Plane className="w-3.5 h-3.5" /> Choose your fare class
                               </p>
                               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                                 {flight.fareOptions.map((fare: FareOption) => {
@@ -911,50 +910,63 @@ export default function FlightResults() {
                                     fareKey:        fare.fareId,
                                   });
                                   const isFareLoading = bookingLoadingId === fare.fareId;
+                                  const isPremium = fare.cabinClass === "BUSINESS" || fare.cabinClass === "FIRST" || fare.cabinClass === "PREMIUM_ECONOMY";
                                   return (
                                     <div
                                       key={fare.fareId || fare.cabinClass}
-                                      onClick={() => {
-                                        if (bookingLoadingId) return;
-                                        const ri = fare.resultIndex || flight.resultIndex;
-                                        console.log("[fareSelect] selectedFare.resultIndex:", fare.resultIndex, "| flight.resultIndex:", flight.resultIndex, "| using:", ri);
-                                        handleSelectFlight(fare.fareId, bookParams, true, ri, traceId);
-                                      }}
                                       className={cn(
-                                        "p-3.5 rounded-xl border-2 bg-white transition-all group",
-                                        bookingLoadingId
-                                          ? "opacity-60 cursor-not-allowed"
-                                          : "hover:border-orange-400 hover:shadow-md cursor-pointer",
-                                        fare.cabinClass === "BUSINESS" || fare.cabinClass === "FIRST"
-                                          ? "border-purple-200"
-                                          : "border-slate-200"
+                                        "p-3.5 rounded-xl border-2 bg-white flex flex-col gap-3",
+                                        bookingLoadingId && bookingLoadingId !== fare.fareId ? "opacity-50" : "",
+                                        isPremium ? "border-purple-200" : "border-slate-200"
                                       )}
                                     >
-                                      <div className="flex items-start justify-between gap-2 mb-2">
+                                      {/* Cabin class label + seats */}
+                                      <div className="flex items-start justify-between gap-2">
                                         <div>
                                           <p className="font-bold text-sm text-slate-800">{fare.cabinLabel}</p>
                                           <p className={cn(
                                             "text-[10px] font-semibold mt-0.5",
                                             fare.seatsLeft <= 5 ? "text-red-500" : "text-slate-400"
                                           )}>
-                                            {fare.seatsLeft <= 5 ? `🔥 Only ${fare.seatsLeft} left` : `${fare.seatsLeft} seats available`}
+                                            {fare.seatsLeft <= 5 ? `🔥 Only ${fare.seatsLeft} left` : `${fare.seatsLeft} seats`}
                                           </p>
                                         </div>
-                                        <div className="text-right shrink-0">
-                                          <p className="text-xl font-extrabold text-blue-700 tabular-nums leading-none">
-                                            ₹{fareWithMarkup.toLocaleString("en-IN")}
-                                          </p>
-                                          <p className="text-[10px] text-muted-foreground">per person</p>
-                                        </div>
+                                        {isPremium && (
+                                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 uppercase tracking-wide shrink-0">
+                                            {fare.cabinLabel}
+                                          </span>
+                                        )}
                                       </div>
+
+                                      {/* Price */}
+                                      <div>
+                                        <p className="text-2xl font-extrabold text-blue-700 tabular-nums leading-none">
+                                          ₹{fareWithMarkup.toLocaleString("en-IN")}
+                                        </p>
+                                        <p className="text-[10px] text-muted-foreground mt-0.5">per person · all taxes incl.</p>
+                                        {travelers > 1 && (
+                                          <p className="text-xs text-slate-500 mt-0.5">
+                                            Total <span className="font-semibold">₹{(fareWithMarkup * travelers).toLocaleString("en-IN")}</span> for {travelers}
+                                          </p>
+                                        )}
+                                      </div>
+
+                                      {/* Select button — the sole trigger for this fare */}
                                       <Button
                                         size="sm"
                                         disabled={!!bookingLoadingId}
-                                        className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs h-8 gap-1 group-hover:shadow-sm"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (bookingLoadingId) return;
+                                          const ri = fare.resultIndex || flight.resultIndex;
+                                          console.log("[fareSelect] fareId:", fare.fareId, "| cabinClass:", fare.cabinClass, "| resultIndex:", ri, "| traceId:", traceId || "(none)");
+                                          handleSelectFlight(fare.fareId, bookParams, true, ri, traceId);
+                                        }}
+                                        className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs h-8 gap-1"
                                       >
                                         {isFareLoading
-                                          ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Checking…</>
-                                          : <>Select <ChevronRight className="w-3.5 h-3.5" /></>
+                                          ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Checking fare…</>
+                                          : <>Select {fare.cabinLabel} <ChevronRight className="w-3.5 h-3.5" /></>
                                         }
                                       </Button>
                                     </div>
