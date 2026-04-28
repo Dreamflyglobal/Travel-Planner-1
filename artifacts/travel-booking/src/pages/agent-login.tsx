@@ -23,7 +23,7 @@ import {
 
 export default function AgentLogin() {
   const [, setLocation] = useLocation();
-  const { login, logout, isAuthenticated, user } = useAuth();
+  const { loginAgent, isAuthenticated, user } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -31,10 +31,8 @@ export default function AgentLogin() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  if (isAuthenticated) {
-    if (user?.role === "agent") setLocation("/agent");
-    else if (user?.role === "admin") setLocation("/master-admin/dashboard");
-    else setLocation("/");
+  if (isAuthenticated && user?.role === "agent") {
+    setLocation("/agent");
     return null;
   }
 
@@ -49,23 +47,16 @@ export default function AgentLogin() {
       return;
     }
 
-    const { user: loggedInUser } = await login(email, password);
+    const { user: loggedInUser, error: loginError, code } = await loginAgent(email, password);
 
-    if (loggedInUser) {
-      const role = loggedInUser.role;
-      if (role === "agent") {
-        setLocation("/agent");
-      } else if (role === "admin") {
-        setLocation("/master-admin/dashboard");
-      } else {
-        // Customer account — log them out and show a clear error with redirect
-        logout();
-        setError("customer_blocked");
-        setLoading(false);
-        return;
-      }
+    if (loggedInUser?.role === "agent") {
+      setLocation("/agent");
+    } else if (code === "wrong_portal") {
+      setError("customer_blocked");
+    } else if (code === "not_approved") {
+      setError("Your agent account is pending approval. Please contact support.");
     } else {
-      setError("Invalid email or password. Please try again.");
+      setError(loginError || "Invalid email or password. Please try again.");
     }
 
     setLoading(false);

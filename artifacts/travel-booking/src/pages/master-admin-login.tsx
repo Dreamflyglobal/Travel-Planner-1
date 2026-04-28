@@ -8,11 +8,9 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { ShieldCheck, Eye, EyeOff, Lock, Mail, AlertCircle } from "lucide-react";
 
-const API = import.meta.env.VITE_API_BASE_URL ?? "";
-
 export default function MasterAdminLogin() {
   const [, setLocation] = useLocation();
-  const { isAdmin, isAuthenticated, refreshUser } = useAuth();
+  const { isAdmin, isAuthenticated, loginAdmin } = useAuth();
 
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
@@ -36,34 +34,15 @@ export default function MasterAdminLogin() {
     setLoading(true);
     setError("");
 
-    try {
-      const res = await fetch(`${API}/api/admin/login`, {
-        method:      "POST",
-        credentials: "include",
-        headers:     { "Content-Type": "application/json" },
-        body:        JSON.stringify({ email: email.trim().toLowerCase(), password }),
-      });
-      const data = await res.json();
+    const { user, error: loginError } = await loginAdmin(email, password);
 
-      if (!res.ok || !data.success) {
-        setLoading(false);
-        setError("Invalid credentials");
-        return;
-      }
-
-      // Persist admin session in its own key — keeps B2C user sessions untouched
-      localStorage.setItem("admin_jwt", data.token);
-      localStorage.removeItem("jwt_token"); // ensure B2C slot is clear for this session
-
-      // Refresh AuthContext so navbar / AdminGuard pick up the new admin user
-      await refreshUser();
-
-      setLoading(false);
+    if (user?.role === "admin") {
       setLocation("/master-admin/dashboard");
-    } catch {
-      setLoading(false);
-      setError("Invalid credentials");
+    } else {
+      setError(loginError || "Invalid credentials");
     }
+
+    setLoading(false);
   };
 
   return (

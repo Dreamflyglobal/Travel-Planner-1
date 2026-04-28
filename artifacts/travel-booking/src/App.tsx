@@ -9,6 +9,7 @@ import { SiteSettingsProvider } from "@/contexts/site-settings-context";
 import { NotificationSettingsProvider } from "@/contexts/notification-settings-context";
 import { WebsiteSettingsProvider } from "@/contexts/website-settings-context";
 import { AdminGuard } from "@/components/admin-guard";
+import { AgentGuard } from "@/components/agent-guard";
 import { PushNotificationPrompt } from "@/components/push-notification-prompt";
 import { BookingNotificationPopup } from "@/components/booking-notification-popup";
 import { WhatsappFloat } from "@/components/whatsapp-float";
@@ -130,7 +131,9 @@ function Router() {
       <Route path="/master-admin/enquiries">
         <AdminGuard><AdminEnquiries /></AdminGuard>
       </Route>
-      <Route path="/agent" component={AgentDashboard} />
+      <Route path="/agent">
+        <AgentGuard><AgentDashboard /></AgentGuard>
+      </Route>
       <Route path="/flights/:id" component={FlightDetail} />
       <Route path="/buses" component={Buses} />
       <Route path="/bus/results" component={BusResults} />

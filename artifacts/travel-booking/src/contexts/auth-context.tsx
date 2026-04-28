@@ -39,13 +39,21 @@ export function isValidPhone(phone: string): boolean {
   return PHONE_REGEX.test(normalizePhone(phone));
 }
 
-// ── Token helpers ─────────────────────────────────────────────────────────────
-// Admin sessions are stored under "admin_jwt"; B2C user sessions under "jwt_token".
-// This keeps the two roles fully isolated — logging in as admin never pollutes
-// the B2C user session and vice-versa.
+// ── Storage keys ──────────────────────────────────────────────────────────────
+// Each portal uses its own localStorage key so sessions never bleed across roles.
+//   B2C  customers → "b2c_token"
+//   B2B  agents    → "agent_token"
+//   Admin          → "admin_token"
+//
+// Legacy keys ("jwt_token", "admin_jwt") are migrated on first load and removed.
 
-const ADMIN_TOKEN_KEY = "admin_jwt";
-const USER_TOKEN_KEY  = "jwt_token";
+const B2C_TOKEN_KEY   = "b2c_token";
+const AGENT_TOKEN_KEY = "agent_token";
+const ADMIN_TOKEN_KEY = "admin_token";
+
+// Legacy key names — only used for one-time migration
+const LEGACY_USER_KEY  = "jwt_token";
+const LEGACY_ADMIN_KEY = "admin_jwt";
 
 function isAdminJwt(token: string): boolean {
   try {
@@ -56,38 +64,47 @@ function isAdminJwt(token: string): boolean {
   }
 }
 
-/** Returns the active token: admin_jwt if an admin session exists, else jwt_token */
-function getToken(): string | null {
-  const adminToken = localStorage.getItem(ADMIN_TOKEN_KEY);
-  if (adminToken && isAdminJwt(adminToken)) return adminToken;
-  return localStorage.getItem(USER_TOKEN_KEY);
+/** Determine which portal the current URL belongs to */
+function currentPortal(): "admin" | "agent" | "b2c" {
+  const path = window.location.pathname;
+  if (path.startsWith("/master-admin")) return "admin";
+  if (path.startsWith("/agent") || path.startsWith("/agent-login") || path.startsWith("/agent-signup")) return "agent";
+  return "b2c";
 }
 
-/** Store a B2C user token */
-function setToken(token: string) {
-  localStorage.setItem(USER_TOKEN_KEY, token);
-}
-
-/** Store an admin token (kept separate from B2C sessions) */
-function setAdminToken(token: string) {
-  localStorage.setItem(ADMIN_TOKEN_KEY, token);
-}
-
-/** Clear the B2C user token */
-function clearToken() {
-  localStorage.removeItem(USER_TOKEN_KEY);
-}
-
-/** Clear both tokens (full logout) */
-function clearAllTokens() {
-  localStorage.removeItem(USER_TOKEN_KEY);
-  localStorage.removeItem(ADMIN_TOKEN_KEY);
-  localStorage.removeItem("isAdmin");
+/** Return the active token for the current portal */
+function getActiveToken(): string | null {
+  switch (currentPortal()) {
+    case "admin": return localStorage.getItem(ADMIN_TOKEN_KEY);
+    case "agent": return localStorage.getItem(AGENT_TOKEN_KEY);
+    default:      return localStorage.getItem(B2C_TOKEN_KEY);
+  }
 }
 
 function authHeader(): Record<string, string> {
-  const token = getToken();
+  const token = getActiveToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+/** One-time migration of legacy storage keys */
+function migrateLegacyKeys() {
+  const legacyUser  = localStorage.getItem(LEGACY_USER_KEY);
+  const legacyAdmin = localStorage.getItem(LEGACY_ADMIN_KEY);
+
+  if (legacyAdmin && isAdminJwt(legacyAdmin)) {
+    localStorage.setItem(ADMIN_TOKEN_KEY, legacyAdmin);
+    localStorage.removeItem(LEGACY_ADMIN_KEY);
+  } else if (legacyAdmin) {
+    localStorage.removeItem(LEGACY_ADMIN_KEY);
+  }
+
+  if (legacyUser && isAdminJwt(legacyUser)) {
+    localStorage.setItem(ADMIN_TOKEN_KEY, legacyUser);
+    localStorage.removeItem(LEGACY_USER_KEY);
+  } else if (legacyUser) {
+    localStorage.setItem(B2C_TOKEN_KEY, legacyUser);
+    localStorage.removeItem(LEGACY_USER_KEY);
+  }
 }
 
 // ── Context ───────────────────────────────────────────────────────────────────
@@ -98,7 +115,12 @@ interface AuthContextType {
   isAdmin: boolean;
   isAgent: boolean;
   isStaff: boolean;
+  /** B2C email+password login → stores in b2c_token */
   login: (email: string, password: string) => Promise<{ user: User | null; error?: string; code?: string }>;
+  /** Agent portal login → stores in agent_token */
+  loginAgent: (email: string, password: string) => Promise<{ user: User | null; error?: string; code?: string }>;
+  /** Admin portal login → stores in admin_token */
+  loginAdmin: (email: string, password: string) => Promise<{ user: User | null; error?: string }>;
   loginWithOTP: (phone: string, otp?: string) => Promise<{ success: boolean; user?: User; token?: string }>;
   signup: (
     name: string,
@@ -125,68 +147,93 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loaded, setLoaded] = useState(false);
 
   const loadUser = async () => {
-    // ── 1. Check dedicated admin_jwt key first ────────────────────────────────
-    const adminToken = localStorage.getItem(ADMIN_TOKEN_KEY);
-    if (adminToken) {
-      if (isAdminJwt(adminToken)) {
-        setUser({ id: 0, name: "Admin", email: "admin@dreamflyglobal.com", role: "admin" });
-        setLoaded(true);
-        return;
-      }
-      // Stale / invalid admin token — remove it
-      localStorage.removeItem(ADMIN_TOKEN_KEY);
-    }
+    migrateLegacyKeys();
 
-    // ── 2. Migrate legacy admin sessions stored in jwt_token ──────────────────
-    const legacyToken = localStorage.getItem(USER_TOKEN_KEY);
-    if (legacyToken && isAdminJwt(legacyToken)) {
-      // Move to the correct key; clear from user slot
-      localStorage.setItem(ADMIN_TOKEN_KEY, legacyToken);
-      localStorage.removeItem(USER_TOKEN_KEY);
-      setUser({ id: 0, name: "Admin", email: "admin@dreamflyglobal.com", role: "admin" });
+    const portal = currentPortal();
+
+    if (portal === "admin") {
+      const token = localStorage.getItem(ADMIN_TOKEN_KEY);
+      if (token && isAdminJwt(token)) {
+        const adminEmail = process.env.ADMIN_EMAIL || "admin@dreamflyglobal.com";
+        setUser({ id: 0, name: "Admin", email: adminEmail, role: "admin" });
+      } else {
+        if (token) localStorage.removeItem(ADMIN_TOKEN_KEY); // stale
+        setUser(null);
+      }
       setLoaded(true);
       return;
     }
 
-    // ── 3. Regular B2C user session ───────────────────────────────────────────
-    const token = localStorage.getItem(USER_TOKEN_KEY);
-    if (!token) { setLoaded(true); return; }
+    if (portal === "agent") {
+      const token = localStorage.getItem(AGENT_TOKEN_KEY);
+      if (!token) { setLoaded(true); return; }
+      try {
+        const res = await fetch(`${API}/api/auth/me`, {
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.user.role === "agent") {
+            setUser(data.user);
+          } else {
+            localStorage.removeItem(AGENT_TOKEN_KEY);
+            setUser(null);
+          }
+        } else {
+          localStorage.removeItem(AGENT_TOKEN_KEY);
+          setUser(null);
+        }
+      } catch {
+        // network error — keep user optimistically if token present
+      }
+      setLoaded(true);
+      return;
+    }
 
+    // B2C portal (default)
+    const token = localStorage.getItem(B2C_TOKEN_KEY);
+    if (!token) { setLoaded(true); return; }
     try {
       const res = await fetch(`${API}/api/auth/me`, {
-        headers: { ...authHeader(), "Content-Type": "application/json" },
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       });
       if (res.ok) {
         const data = await res.json();
-        setUser(data.user);
+        const role = data.user.role;
+        if (role === "user" || role === "staff") {
+          setUser(data.user);
+        } else {
+          // Agent or admin token in B2C slot — remove it
+          localStorage.removeItem(B2C_TOKEN_KEY);
+          setUser(null);
+        }
       } else {
-        clearToken();
+        localStorage.removeItem(B2C_TOKEN_KEY);
         setUser(null);
       }
     } catch {
-      // network error — keep user from last session if token exists
-    } finally {
-      setLoaded(true);
+      // network error — keep session optimistically
     }
+    setLoaded(true);
   };
 
   useEffect(() => { loadUser(); }, []);
 
   const refreshUser = async () => { await loadUser(); };
 
-  // ── login (email + password) ────────────────────────────────────────────────
+  // ── login (B2C) ─────────────────────────────────────────────────────────────
   const login = async (email: string, password: string): Promise<{ user: User | null; error?: string; code?: string }> => {
     try {
-      const res = await fetch(`${API}/api/auth/login`, {
+      const res = await fetch(`${API}/api/auth/login-user`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim(), password }),
       });
       const data = await res.json();
       if (!res.ok) {
-        return { user: null, error: data.error || "Invalid email or password. Please try again.", code: data.code };
+        return { user: null, error: data.error || "Invalid email or password.", code: data.code };
       }
-      setToken(data.token);
+      localStorage.setItem(B2C_TOKEN_KEY, data.token);
       setUser(data.user);
       return { user: data.user as User };
     } catch {
@@ -194,16 +241,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // ── loginWithOTP (called after OTP is verified) ─────────────────────────────
-  // Pass otp + phone to verify server-side, or just phone when token is returned inline
-  const loginWithOTP = async (
-    phone: string,
-    otp?: string,
-  ): Promise<{ success: boolean; user?: User; token?: string }> => {
+  // ── loginAgent (B2B) ────────────────────────────────────────────────────────
+  const loginAgent = async (email: string, password: string): Promise<{ user: User | null; error?: string; code?: string }> => {
+    try {
+      const res = await fetch(`${API}/api/auth/login-agent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), password }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return { user: null, error: data.error || "Invalid credentials.", code: data.code };
+      }
+      localStorage.setItem(AGENT_TOKEN_KEY, data.token);
+      setUser(data.user);
+      return { user: data.user as User };
+    } catch {
+      return { user: null, error: "Network error. Please check your connection." };
+    }
+  };
+
+  // ── loginAdmin ──────────────────────────────────────────────────────────────
+  const loginAdmin = async (email: string, password: string): Promise<{ user: User | null; error?: string }> => {
+    try {
+      const res = await fetch(`${API}/api/auth/login-admin`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        return { user: null, error: data.error || "Invalid credentials" };
+      }
+      localStorage.setItem(ADMIN_TOKEN_KEY, data.token);
+      setUser(data.user);
+      return { user: data.user as User };
+    } catch {
+      return { user: null, error: "Network error. Please check your connection." };
+    }
+  };
+
+  // ── loginWithOTP ─────────────────────────────────────────────────────────────
+  const loginWithOTP = async (phone: string, otp?: string): Promise<{ success: boolean; user?: User; token?: string }> => {
     try {
       const cleanPhone = normalizePhone(phone);
-
-      // If otp is provided, verify it with the backend
       if (otp) {
         const res = await fetch(`${API}/api/auth/verify-otp`, {
           method: "POST",
@@ -212,18 +294,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
         const data = await res.json();
         if (!res.ok) return { success: false };
-        setToken(data.token);
+        localStorage.setItem(B2C_TOKEN_KEY, data.token);
         setUser(data.user);
         return { success: true, user: data.user, token: data.token };
       }
-
       return { success: false };
     } catch {
       return { success: false };
     }
   };
 
-  // ── signup ──────────────────────────────────────────────────────────────────
+  // ── signup ───────────────────────────────────────────────────────────────────
   const signup = async (
     name: string,
     email: string,
@@ -243,15 +324,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await fetch(`${API}/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim(),
-          email: email.trim(),
-          phone: cleanPhone,
-          password,
-          role,
-          agencyName,
-          gstNumber,
-        }),
+        body: JSON.stringify({ name: name.trim(), email: email.trim(), phone: cleanPhone, password, role, agencyName, gstNumber }),
       });
       const data = await res.json();
 
@@ -261,7 +334,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, error: data.error || "Registration failed" };
       }
 
-      setToken(data.token);
+      // Store in the correct slot based on the registered role
+      if (role === "agent") {
+        localStorage.setItem(AGENT_TOKEN_KEY, data.token);
+      } else {
+        localStorage.setItem(B2C_TOKEN_KEY, data.token);
+      }
       setUser(data.user);
       return { success: true };
     } catch {
@@ -269,17 +347,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // ── autoLoginOrRegister ─────────────────────────────────────────────────────
-  const autoLoginOrRegister = async (
-    name: string,
-    email: string,
-    phone: string,
-  ): Promise<AutoLoginResult> => {
+  // ── autoLoginOrRegister ──────────────────────────────────────────────────────
+  const autoLoginOrRegister = async (name: string, email: string, phone: string): Promise<AutoLoginResult> => {
     const cleanPhone = phone ? normalizePhone(phone) : "";
-
-    // Try login with email first (no password — use a temp OTP-less flow by checking if user exists)
-    // We attempt registration; if duplicate_email, user already exists — they need to log in properly
-    // For auto-registration (booking flow), create account without password
     try {
       const generatedPassword = Array.from(crypto.getRandomValues(new Uint8Array(12)))
         .map((b) => b.toString(16).padStart(2, "0"))
@@ -289,53 +359,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await fetch(`${API}/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name || email.split("@")[0],
-          email: email.trim(),
-          phone: cleanPhone,
-          password: generatedPassword,
-          role: "user",
-        }),
+        body: JSON.stringify({ name: name || email.split("@")[0], email: email.trim(), phone: cleanPhone, password: generatedPassword, role: "user" }),
       });
       const data = await res.json();
 
       if (res.ok) {
-        setToken(data.token);
+        localStorage.setItem(B2C_TOKEN_KEY, data.token);
         setUser(data.user);
         return { user: data.user, isNew: true, generatedPassword };
       }
 
       if (res.status === 409) {
-        // User already exists — log them in with current session if available
         if (user) return { user, isNew: false };
-        // Return a stub user object so booking flow doesn't break
-        return {
-          user: {
-            id: `auto_${Date.now()}`,
-            name: name || email.split("@")[0],
-            email,
-            phone: cleanPhone,
-            role: "user",
-          },
-          isNew: false,
-        };
+        return { user: { id: `auto_${Date.now()}`, name: name || email.split("@")[0], email, phone: cleanPhone, role: "user" }, isNew: false };
       }
 
       throw new Error(data.error || "Failed");
     } catch {
-      const fallback: User = {
-        id: `auto_${Date.now()}`,
-        name: name || email.split("@")[0],
-        email,
-        phone: cleanPhone,
-        role: "user",
-      };
-      return { user: fallback, isNew: false };
+      return { user: { id: `auto_${Date.now()}`, name: name || email.split("@")[0], email, phone: cleanPhone, role: "user" }, isNew: false };
     }
   };
 
+  // ── logout ───────────────────────────────────────────────────────────────────
   const logout = () => {
-    clearAllTokens();
+    localStorage.removeItem(B2C_TOKEN_KEY);
+    localStorage.removeItem(AGENT_TOKEN_KEY);
+    localStorage.removeItem(ADMIN_TOKEN_KEY);
+    localStorage.removeItem("isAdmin");
     setUser(null);
   };
 
@@ -344,16 +394,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         isAuthenticated: !!user,
-        isAdmin: user?.role === "admin",
-        isAgent: user?.role === "agent",
-        isStaff: user?.role === "staff",
+        isAdmin:  user?.role === "admin",
+        isAgent:  user?.role === "agent",
+        isStaff:  user?.role === "staff",
         login,
+        loginAgent,
+        loginAdmin,
         loginWithOTP,
         signup,
         logout,
         refreshUser,
         autoLoginOrRegister,
-        getToken,
+        getToken: getActiveToken,
       }}
     >
       {children}

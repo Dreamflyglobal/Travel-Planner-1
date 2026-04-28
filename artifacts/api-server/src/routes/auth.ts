@@ -237,7 +237,8 @@ router.post("/auth/register", async (req, res) => {
 });
 
 // ── POST /api/auth/login ─────────────────────────────────────────────────────
-// Fields: email (or phone), password
+// Generic login — preserved for backward compatibility.
+// Prefer the role-scoped endpoints below for new code.
 
 router.post("/auth/login", async (req, res) => {
   const { email, password } = req.body as { email?: string; password?: string };
@@ -252,7 +253,6 @@ router.post("/auth/login", async (req, res) => {
   const input = email.trim().toLowerCase();
 
   try {
-    // Note: Admin login is handled by POST /api/admin/login (uses ADMIN_EMAIL / ADMIN_PASSWORD env vars)
     const rows = await db
       .select()
       .from(usersTable)
@@ -277,6 +277,104 @@ router.post("/auth/login", async (req, res) => {
     return res.json({ token, user: safeUser(user) });
   } catch (err: any) {
     console.error("[auth/login] error:", err.message);
+    return res.status(500).json({ error: "Login failed. Please try again." });
+  }
+});
+
+// ── POST /api/auth/login-user ─────────────────────────────────────────────────
+// B2C portal login — rejects agent accounts.
+
+router.post("/auth/login-user", async (req, res) => {
+  const { email, password } = req.body as { email?: string; password?: string };
+
+  if (!email?.trim() || !password) {
+    return res.status(400).json({ error: "Email and password are required" });
+  }
+
+  const input = email.trim().toLowerCase();
+
+  try {
+    const rows = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.email, input))
+      .limit(1);
+
+    if (!rows.length) {
+      return res.status(401).json({ error: "No account found with this email.", code: "user_not_found" });
+    }
+
+    const user = rows[0];
+
+    if (user.role === "agent") {
+      return res.status(403).json({ error: "Agent accounts must use the agent portal to login.", code: "wrong_portal" });
+    }
+    if (user.role === "admin") {
+      return res.status(403).json({ error: "Admin accounts must use the admin portal to login.", code: "wrong_portal" });
+    }
+
+    if (!user.passwordHash) {
+      return res.status(401).json({ error: "This account uses OTP login. Please use your mobile number.", code: "otp_account" });
+    }
+
+    const passwordOk = await bcrypt.compare(password, user.passwordHash);
+    if (!passwordOk) {
+      return res.status(401).json({ error: "Incorrect password.", code: "wrong_password" });
+    }
+
+    const token = signToken({ userId: user.id, role: user.role, email: user.email ?? undefined, phone: user.phone ?? undefined });
+    return res.json({ token, user: safeUser(user) });
+  } catch (err: any) {
+    console.error("[auth/login-user] error:", err.message);
+    return res.status(500).json({ error: "Login failed. Please try again." });
+  }
+});
+
+// ── POST /api/auth/login-agent ────────────────────────────────────────────────
+// B2B portal login — only allows approved agent accounts.
+
+router.post("/auth/login-agent", async (req, res) => {
+  const { email, password } = req.body as { email?: string; password?: string };
+
+  if (!email?.trim() || !password) {
+    return res.status(400).json({ error: "Email and password are required" });
+  }
+
+  const input = email.trim().toLowerCase();
+
+  try {
+    const rows = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.email, input))
+      .limit(1);
+
+    if (!rows.length) {
+      return res.status(401).json({ error: "No agent account found with this email.", code: "user_not_found" });
+    }
+
+    const user = rows[0];
+
+    if (user.role !== "agent") {
+      return res.status(403).json({ error: "This login is for travel agents only. Please use the customer portal.", code: "wrong_portal" });
+    }
+    if (!user.isApproved) {
+      return res.status(403).json({ error: "Your agent account is pending approval. Please contact support.", code: "not_approved" });
+    }
+
+    if (!user.passwordHash) {
+      return res.status(401).json({ error: "Incorrect password.", code: "wrong_password" });
+    }
+
+    const passwordOk = await bcrypt.compare(password, user.passwordHash);
+    if (!passwordOk) {
+      return res.status(401).json({ error: "Incorrect password.", code: "wrong_password" });
+    }
+
+    const token = signToken({ userId: user.id, role: user.role, email: user.email ?? undefined, phone: user.phone ?? undefined });
+    return res.json({ token, user: safeUser(user) });
+  } catch (err: any) {
+    console.error("[auth/login-agent] error:", err.message);
     return res.status(500).json({ error: "Login failed. Please try again." });
   }
 });
