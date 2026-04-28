@@ -4,7 +4,12 @@ import axios from "axios";
 import { db, apiKeysTable } from "@workspace/db";
 import { verifyToken } from "../lib/jwt.js";
 import { logger } from "../lib/logger.js";
-import { bustTripJackToken, TRIPJACK_BASE } from "../lib/tripjack-auth.js";
+import {
+  getTripJackToken,
+  bustTripJackToken,
+  extractTripJackError,
+  TRIPJACK_BASE,
+} from "../lib/tripjack-auth.js";
 
 const router = Router();
 
@@ -20,7 +25,7 @@ function requireAdmin(req: Request, res: Response, next: NextFunction) {
     }
     next();
   } catch {
-    return res.status(401).json({ success: false, error: "Invalid or expired token" });
+    return res.status(401).json({ success: false, error: "Invalid or expired session — please log in again." });
   }
 }
 
@@ -28,17 +33,12 @@ async function getKeys() {
   const rows = await db.select().from(apiKeysTable).limit(1);
   const row  = rows[0] ?? {};
   return {
-    tripjackKey:    (row as any).flightApiKey    || process.env["TRIPJACK_API_KEY"]    || "",
-    razorpayKey:    (row as any).paymentApiKey   || process.env["RAZORPAY_KEY_ID"]     || "",
-    razorpaySecret: (row as any).paymentApiSecret|| process.env["RAZORPAY_KEY_SECRET"] || "",
-    hotelbedsKey:   (row as any).hotelApiKey     || process.env["HOTELBEDS_API_KEY"]   || "",
-    hotelbedsSecret:(row as any).hotelApiSecret  || process.env["HOTELBEDS_SECRET"]    || "",
+    razorpayKey:     (row as any).paymentApiKey    || process.env["RAZORPAY_KEY_ID"]     || "",
+    razorpaySecret:  (row as any).paymentApiSecret || process.env["RAZORPAY_KEY_SECRET"] || "",
+    hotelbedsKey:    (row as any).hotelApiKey      || process.env["HOTELBEDS_API_KEY"]   || "",
+    hotelbedsSecret: (row as any).hotelApiSecret   || process.env["HOTELBEDS_SECRET"]    || "",
   };
 }
-
-// ── TripJack two-step auth helper ─────────────────────────────────────────
-// Step 1: POST /auth/token { apiKey } → get Bearer token
-// Step 2: use Authorization: Bearer <token> on all subsequent calls
 
 const TRIPJACK_TEST_PAYLOAD = {
   searchQuery: {
@@ -55,59 +55,31 @@ const TRIPJACK_TEST_PAYLOAD = {
   },
 };
 
-async function fetchTripJackToken(apiKey: string): Promise<string> {
-  console.log("[tripjack-test] Step 1: POST /auth/v1/token");
-  const { data } = await axios.post(
-    `${TRIPJACK_BASE}/auth/v1/token`,
-    { apiKey },
-    { headers: { "Content-Type": "application/json" }, timeout: 10_000 }
-  );
-  console.log("[tripjack-test] Token response:", JSON.stringify(data));
-
-  const token: string =
-    data?.token?.value
-    ?? data?.token
-    ?? data?.access_token
-    ?? data?.data?.token
-    ?? "";
-
-  if (!token) {
-    const desc =
-      data?.status?.messages?.[0]?.description
-      ?? data?.message
-      ?? "No token returned";
-    throw new Error(`TripJack token error: ${desc}`);
-  }
-  return token;
-}
-
 function parseTripJackSearchResult(body: any): { ok: boolean; message: string } {
-  const statusBlock = body?.status;
-  if (statusBlock?.success === false) {
-    const desc = statusBlock?.messages?.[0]?.description
-      || statusBlock?.messages?.[0]?.code
-      || body?.message
-      || "Authentication or validation error";
+  if (body?.status?.success === false) {
+    const desc = extractTripJackError(body, "Authentication or validation error");
     return { ok: false, message: `TripJack error: ${desc}` };
   }
-  if (body?.searchResult || body?.tripInfos || statusBlock?.success === true) {
+  if (body?.searchResult || body?.tripInfos || body?.status?.success === true) {
     return { ok: true, message: "TripJack API key is valid and working." };
   }
-  const fallback = body?.message || body?.error || "Unexpected response from TripJack";
+  const fallback = extractTripJackError(body, "Unexpected response from TripJack");
   return { ok: false, message: `TripJack error: ${fallback}` };
 }
 
 // ── POST /api/admin/test-tripjack ─────────────────────────────────────────
 router.post("/admin/test-tripjack", requireAdmin, async (_req, res) => {
   try {
-    const { tripjackKey } = await getKeys();
-    if (!tripjackKey) {
-      return res.json({ success: true, ok: false, message: "TripJack API key is not configured. Set it in Admin → API Keys and save first." });
+    // Step 1 — get Bearer token (reads API key from DB)
+    let token: string;
+    try {
+      token = await getTripJackToken();
+    } catch (tokenErr: any) {
+      return res.json({ success: true, ok: false, message: tokenErr.message });
     }
 
-    const token = await fetchTripJackToken(tripjackKey.trim());
-
-    const { data: body } = await axios.post(
+    // Step 2 — call search API with Bearer token
+    const { data } = await axios.post(
       `${TRIPJACK_BASE}/fms/v1/air/search`,
       TRIPJACK_TEST_PAYLOAD,
       {
@@ -115,46 +87,41 @@ router.post("/admin/test-tripjack", requireAdmin, async (_req, res) => {
         timeout: 15_000,
       }
     );
-    console.log("[test-tripjack] response:", JSON.stringify(body));
+    console.log("[test-tripjack] response:", JSON.stringify(data));
 
-    const { ok, message } = parseTripJackSearchResult(body);
+    const { ok, message } = parseTripJackSearchResult(data);
     return res.json({ success: true, ok, message });
   } catch (err: any) {
     bustTripJackToken();
-    const msg = err.response?.data?.status?.messages?.[0]?.description
-      || err.response?.data?.message
-      || err.message;
+    const msg = err.response
+      ? extractTripJackError(err.response.data, err.message)
+      : err.message;
     logger.error({ err }, "[test-tripjack] failed");
     return res.json({ success: true, ok: false, message: `TripJack error: ${msg}` });
   }
 });
 
 // ── POST /api/test-tripjack-real ───────────────────────────────────────────
-// Two-step: (1) get token from /auth/token, (2) call /fms/v1/air/search
-// Full response logged and returned to frontend.
+// Step 1: POST /auth/v1/token { apiKey } → Bearer token
+// Step 2: POST /fms/v1/air/search with Authorization: Bearer <token>
 router.post("/test-tripjack-real", requireAdmin, async (_req, res) => {
+  // Step 1 — get Bearer token (reads API key from DB / env)
+  let token: string;
   try {
-    const { tripjackKey } = await getKeys();
-    if (!tripjackKey) {
-      return res.json({ success: false, ok: false, message: "TripJack API key is not configured. Set it in Admin → API Keys and save first." });
-    }
+    token = await getTripJackToken();
+    console.log("[test-tripjack-real] Step 1: Bearer token obtained");
+  } catch (tokenErr: any) {
+    console.error("[test-tripjack-real] Token fetch failed:", tokenErr.message);
+    return res.json({
+      success: false,
+      ok:      false,
+      message: tokenErr.message,
+    });
+  }
 
-    // Step 1 — get token
-    let token: string;
-    try {
-      token = await fetchTripJackToken(tripjackKey.trim());
-    } catch (tokenErr: any) {
-      const msg = tokenErr.response?.data?.status?.messages?.[0]?.description
-        || tokenErr.response?.data?.message
-        || tokenErr.message;
-      console.error("[test-tripjack-real] Token fetch failed:", msg);
-      return res.json({ success: false, ok: false, message: `TripJack token error: ${msg}` });
-    }
-
-    // Step 2 — call search API
+  // Step 2 — call real search endpoint with Bearer token
+  try {
     console.log("[test-tripjack-real] Step 2: POST /fms/v1/air/search");
-    console.log("[test-tripjack-real] Payload:", JSON.stringify(TRIPJACK_TEST_PAYLOAD));
-
     const { data } = await axios.post(
       `${TRIPJACK_BASE}/fms/v1/air/search`,
       TRIPJACK_TEST_PAYLOAD,
@@ -166,16 +133,15 @@ router.post("/test-tripjack-real", requireAdmin, async (_req, res) => {
         timeout: 15_000,
       }
     );
-
-    console.log("[test-tripjack-real] response.data:", JSON.stringify(data));
+    console.log("[test-tripjack-real] response:", JSON.stringify(data));
 
     const { ok, message } = parseTripJackSearchResult(data);
-    return res.json({ success: true, ok, message, data });
+    return res.json({ success: true, ok, message });
   } catch (err: any) {
     bustTripJackToken();
-    const msg = err.response?.data?.status?.messages?.[0]?.description
-      || err.response?.data?.message
-      || err.message;
+    const msg = err.response
+      ? extractTripJackError(err.response.data, err.message)
+      : err.message;
     logger.error({ err }, "[test-tripjack-real] failed");
     return res.json({ success: false, ok: false, message: `TripJack error: ${msg}` });
   }
@@ -234,9 +200,9 @@ router.post("/admin/test-hotelbeds", requireAdmin, async (_req, res) => {
 
     const r = await fetch("https://api.test.hotelbeds.com/hotel-content-api/1.0/status", {
       headers: {
-        "Api-key":   hotelbedsKey.trim(),
+        "Api-key":     hotelbedsKey.trim(),
         "X-Signature": sig,
-        "Accept": "application/json",
+        "Accept":      "application/json",
       },
       signal: AbortSignal.timeout(10_000),
     });
@@ -257,9 +223,7 @@ router.post("/admin/test-hotelbeds", requireAdmin, async (_req, res) => {
   }
 });
 
-// ── POST /api/admin/api-settings (alias for /api/admin/api-keys) ──────────
-// Accepts: { tripjackKey, razorpayKey, razorpaySecret, hotelbedsKey, hotelbedsSecret }
-// Maps to the canonical field names and forwards to the existing storage logic
+// ── POST /api/admin/api-settings ──────────────────────────────────────────
 router.post("/admin/api-settings", requireAdmin, async (req, res) => {
   try {
     const b = (req.body ?? {}) as Record<string, string>;

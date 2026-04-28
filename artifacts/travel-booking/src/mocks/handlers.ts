@@ -589,10 +589,20 @@ export const handlers = [
   http.post('/api/marketing/send-daily-offers',() => passthrough()),
   http.get('/api/marketing/status',           () => passthrough()),
 
-  // TripJack add-ons flow — always pass through to real backend
+  // TripJack proxy routes — all must pass through to the API server
+  http.post('/api/search',       () => passthrough()),
+  http.post('/api/fareQuote',    () => passthrough()),
+  http.post('/api/ssr',          () => passthrough()),
+  http.post('/api/book',         () => passthrough()),
+  http.post('/api/tj-search',    () => passthrough()),
   http.post('/api/tj-farequote', () => passthrough()),
   http.post('/api/tj-ssr',       () => passthrough()),
   http.post('/api/tj-book',      () => passthrough()),
+  // Admin test routes
+  http.post('/api/test-tripjack-real',     () => passthrough()),
+  http.post('/api/admin/test-tripjack',    () => passthrough()),
+  http.post('/api/admin/test-razorpay',    () => passthrough()),
+  http.post('/api/admin/test-hotelbeds',   () => passthrough()),
 
   // Live search endpoints — all pass through to real backend
   http.get('/api/flights/live-search', () => passthrough()),

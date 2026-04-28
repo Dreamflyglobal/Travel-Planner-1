@@ -216,11 +216,13 @@ router.post("/admin/api-keys/test", requireAdmin, async (req, res) => {
           ?? "";
 
         if (!token) {
+          // TripJack error is in errors[0].message or status.messages[0].description
           const desc =
-            tokenBody?.status?.messages?.[0]?.description
+            tokenBody?.errors?.[0]?.message
+            ?? tokenBody?.status?.messages?.[0]?.description
             ?? tokenBody?.message
-            ?? "No token returned";
-          return res.json({ success: true, ok: false, message: `TripJack token error: ${desc}` });
+            ?? "No token returned — check your API key";
+          return res.json({ success: true, ok: false, message: `TripJack: ${desc}` });
         }
 
         // Step 2 — call search with Bearer token
@@ -236,16 +238,18 @@ router.post("/admin/api-keys/test", requireAdmin, async (req, res) => {
 
         const statusBlock = body?.status;
         if (statusBlock?.success === false) {
-          const desc = statusBlock?.messages?.[0]?.description
-            || statusBlock?.messages?.[0]?.code
-            || body?.message
-            || "Authentication or validation error";
+          const desc =
+            body?.errors?.[0]?.message
+            ?? statusBlock?.messages?.[0]?.description
+            ?? statusBlock?.messages?.[0]?.code
+            ?? body?.message
+            ?? "Authentication or validation error";
           return res.json({ success: true, ok: false, message: `TripJack error: ${desc}` });
         }
         if (body?.searchResult || body?.tripInfos || statusBlock?.success === true) {
           return res.json({ success: true, ok: true, message: "TripJack API key is valid and working." });
         }
-        const fallback = body?.message || body?.error || `HTTP ${r.status}`;
+        const fallback = body?.errors?.[0]?.message || body?.message || body?.error || `HTTP ${r.status}`;
         return res.json({ success: true, ok: false, message: `TripJack error: ${fallback}` });
       } catch (err: any) {
         if (err.name === "TimeoutError" || err.code === "ABORT_ERR") {
