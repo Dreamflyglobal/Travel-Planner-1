@@ -19,7 +19,7 @@ router.post("/tj-search", async (req, res): Promise<void> => {
 
 // POST /api/tj-farequote → /fms/v1/air/farequote
 // Accepts: { traceId, resultIndex }
-// TripJack expects: { priceIds: [{ traceId, resultIndex }] }
+// TripJack expects flat: { traceId, resultIndex }
 router.post("/tj-farequote", async (req, res): Promise<void> => {
   const { traceId, resultIndex } = req.body as {
     traceId?:     string;
@@ -31,14 +31,11 @@ router.post("/tj-farequote", async (req, res): Promise<void> => {
     return;
   }
 
-  const fareQuoteBody = {
-    priceIds: [
-      {
-        ...(traceId && { traceId }),
-        resultIndex,
-      },
-    ],
-  };
+  console.log("TRACE:", traceId || "(none)");
+  console.log("RESULT:", resultIndex);
+
+  const fareQuoteBody: Record<string, string> = { resultIndex };
+  if (traceId) fareQuoteBody.traceId = traceId;
 
   console.log("FareQuote Body:", JSON.stringify(fareQuoteBody));
 

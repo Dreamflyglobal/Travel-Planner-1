@@ -198,7 +198,7 @@ export default function FlightResults() {
     const fareQuotePayload = { traceId: ti, resultIndex: ri };
     const payload = JSON.stringify(fareQuotePayload);
 
-    console.log("FareQuote Body:", { priceIds: [{ traceId: ti, resultIndex: ri }] });
+    console.log("FareQuote Body:", { traceId: ti || "(none)", resultIndex: ri });
     console.info(
       "[fareQuote/select] fareKey:", fareKey,
       "| resultIndex:", ri,
