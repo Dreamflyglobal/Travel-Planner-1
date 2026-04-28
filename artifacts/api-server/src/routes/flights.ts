@@ -8,6 +8,7 @@ import {
   GetFlightParams,
   GetFlightResponse,
 } from "@workspace/api-zod";
+import { getProviderConfig } from "../lib/provider-config.js";
 
 const router: IRouter = Router();
 
@@ -282,9 +283,10 @@ router.post("/flights", async (req, res): Promise<void> => {
     returnDate?: string;
   };
 
-  const apiKey = process.env.TRIPJACK_API_KEY;
+  const cfg = await getProviderConfig();
+  const apiKey = cfg.flightApiKey || process.env.TRIPJACK_API_KEY || "";
   if (!apiKey) {
-    res.status(503).json({ error: "TRIPJACK_API_KEY is not configured." });
+    res.status(503).json({ error: "TripJack API key is not configured. Please set it in Admin Settings → API Keys." });
     return;
   }
 
