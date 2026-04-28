@@ -21,6 +21,7 @@
  */
 
 import axios from "axios";
+import { logger } from "./logger.js";
 import { getProviderConfig } from "./provider-config.js";
 
 /** TripJack API base URL — override with TRIPJACK_BASE_URL env var */
@@ -59,7 +60,7 @@ function isCacheValid(): boolean {
  */
 export function bustTripJackToken(): void {
   if (_tokenCache) {
-    console.log("[tripjack-auth] Busting cached token — will re-authenticate on next call");
+    logger.info("[tripjack-auth] Busting cached token — will re-authenticate on next call");
     _tokenCache = null;
   }
 }
@@ -73,7 +74,7 @@ export function bustTripJackToken(): void {
  */
 async function fetchFreshToken(apiKey: string): Promise<string | null> {
   const url = `${TRIPJACK_BASE}/auth/v1/token`;
-  console.log("[tripjack-auth] Fetching fresh token from:", url);
+  logger.info("[tripjack-auth] Fetching fresh token from:", url);
 
   try {
     const resp = await axios.post(
@@ -90,7 +91,7 @@ async function fetchFreshToken(apiKey: string): Promise<string | null> {
         data?.errors?.[0]?.message ??
         data?.status?.messages?.[0]?.description ??
         "Token exchange rejected by TripJack";
-      console.warn("[tripjack-auth] Token exchange failed:", reason, "— falling back to apikey header");
+      logger.warn("[tripjack-auth] Token exchange failed:", reason, "— falling back to apikey header");
       return null;
     }
 
@@ -101,7 +102,7 @@ async function fetchFreshToken(apiKey: string): Promise<string | null> {
       data?.token;
 
     if (!tokenId) {
-      console.warn("[tripjack-auth] Token not found in response — falling back to apikey header");
+      logger.warn("[tripjack-auth] Token not found in response — falling back to apikey header");
       return null;
     }
 
@@ -115,7 +116,7 @@ async function fetchFreshToken(apiKey: string): Promise<string | null> {
 
     _tokenCache = { tokenId, expiresAt: Date.now() + expiresInMs };
 
-    console.log(
+    logger.info(
       "[tripjack-auth] Token obtained — expires in",
       Math.round(expiresInMs / 60_000),
       "min | prefix:", tokenId.slice(0, 8) + "…",
@@ -125,7 +126,7 @@ async function fetchFreshToken(apiKey: string): Promise<string | null> {
   } catch (err: any) {
     const status  = err.response?.status;
     const message = err.response?.data?.errors?.[0]?.message ?? err.message;
-    console.warn(
+    logger.warn(
       "[tripjack-auth] Token fetch failed (HTTP", status ?? "network", "):", message,
       "— falling back to apikey header",
     );
@@ -170,7 +171,7 @@ export async function getTripJackHeaders(): Promise<Record<string, string>> {
   // Try Bearer token first
   const token = await getTripjackToken();
   if (token) {
-    console.log("[tripjack-auth] Using Bearer token | Base URL:", TRIPJACK_BASE);
+    logger.info("[tripjack-auth] Using Bearer token | Base URL:", TRIPJACK_BASE);
     return {
       "Authorization": `Bearer ${token}`,
       "Content-Type":  "application/json",
@@ -178,7 +179,7 @@ export async function getTripJackHeaders(): Promise<Record<string, string>> {
   }
 
   // Fall back to direct API key header
-  console.log(
+  logger.info(
     "[tripjack-auth] Using direct apikey header (token exchange unavailable) | Base URL:", TRIPJACK_BASE,
   );
   return {

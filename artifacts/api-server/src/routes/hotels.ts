@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { logger } from "../lib/logger.js";
 import { ilike, eq } from "drizzle-orm";
 import { createHash } from "crypto";
 import { db, hotelsTable, apiKeysTable } from "@workspace/db";
@@ -11,6 +12,10 @@ import {
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
+
+/** HotelBeds API base — override with HOTELBEDS_API_BASE env var for live environment */
+const HOTELBEDS_API_BASE =
+  (process.env["HOTELBEDS_API_BASE"] ?? "https://api.test.hotelbeds.com").replace(/\/$/, "");
 
 // ── Curated synthetic hotel data per city ─────────────────────────────────
 const CITY_HOTELS: Record<string, any[]> = {
@@ -154,8 +159,8 @@ router.get("/hotels/live-search", async (req, res): Promise<void> => {
   const hbApiKey  = (keysRow as any).hotelApiKey  || process.env.HOTELBEDS_API_KEY  || "";
   const hbSecret  = (keysRow as any).hotelApiSecret|| process.env.HOTELBEDS_SECRET   || "";
 
-  console.log("API KEY:", hbApiKey ? `${hbApiKey.slice(0, 6)}...${hbApiKey.slice(-4)} (length ${hbApiKey.length})` : "NOT SET");
-  console.log(`[hotels/live-search] city="${city}" checkin="${checkin}" checkout="${checkout}" hotelbeds=${hbApiKey ? "set" : "not set"}`);
+  logger.info("API KEY:", hbApiKey ? `${hbApiKey.slice(0, 6)}...${hbApiKey.slice(-4)} (length ${hbApiKey.length})` : "NOT SET");
+  logger.info(`[hotels/live-search] city="${city}" checkin="${checkin}" checkout="${checkout}" hotelbeds=${hbApiKey ? "set" : "not set"}`);
 
   // ── HotelBeds: always call when credentials are present ──────────────────
   if (hbApiKey && hbSecret) {
@@ -164,7 +169,7 @@ router.get("/hotels/live-search", async (req, res): Promise<void> => {
     const checkOut = checkout || new Date(Date.now() + 9  * 86400000).toISOString().slice(0, 10);
 
     if (!destCode) {
-      console.log(`HotelBeds Error: No destination code mapped for city "${city}". Add it to HOTELBEDS_DEST_CODES.`);
+      logger.info(`HotelBeds Error: No destination code mapped for city "${city}". Add it to HOTELBEDS_DEST_CODES.`);
       res.json({ hotels: [], total: 0, source: "hotelbeds", city, message: `No HotelBeds destination code for "${city}".` });
       return;
     }
@@ -175,10 +180,10 @@ router.get("/hotels/live-search", async (req, res): Promise<void> => {
       destination: { code: destCode },
     };
 
-    console.log("Calling HotelBeds API...", { city, destCode, checkIn, checkOut, endpoint: "https://api.test.hotelbeds.com/hotel-api/1.0/hotels" });
+    logger.info("Calling HotelBeds API...", { city, destCode, checkIn, checkOut, endpoint: `${HOTELBEDS_API_BASE}/hotel-api/1.0/hotels` });
 
     try {
-      const hbRes = await fetch("https://api.test.hotelbeds.com/hotel-api/1.0/hotels", {
+      const hbRes = await fetch(`${HOTELBEDS_API_BASE}/hotel-api/1.0/hotels`, {
         method: "POST",
         headers: {
           "Api-key":       hbApiKey,
@@ -191,16 +196,16 @@ router.get("/hotels/live-search", async (req, res): Promise<void> => {
       });
 
       const hbBody = await hbRes.json().catch(() => null);
-      console.log("HotelBeds Response:", JSON.stringify(hbBody).slice(0, 1200));
+      logger.info("HotelBeds Response:", JSON.stringify(hbBody).slice(0, 1200));
 
       if (!hbRes.ok) {
-        console.log("HotelBeds Error:", { status: hbRes.status, body: hbBody });
+        logger.error({ status: hbRes.status, body: hbBody });
         res.json({ hotels: [], total: 0, source: "hotelbeds", city, message: `HotelBeds API error ${hbRes.status}` });
         return;
       }
 
       const rawHotels: any[] = hbBody?.hotels?.hotels ?? [];
-      console.log(`HotelBeds: ${rawHotels.length} hotels returned for ${city} (${destCode})`);
+      logger.info(`HotelBeds: ${rawHotels.length} hotels returned for ${city} (${destCode})`);
 
       if (rawHotels.length === 0) {
         res.json({ hotels: [], total: 0, source: "hotelbeds", city, message: `HotelBeds has no inventory for "${city}" (${destCode}) in the test environment for ${checkIn}→${checkOut}.` });
@@ -253,19 +258,19 @@ router.get("/hotels/live-search", async (req, res): Promise<void> => {
         };
       });
 
-      console.log(`[hotels/live-search] HotelBeds OK: ${mapped.length} hotels for ${city}`);
+      logger.info(`[hotels/live-search] HotelBeds OK: ${mapped.length} hotels for ${city}`);
       res.json({ hotels: mapped, total: mapped.length, source: "hotelbeds", city });
       return;
 
     } catch (err: any) {
-      console.log("HotelBeds Error:", err?.message ?? err);
+      logger.error(err?.message ?? err);
       res.json({ hotels: [], total: 0, source: "hotelbeds", city, message: `HotelBeds request failed: ${err?.message}` });
       return;
     }
   }
 
   // ── No HotelBeds credentials configured ──────────────────────────────────
-  console.log("HotelBeds Error: HOTELBEDS_API_KEY and HOTELBEDS_SECRET are not configured.");
+  logger.warn("HotelBeds: HOTELBEDS_API_KEY and HOTELBEDS_SECRET are not configured.");
   res.json({ hotels: [], total: 0, source: "hotelbeds", city, message: "HotelBeds credentials not configured." });
 });
 
@@ -349,10 +354,10 @@ router.get("/hotels/rooms", async (req, res): Promise<void> => {
     hotels: { hotel: [hotelCode] },
   };
 
-  console.log(`[hotels/rooms] hotel=${hotelCode} ${checkin}→${checkout} adults=${adults}`);
+  logger.info(`[hotels/rooms] hotel=${hotelCode} ${checkin}→${checkout} adults=${adults}`);
 
   try {
-    const hbRes = await fetch("https://api.test.hotelbeds.com/hotel-api/1.0/hotels", {
+    const hbRes = await fetch(`${HOTELBEDS_API_BASE}/hotel-api/1.0/hotels`, {
       method: "POST",
       headers: {
         "Api-key":      hbApiKey,
@@ -367,14 +372,14 @@ router.get("/hotels/rooms", async (req, res): Promise<void> => {
     const data = await hbRes.json().catch(() => null);
 
     if (!hbRes.ok) {
-      console.log("[hotels/rooms] HotelBeds error:", hbRes.status, JSON.stringify(data).slice(0, 400));
+      logger.error(hbRes.status, JSON.stringify(data).slice(0, 400));
       res.json({ rooms: [], message: `HotelBeds error ${hbRes.status}` });
       return;
     }
 
     const rawHotel = data?.hotels?.hotels?.[0];
     if (!rawHotel) {
-      console.log(`[hotels/rooms] No availability for hotel ${hotelCode}`);
+      logger.info(`[hotels/rooms] No availability for hotel ${hotelCode}`);
       res.json({ rooms: [], message: "Hotel not available for the selected dates." });
       return;
     }
@@ -404,10 +409,10 @@ router.get("/hotels/rooms", async (req, res): Promise<void> => {
     }
 
     rooms.sort((a, b) => a.priceINR - b.priceINR);
-    console.log(`[hotels/rooms] ${rooms.length} room options for hotel ${hotelCode}`);
+    logger.info(`[hotels/rooms] ${rooms.length} room options for hotel ${hotelCode}`);
     res.json({ rooms, hotelName: rawHotel.name });
   } catch (err: any) {
-    console.log("[hotels/rooms] Error:", err?.message ?? err);
+    logger.error(err?.message ?? err);
     res.json({ rooms: [], message: `Failed to fetch rooms: ${err?.message}` });
   }
 });
@@ -471,10 +476,10 @@ router.post("/hotels/book", async (req, res): Promise<void> => {
     tolerance: 2,
   };
 
-  console.log(`[hotels/book] Booking hotel ${hotelId ?? "?"} ("${hotelName ?? "?"}") with rateKey: ${rateKey.slice(0, 60)}...`);
+  logger.info(`[hotels/book] Booking hotel ${hotelId ?? "?"} ("${hotelName ?? "?"}") with rateKey: ${rateKey.slice(0, 60)}...`);
 
   try {
-    const hbRes = await fetch("https://api.test.hotelbeds.com/hotel-api/1.0/bookings", {
+    const hbRes = await fetch(`${HOTELBEDS_API_BASE}/hotel-api/1.0/bookings`, {
       method: "POST",
       headers: {
         "Api-key":      hbApiKey,
@@ -487,10 +492,10 @@ router.post("/hotels/book", async (req, res): Promise<void> => {
     });
 
     const data = await hbRes.json().catch(() => null);
-    console.log("Booking Response:", JSON.stringify(data));
+    logger.info("Booking Response:", JSON.stringify(data));
 
     if (!hbRes.ok) {
-      console.log("[hotels/book] HotelBeds booking error:", hbRes.status, JSON.stringify(data));
+      logger.error(hbRes.status, JSON.stringify(data));
       res.status(hbRes.status).json({
         error: data?.error?.message || `HotelBeds booking failed (${hbRes.status})`,
         details: data,
@@ -500,7 +505,7 @@ router.post("/hotels/book", async (req, res): Promise<void> => {
 
     res.json({ success: true, booking: data?.booking ?? data });
   } catch (err: any) {
-    console.log("[hotels/book] Error:", err?.message ?? err);
+    logger.error(err?.message ?? err);
     res.status(500).json({ error: `Booking request failed: ${err?.message}` });
   }
 });

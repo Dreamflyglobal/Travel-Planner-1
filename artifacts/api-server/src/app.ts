@@ -73,4 +73,14 @@ if (process.env.NODE_ENV === "production") {
   }
 }
 
+// ── Global error handler ──────────────────────────────────────────────────────
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  logger.error({ err }, "Unhandled error");
+  const status  = err?.status ?? err?.statusCode ?? 500;
+  const message = process.env.NODE_ENV === "production" ? "Internal server error" : (err?.message ?? "Internal server error");
+  if (!res.headersSent) {
+    res.status(status).json({ error: message });
+  }
+});
+
 export default app;

@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { logger } from "../lib/logger.js";
 import { tjPostWithRetry, handleTjError } from "../lib/tj-retry.js";
 
 const router: IRouter = Router();
@@ -25,11 +26,11 @@ async function handleFareQuote(req: any, res: any): Promise<void> {
     resultIndex?: string;
   };
 
-  console.log("TRACE:", traceId || "(none)");
-  console.log("RESULT:", resultIndex || "(none)");
+  logger.info("TRACE:", traceId || "(none)");
+  logger.info("RESULT:", resultIndex || "(none)");
 
   if (!resultIndex) {
-    console.error("[fareQuote] resultIndex missing");
+    logger.error("[fareQuote] resultIndex missing");
     res.status(400).json({ error: "resultIndex is required for fareQuote" });
     return;
   }
@@ -38,7 +39,7 @@ async function handleFareQuote(req: any, res: any): Promise<void> {
   const fareQuoteBody: Record<string, string> = { resultIndex };
   if (traceId) fareQuoteBody.traceId = traceId;
 
-  console.log("FareQuote Body:", JSON.stringify(fareQuoteBody));
+  logger.info("FareQuote Body:", JSON.stringify(fareQuoteBody));
 
   try {
     // TripJack fareQuote endpoint — path confirmed by 405 (exists) vs 404 (doesn't exist)
@@ -48,7 +49,7 @@ async function handleFareQuote(req: any, res: any): Promise<void> {
       maxRetries: 2,
     });
 
-    console.log("FareQuote Response:", JSON.stringify(data).slice(0, 800));
+    logger.info("FareQuote Response:", JSON.stringify(data).slice(0, 800));
     res.json(data);
   } catch (err: any) {
     handleTjError(res, err, "fareQuote");

@@ -153,7 +153,6 @@ export default function TJAddonsBooking() {
         body: JSON.stringify({ bookingId: ssrBid }),
       });
       const ssrData = await ssrRes.json();
-      console.log("[tj-addons] SSR response:", ssrData);
 
       // Extract seats
       const rawSeats: TJSeat[] =
@@ -234,7 +233,6 @@ export default function TJAddonsBooking() {
       gstInfo: null,
     };
 
-    console.log("[tj-addons] Book payload:", JSON.stringify(bookPayload, null, 2));
 
     try {
       const res = await fetch(`${API}/api/tj-book`, {
@@ -243,7 +241,6 @@ export default function TJAddonsBooking() {
         body: JSON.stringify(bookPayload),
       });
       const data = await res.json();
-      console.log("[tj-addons] Book response:", data);
 
       if (!res.ok || data?.status?.success === false) {
         const msg = data?.errors?.[0]?.message || data?.error || "Booking failed. Please try again.";

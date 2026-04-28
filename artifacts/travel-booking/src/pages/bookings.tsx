@@ -120,7 +120,6 @@ export default function Bookings() {
       return;
     }
     
-    console.log('🔵 Cancelling booking with ID:', bookingId, typeof bookingId);
     
     try {
       // Call API to cancel booking (MSW will intercept this)

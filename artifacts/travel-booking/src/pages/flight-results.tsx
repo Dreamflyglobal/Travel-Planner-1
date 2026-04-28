@@ -195,9 +195,6 @@ export default function FlightResults() {
     const ri       = resultIndex   || "";
     const ti       = searchTraceId || "";
 
-    console.log("TRACE:", ti || "(none)");
-    console.log("RESULT:", ri || "(none)");
-
     // resultIndex is required; traceId is optional (test API may not return it)
     if (!ri) {
       console.error("[fareQuote] resultIndex missing — cannot identify fare");
@@ -232,7 +229,6 @@ export default function FlightResults() {
     const fareQuotePayload = { traceId: ti, resultIndex: ri };
     const payload = JSON.stringify(fareQuotePayload);
 
-    console.log("FareQuote Body:", { traceId: ti || "(none)", resultIndex: ri });
     console.info(
       "[fareQuote] fareKey:", fareKey,
       "| resultIndex:", ri,
@@ -296,10 +292,6 @@ export default function FlightResults() {
           bodyMsg.includes("could not verify fare") ||
           bodyMsg.includes("verify fare");
         if (isVerifyFareError && attempt < MAX_AUTO_RETRIES) {
-          console.log(
-            "[fareQuote] 'Could not verify fare' — recalling FareQuote, retry",
-            attempt + 2,
-          );
           toast({
             title:       "Refreshing price…",
             description: "Getting the latest fare from the airline.",

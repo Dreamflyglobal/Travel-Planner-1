@@ -604,7 +604,6 @@ export default function BookingPayment() {
 
     try {
       await createBooking.mutateAsync({ data: booking });
-      console.log("Booking saved");
     } catch (err) {
       console.error("Booking save failed:", err);
       setWalletPaying(false);
@@ -731,7 +730,6 @@ export default function BookingPayment() {
       else booking = buildHotelBooking(session as HotelBookingSession, paymentId, bookingRef, user.id);
       try {
         await createBooking.mutateAsync({ data: booking });
-        console.log("Booking saved");
       } catch (err) {
         console.error("Booking save failed:", err);
         setProcessing(false);
@@ -918,8 +916,6 @@ export default function BookingPayment() {
                            ?? "";
           const isTjFare = sessionStorage.getItem("ww_is_tj_fare") !== "0";
 
-          console.log("TRACE:", traceId ?? "(none)");
-          console.log("RESULT:", resultIndex ?? "(none)");
           console.info(
             "[book-flight] bookingId:", tjBookingId || "(non-TJ fare)",
             "| traceId:", traceId ?? "(none)",
@@ -996,11 +992,9 @@ export default function BookingPayment() {
 
           try {
             await createBooking.mutateAsync({ data: booking });
-            console.log("Booking saved");
           } catch (err) {
             console.error("Booking save failed:", err);
             const refundResult = await attemptRefund(paymentId, totalAfterCoupon, "booking_save_failed");
-            console.log("[refund] result:", refundResult);
             setProcessing(false);
             const refundMsg = refundResult.initiated
               ? `Payment successful but booking failed. Refund initiated — allow 5–7 business days. Payment ID: ${paymentId}`

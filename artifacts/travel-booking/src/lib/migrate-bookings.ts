@@ -23,7 +23,6 @@ export function getAllBookings() {
 export function saveBookings(bookings: any[]) {
   try {
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(bookings));
-    console.log('✅ Saved', bookings.length, 'bookings to sessionStorage');
     return true;
   } catch (error) {
     console.error('Error saving bookings:', error);
@@ -37,7 +36,6 @@ export function saveBookings(bookings: any[]) {
 export function clearAllBookings() {
   try {
     sessionStorage.removeItem(STORAGE_KEY);
-    console.log('✅ Cleared all bookings from sessionStorage');
     return true;
   } catch (error) {
     console.error('Error clearing bookings:', error);
@@ -108,18 +106,15 @@ export function migrateBookingTitles() {
   
   if (migrated > 0) {
     saveBookings(updatedBookings);
-    console.log(`✅ Migrated ${migrated} bookings with missing titles`);
-  } else {
-    console.log('ℹ️ No bookings needed migration');
   }
   
   return { migrated, total: bookings.length };
 }
 
 /**
- * Expose debug functions to window for easy access in console
+ * Expose debug functions to window in development only
  */
-if (typeof window !== 'undefined') {
+if (import.meta.env.DEV && typeof window !== 'undefined') {
   (window as any).bookingDebug = {
     getAll: getAllBookings,
     save: saveBookings,
@@ -127,10 +122,4 @@ if (typeof window !== 'undefined') {
     debug: debugBookings,
     migrate: migrateBookingTitles,
   };
-  
-  console.log('🔧 Booking debug tools available at: window.bookingDebug');
-  console.log('  - bookingDebug.getAll() - Get all bookings');
-  console.log('  - bookingDebug.debug() - Log all bookings with details');
-  console.log('  - bookingDebug.migrate() - Migrate bookings to add titles');
-  console.log('  - bookingDebug.clear() - Clear all bookings');
 }

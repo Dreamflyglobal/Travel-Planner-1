@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { logger } from "../lib/logger.js";
 import { eq, sql, ilike, and, or } from "drizzle-orm";
 import { db, packagesTable } from "@workspace/db";
 
@@ -265,17 +266,17 @@ export async function seedPackagesIfEmpty() {
 
     const [{ count }] = await db.select({ count: sql<number>`count(*)::int` }).from(packagesTable);
     if (count === 0) {
-      console.log("[holiday-packages] Seeding packages into DB…");
+      logger.info("[holiday-packages] Seeding packages into DB…");
       for (const pkg of SEED_PACKAGES) {
         await db.insert(packagesTable).values({
           ...pkg,
           itinerary: getItineraryForDest(pkg.destination) as unknown as null,
         });
       }
-      console.log(`[holiday-packages] Seeded ${SEED_PACKAGES.length} packages.`);
+      logger.info(`[holiday-packages] Seeded ${SEED_PACKAGES.length} packages.`);
     }
   } catch (err) {
-    console.error("[holiday-packages] Seed error:", err);
+    logger.error("[holiday-packages] Seed error:", err);
   }
 }
 
@@ -454,7 +455,7 @@ router.get("/holiday-packages/generate-itinerary", async (req, res): Promise<voi
 
     res.json({ itinerary: days, packageType: packageType || null });
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: "Failed to generate itinerary" });
   }
 });
@@ -490,7 +491,7 @@ router.get("/holiday-packages", async (req, res): Promise<void> => {
     const rows = await query.orderBy(packagesTable.id);
     res.json(rows.map((p) => mapPackage(p, isAdminView, travelDate)));
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: "Failed to fetch packages" });
   }
 });
@@ -519,7 +520,7 @@ router.get("/holiday-packages/check-destination", async (req, res): Promise<void
       res.json({ exists: false });
     }
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: "Failed to check destination" });
   }
 });
@@ -536,7 +537,7 @@ router.get("/holiday-packages/:id", async (req, res): Promise<void> => {
     const travelDate  = req.query.travelDate as string | undefined;
     res.json(mapPackage(pkg, isAdminView, travelDate));
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: "Failed to fetch package" });
   }
 });
@@ -636,7 +637,7 @@ router.post("/holiday-packages", async (req, res): Promise<void> => {
 
     res.status(201).json(mapPackage(inserted, true));
   } catch (err) {
-    console.error("SAVE ERROR [POST /holiday-packages]:", err);
+    logger.error("SAVE ERROR [POST /holiday-packages]:", err);
     res.status(500).json({ error: "Failed to create package – check itinerary format" });
   }
 });
@@ -681,7 +682,7 @@ router.patch("/holiday-packages/:id", async (req, res): Promise<void> => {
     if (!updated) { res.status(404).json({ error: "Package not found" }); return; }
     res.json(mapPackage(updated, true));
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: "Failed to update package" });
   }
 });
@@ -746,7 +747,7 @@ router.put("/holiday-packages/:id", async (req, res): Promise<void> => {
     if (!updated) { res.status(404).json({ error: "Package not found" }); return; }
     res.json(mapPackage(updated, true));
   } catch (err) {
-    console.error("SAVE ERROR [PUT /holiday-packages/:id]:", err);
+    logger.error("SAVE ERROR [PUT /holiday-packages/:id]:", err);
     res.status(500).json({ error: "Failed to update package – check itinerary format" });
   }
 });
@@ -759,7 +760,7 @@ router.delete("/holiday-packages/:id", async (req, res): Promise<void> => {
     await db.delete(packagesTable).where(eq(packagesTable.id, id));
     res.json({ success: true });
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: "Failed to delete package" });
   }
 });

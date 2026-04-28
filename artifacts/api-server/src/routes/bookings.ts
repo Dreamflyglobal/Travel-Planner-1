@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { logger } from "../lib/logger.js";
 import { eq, desc, or } from "drizzle-orm";
 import { db, bookingsTable, usersTable } from "@workspace/db";
 import {
@@ -135,7 +136,7 @@ router.get("/bookings", async (req, res): Promise<void> => {
     }));
     res.json(mapped);
   } catch (error) {
-    console.error("❌ Error fetching bookings:", error);
+    logger.error("❌ Error fetching bookings:", error);
     res.status(500).json({ error: "Failed to fetch bookings" });
   }
 });
@@ -158,12 +159,12 @@ router.post("/bookings", async (req, res): Promise<void> => {
     if (incomingUserId && incomingUserId !== "guest" && incomingUserId !== "") {
       // Already authenticated — trust the provided userId
       userId = incomingUserId;
-      console.log("👤 Booking: authenticated user", userId);
+      logger.info("👤 Booking: authenticated user", userId);
     } else {
       // Guest checkout — find or create a user account by phone/email
       const { id, created } = await findOrCreateUser(passengerPhone, passengerEmail, passengerName);
       userId = String(id);
-      console.log(
+      logger.info(
         created
           ? `🆕 Booking: auto-created user ${userId} for phone=${passengerPhone} email=${passengerEmail}`
           : `✅ Booking: found existing user ${userId} for phone=${passengerPhone} email=${passengerEmail}`
@@ -210,7 +211,7 @@ router.post("/bookings", async (req, res): Promise<void> => {
       })
       .returning();
 
-    console.log("✅ Booking saved to PostgreSQL:", inserted.id, "| ref:", bookingRef, "| user:", userId);
+    logger.info("✅ Booking saved to PostgreSQL:", inserted.id, "| ref:", bookingRef, "| user:", userId);
 
     res.status(201).json({
       ...inserted,
@@ -220,7 +221,7 @@ router.post("/bookings", async (req, res): Promise<void> => {
       createdAt: inserted.createdAt.toISOString(),
     });
   } catch (error) {
-    console.error("❌ Error saving booking to DB:", error);
+    logger.error("❌ Error saving booking to DB:", error);
     res.status(500).json({ error: "Failed to save booking" });
   }
 });

@@ -73,7 +73,6 @@ export default function PaymentSuccess() {
     const invoiceLink = `${frontendBaseUrl}/invoice/${booking.bookingId}`;
     setInvoiceUrl(invoiceLink);
 
-    console.log("[notify] Sending post-payment notification for", booking.bookingId, "type:", booking.bookingType);
 
     try {
       // Derive from/to for WhatsApp route line based on booking type
@@ -131,7 +130,6 @@ export default function PaymentSuccess() {
 
       if (res.ok) {
         const data = await res.json();
-        console.log("[notify] Result:", data);
         if (data.emailSent) {
           toast({
             title: "Confirmation Email Sent",
@@ -142,7 +140,6 @@ export default function PaymentSuccess() {
           console.warn("[notify] Email not sent:", data.emailReason);
         }
         if (data.whatsappSent) {
-          console.log("WhatsApp sent");
           toast({
             title: "WhatsApp Confirmation Sent",
             description: "Booking confirmation sent via WhatsApp",

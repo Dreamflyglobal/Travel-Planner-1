@@ -96,7 +96,7 @@ export async function tjPostWithRetry(
   const { maxRetries = 2, timeoutMs = 15_000, context = path } = options;
   const totalAttempts = maxRetries + 1;
 
-  console.log("[tj-retry] Calling Booking API:", path);
+  logger.info("[tj-retry] Calling Booking API:", path);
 
   // Track whether we have already done a token-refresh retry so we only do it once.
   let tokenRefreshUsed = false;

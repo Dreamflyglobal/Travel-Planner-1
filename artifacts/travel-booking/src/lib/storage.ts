@@ -453,5 +453,4 @@ export const initializeDefaultData = () => {
 
 export const clearAllData = () => {
   Object.values(KEYS).forEach(key => localStorage.removeItem(key));
-  console.log('All travel data cleared');
 };

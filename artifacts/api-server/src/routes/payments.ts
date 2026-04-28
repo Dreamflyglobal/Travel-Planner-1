@@ -1,4 +1,5 @@
 import { Router }  from "express";
+import { logger } from "../lib/logger.js";
 import crypto      from "crypto";
 import Razorpay    from "razorpay";
 import { sendWhatsAppNotification }   from "../lib/whatsapp-service.js";
@@ -45,7 +46,7 @@ router.post("/create-order", async (req, res) => {
     const mode    = resolveKeyMode(KEY_ID, KEY_SEC);
 
     if (mode !== "test" && mode !== "live") {
-      console.error("[payments] RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET not configured");
+      logger.error("[payments] RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET not configured");
       return res.status(503).json({
         success: false,
         error:   "Payment gateway is not configured. Please contact support.",
@@ -60,11 +61,11 @@ router.post("/create-order", async (req, res) => {
       receipt:  receipt || `rcpt_${Date.now()}`,
       notes:    notes   || {},
     });
-    console.log(`[payments] Order created (${mode}) — ID: ${order.id}  Amount: ₹${amount}`);
+    logger.info(`[payments] Order created (${mode}) — ID: ${order.id}  Amount: ₹${amount}`);
     return res.json({ success: true, order, key: KEY_ID, keyMode: mode });
 
   } catch (err: any) {
-    console.error("[payments] create-order error:", err?.error?.description || err?.message || err);
+    logger.error("[payments] create-order error:", err?.error?.description || err?.message || err);
     res.status(500).json({ success: false, error: err?.error?.description || err?.message || "Failed to create order" });
   }
 });
@@ -90,7 +91,7 @@ router.post("/verify", async (req, res) => {
     const KEY_SEC = cfg.paymentKeySecret;
 
     if (!KEY_SEC) {
-      console.error("[payments] RAZORPAY_KEY_SECRET not configured — cannot verify");
+      logger.error("[payments] RAZORPAY_KEY_SECRET not configured — cannot verify");
       return res.status(503).json({ success: false, error: "Payment gateway not configured" });
     }
 
@@ -99,14 +100,14 @@ router.post("/verify", async (req, res) => {
     const verified     = expectedSign === razorpay_signature;
 
     if (!verified) {
-      console.warn(`[payments] Signature mismatch — order: ${razorpay_order_id}  payment: ${razorpay_payment_id}`);
+      logger.warn(`[payments] Signature mismatch — order: ${razorpay_order_id}  payment: ${razorpay_payment_id}`);
     }
 
     if (!verified) {
       return res.status(400).json({ success: false, error: "Payment verification failed. Invalid signature." });
     }
 
-    console.log(`[payments] Payment verified ✓ — ${razorpay_payment_id}`);
+    logger.info(`[payments] Payment verified ✓ — ${razorpay_payment_id}`);
 
     return res.json({
       success:   true,
@@ -115,7 +116,7 @@ router.post("/verify", async (req, res) => {
     });
 
   } catch (err: any) {
-    console.error("[payments] verify error:", err.message);
+    logger.error("[payments] verify error:", err.message);
     res.status(500).json({ success: false, error: err.message || "Verification failed" });
   }
 });
@@ -132,7 +133,7 @@ router.post("/notify", async (req, res) => {
   }
 
   const invoiceUrl = `${frontendBaseUrl || "https://dreamflyglobal.in"}/invoice/${bookingContext.bookingId}`;
-  console.log(`[notify] Invoice URL: ${invoiceUrl}`);
+  logger.info(`[notify] Invoice URL: ${invoiceUrl}`);
 
   let emailSent    = false;
   let emailReason  = "";
@@ -154,21 +155,21 @@ router.post("/notify", async (req, res) => {
       const result = await sendGeneralBookingEmail(emailData);
       emailSent    = result.sent;
       emailReason  = result.reason || "";
-      if (!result.sent) console.warn(`[notify] Email not sent: ${result.reason}`);
+      if (!result.sent) logger.warn(`[notify] Email not sent: ${result.reason}`);
     } catch (err: any) {
       emailReason = err.message;
-      console.error(`[notify] Email error: ${err.message}`);
+      logger.error(`[notify] Email error: ${err.message}`);
     }
   } else {
     emailReason = "No email address provided";
-    console.warn("[notify] No passengerEmail — skipping email");
+    logger.warn("[notify] No passengerEmail — skipping email");
   }
 
   let whatsappSent   = false;
   let whatsappReason = "";
 
   if (bookingContext.phone) {
-    console.log("WhatsApp triggered", { bookingId: bookingContext.bookingId, phone: bookingContext.phone });
+    logger.info("WhatsApp triggered", { bookingId: bookingContext.bookingId, phone: bookingContext.phone });
     try {
       const travelDateStr = bookingContext.travelDate
         ? new Date(bookingContext.travelDate).toLocaleDateString("en-IN", {
@@ -202,14 +203,14 @@ router.post("/notify", async (req, res) => {
       });
       whatsappSent   = result.sent;
       whatsappReason = result.reason || "";
-      if (!result.sent) console.warn(`[notify] WhatsApp not sent: ${result.reason}`);
+      if (!result.sent) logger.warn(`[notify] WhatsApp not sent: ${result.reason}`);
     } catch (err: any) {
       whatsappReason = err.message;
-      console.error(`[notify] WhatsApp error: ${err.message}`);
+      logger.error(`[notify] WhatsApp error: ${err.message}`);
     }
   } else {
     whatsappReason = "No phone number provided";
-    console.warn("[notify] No phone — skipping WhatsApp");
+    logger.warn("[notify] No phone — skipping WhatsApp");
   }
 
   if (bookingContext.phone) {
@@ -254,10 +255,10 @@ router.post("/webhook", async (req, res) => {
     }
 
     const { event, payload } = req.body;
-    console.log(`[payments] Webhook: ${event}`, payload?.payment?.entity?.id ?? "");
+    logger.info(`[payments] Webhook: ${event}`, payload?.payment?.entity?.id ?? "");
     res.json({ success: true });
   } catch (err: any) {
-    console.error("[payments] webhook error:", err.message);
+    logger.error("[payments] webhook error:", err.message);
     res.status(500).json({ error: err.message || "Webhook error" });
   }
 });

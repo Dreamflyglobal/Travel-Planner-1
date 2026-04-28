@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { logger } from "../lib/logger.js";
 import twilio from "twilio";
 import bcrypt from "bcryptjs";
 import { db, usersTable } from "@workspace/db";
@@ -74,7 +75,7 @@ async function sendSMSOTP(phone: string, otp: string): Promise<{ sent: boolean; 
       await client.messages.create({ from: smsSender, to, body });
       return { sent: true };
     } catch (err: any) {
-      console.warn("[otp] SMS failed:", err.message);
+      logger.warn("[otp] SMS failed:", err.message);
     }
   }
 
@@ -91,7 +92,7 @@ async function sendSMSOTP(phone: string, otp: string): Promise<{ sent: boolean; 
       });
       return { sent: true };
     } catch (err: any) {
-      console.warn("[otp] WhatsApp fallback failed:", err.message);
+      logger.warn("[otp] WhatsApp fallback failed:", err.message);
       return { sent: false, reason: err.message };
     }
   }
@@ -115,7 +116,7 @@ router.get("/auth/me", requireAuth, async (req, res) => {
 
     return res.json({ user: safeUser(rows[0]) });
   } catch (err: any) {
-    console.error("[auth/me] error:", err.message);
+    logger.error("[auth/me] error:", err.message);
     return res.status(500).json({ error: "Server error" });
   }
 });
@@ -218,7 +219,7 @@ router.post("/auth/register", async (req, res) => {
     // Fire welcome WhatsApp asynchronously (non-blocking)
     if (newUser.phone) {
       sendWelcomeMessage(String(newUser.id), newUser.name, newUser.phone)
-        .catch((e) => console.error("[auth/register] welcome WhatsApp failed:", e));
+        .catch((e) => logger.error("[auth/register] welcome WhatsApp failed:", e));
     }
 
     return res.status(201).json({ token, user: safeUser(newUser) });
@@ -231,7 +232,7 @@ router.post("/auth/register", async (req, res) => {
         return res.status(409).json({ error: "Account already exists. Please login.", code: "duplicate_phone" });
       }
     }
-    console.error("[auth/register] error:", err.message);
+    logger.error("[auth/register] error:", err.message);
     return res.status(500).json({ error: "Registration failed. Please try again." });
   }
 });
@@ -276,7 +277,7 @@ router.post("/auth/login", async (req, res) => {
     const token = signToken({ userId: user.id, role: user.role, email: user.email ?? undefined, phone: user.phone ?? undefined });
     return res.json({ token, user: safeUser(user) });
   } catch (err: any) {
-    console.error("[auth/login] error:", err.message);
+    logger.error("[auth/login] error:", err.message);
     return res.status(500).json({ error: "Login failed. Please try again." });
   }
 });
@@ -325,7 +326,7 @@ router.post("/auth/login-user", async (req, res) => {
     const token = signToken({ userId: user.id, role: user.role, email: user.email ?? undefined, phone: user.phone ?? undefined });
     return res.json({ token, user: safeUser(user) });
   } catch (err: any) {
-    console.error("[auth/login-user] error:", err.message);
+    logger.error("[auth/login-user] error:", err.message);
     return res.status(500).json({ error: "Login failed. Please try again." });
   }
 });
@@ -374,7 +375,7 @@ router.post("/auth/login-agent", async (req, res) => {
     const token = signToken({ userId: user.id, role: user.role, email: user.email ?? undefined, phone: user.phone ?? undefined });
     return res.json({ token, user: safeUser(user) });
   } catch (err: any) {
-    console.error("[auth/login-agent] error:", err.message);
+    logger.error("[auth/login-agent] error:", err.message);
     return res.status(500).json({ error: "Login failed. Please try again." });
   }
 });
@@ -416,12 +417,12 @@ router.post("/auth/send-otp", async (req, res) => {
     windowStart:  existing && now - existing.windowStart < 10 * 60 * 1000 ? existing.windowStart : now,
   });
 
-  console.log(`[otp] ✅ Generated OTP for +91${normalized}: ${otp}`);
+  logger.info(`[otp] ✅ Generated OTP for +91${normalized}: ${otp}`);
 
   const { sent, reason } = await sendSMSOTP(normalized, otp);
 
   if (sent) {
-    console.log(`[otp] ✅ OTP sent via Twilio to +91${normalized}`);
+    logger.info(`[otp] ✅ OTP sent via Twilio to +91${normalized}`);
     // Always include OTP in response as a backup — Twilio WhatsApp sandbox
     // requires users to join ("join <keyword>") before receiving messages.
     // The frontend shows this as a fallback code in case WhatsApp delivery fails.
@@ -433,7 +434,7 @@ router.post("/auth/send-otp", async (req, res) => {
   }
 
   // Twilio not configured or failed — return OTP directly for testing
-  console.log(`[otp] ⚠️  SMS/WhatsApp not sent (${reason}). Returning OTP in response for testing.`);
+  logger.info(`[otp] ⚠️  SMS/WhatsApp not sent (${reason}). Returning OTP in response for testing.`);
   return res.json({
     success: true,
     message: "OTP generated. Use the code below to login.",
@@ -502,7 +503,7 @@ router.post("/auth/verify-otp", async (req, res) => {
     const token = signToken({ userId: user.id, role: user.role, phone: user.phone ?? undefined, email: user.email ?? undefined });
     return res.json({ success: true, token, user: safeUser(user) });
   } catch (err: any) {
-    console.error("[auth/verify-otp] error:", err.message);
+    logger.error("[auth/verify-otp] error:", err.message);
     return res.status(500).json({ error: "Login failed. Please try again." });
   }
 });
@@ -546,7 +547,7 @@ router.post("/auth/link-email", requireAuth, async (req, res) => {
     if (err.code === "23505") {
       return res.status(409).json({ error: "This email is already linked to another account." });
     }
-    console.error("[auth/link-email] error:", err.message);
+    logger.error("[auth/link-email] error:", err.message);
     return res.status(500).json({ error: "Failed to link email. Please try again." });
   }
 });
@@ -595,7 +596,7 @@ router.post("/auth/link-phone", requireAuth, async (req, res) => {
     if (err.code === "23505") {
       return res.status(409).json({ error: "This mobile number is already linked to another account." });
     }
-    console.error("[auth/link-phone] error:", err.message);
+    logger.error("[auth/link-phone] error:", err.message);
     return res.status(500).json({ error: "Failed to link mobile. Please try again." });
   }
 });

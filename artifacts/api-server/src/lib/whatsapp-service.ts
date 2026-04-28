@@ -1,4 +1,5 @@
 import twilio from "twilio";
+import { logger } from "./logger.js";
 import { APP_NAME, APP_TAGLINE_LONG, APP_SUPPORT_PHONE, APP_SUPPORT_EMAIL } from "./app-config.js";
 
 export interface WhatsAppBookingData {
@@ -105,11 +106,11 @@ export async function sendWhatsAppNotification(
   const overrideTo = process.env.TWILIO_WHATSAPP_TO   || "";
 
   if (!accountSid || !authToken) {
-    console.warn("[whatsapp] TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN not set — skipping");
+    logger.warn("[whatsapp] TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN not set — skipping");
     return { sent: false, reason: "Twilio credentials not configured" };
   }
   if (!rawFrom) {
-    console.warn("[whatsapp] TWILIO_WHATSAPP_FROM not set — skipping (use +14155238886 for sandbox)");
+    logger.warn("[whatsapp] TWILIO_WHATSAPP_FROM not set — skipping (use +14155238886 for sandbox)");
     return { sent: false, reason: "TWILIO_WHATSAPP_FROM not configured" };
   }
 
@@ -120,24 +121,24 @@ export async function sendWhatsAppNotification(
   // Resolve destination phone
   const rawTo = overrideTo || data.phone || "";
   if (!rawTo) {
-    console.warn("[whatsapp] No destination phone number — skipping");
+    logger.warn("[whatsapp] No destination phone number — skipping");
     return { sent: false, reason: "No phone number" };
   }
   if (overrideTo) {
-    console.log(`[whatsapp] Using TWILIO_WHATSAPP_TO override: ${overrideTo}`);
+    logger.info(`[whatsapp] Using TWILIO_WHATSAPP_TO override: ${overrideTo}`);
   }
 
   // Convert to whatsapp:+91XXXXXXXXXX format
   const toNumber = toWhatsApp(rawTo);
   const body     = buildMessage(data);
 
-  console.log(`[whatsapp] Sending — From: ${fromNumber}  To: ${toNumber}  Booking: ${data.bookingId}`);
+  logger.info(`[whatsapp] Sending — From: ${fromNumber}  To: ${toNumber}  Booking: ${data.bookingId}`);
 
   try {
     const client = twilio(accountSid, authToken);
     const res    = await client.messages.create({ from: fromNumber, to: toNumber, body });
-    console.log("WhatsApp response:", { sid: res.sid, status: res.status, to: res.to, from: res.from });
-    console.log("WhatsApp sent");
+    logger.info("WhatsApp response:", { sid: res.sid, status: res.status, to: res.to, from: res.from });
+    logger.info("WhatsApp sent");
     return { sent: true };
   } catch (e: any) {
     const hint = e.code === 63007
@@ -147,8 +148,8 @@ export async function sendWhatsAppNotification(
       : e.code === 63016
       ? " — recipient has not opted in to Twilio sandbox (send 'join <keyword>' to +1 415 523 8886)"
       : "";
-    console.error("WhatsApp error:", e);
-    console.error(`[whatsapp] Failed — Code: ${e.code ?? "N/A"} | ${e.message}${hint}`);
+    logger.error("WhatsApp error:", e);
+    logger.error(`[whatsapp] Failed — Code: ${e.code ?? "N/A"} | ${e.message}${hint}`);
     return { sent: false, reason: `${e.message}${hint}` };
   }
 }
@@ -280,7 +281,7 @@ async function sendRawWhatsApp(toPhone: string, body: string, logTag: string): P
   const overrideTo = process.env.TWILIO_WHATSAPP_TO   || "";
 
   if (!accountSid || !authToken || !rawFrom) {
-    console.warn(`[${logTag}] Twilio not fully configured — skipping`);
+    logger.warn(`[${logTag}] Twilio not fully configured — skipping`);
     return { sent: false, reason: "Twilio not configured" };
   }
 
@@ -292,15 +293,15 @@ async function sendRawWhatsApp(toPhone: string, body: string, logTag: string): P
   if (!resolvedTo) return { sent: false, reason: "No destination phone" };
   const toNumber = toWhatsApp(resolvedTo);
 
-  console.log(`[${logTag}] Sending → From: ${fromNumber}  To: ${toNumber}`);
+  logger.info(`[${logTag}] Sending → From: ${fromNumber}  To: ${toNumber}`);
   try {
     const client = twilio(accountSid, authToken);
     const res    = await client.messages.create({ from: fromNumber, to: toNumber, body });
-    console.log(`[${logTag}] Sent ✓ SID: ${res.sid}  Status: ${res.status}`);
+    logger.info(`[${logTag}] Sent ✓ SID: ${res.sid}  Status: ${res.status}`);
     return { sent: true };
   } catch (e: any) {
-    console.error(`[${logTag}] WhatsApp error:`, e);
-    console.error(`[${logTag}] Failed — Code: ${e.code ?? "N/A"} | ${e.message}`);
+    logger.error(`[${logTag}] WhatsApp error:`, e);
+    logger.error(`[${logTag}] Failed — Code: ${e.code ?? "N/A"} | ${e.message}`);
     return { sent: false, reason: e.message };
   }
 }
@@ -358,7 +359,7 @@ export async function sendHolidayWhatsApp(
   });
   const pdfUrl = `${baseUrl}/api/itinerary-pdf?${pdfParams.toString()}`;
 
-  console.log(`[holiday-whatsapp] PDF URL: ${pdfUrl}`);
+  logger.info(`[holiday-whatsapp] PDF URL: ${pdfUrl}`);
 
   const accountSid = process.env.TWILIO_ACCOUNT_SID    || "";
   const authToken  = process.env.TWILIO_AUTH_TOKEN     || "";
@@ -380,15 +381,15 @@ export async function sendHolidayWhatsApp(
   const toNumber = toWhatsApp(resolvedPhone);
   const body     = buildHolidayMessage(data, pdfUrl);
 
-  console.log(`[holiday-whatsapp] Sending to: ${toNumber}`);
+  logger.info(`[holiday-whatsapp] Sending to: ${toNumber}`);
 
   try {
     const client  = twilio(accountSid, authToken);
     const message = await client.messages.create({ from: fromNumber, to: toNumber, body });
-    console.log(`[holiday-whatsapp] Sent — SID: ${message.sid}`);
+    logger.info(`[holiday-whatsapp] Sent — SID: ${message.sid}`);
     return { sent: true, pdfUrl };
   } catch (err: any) {
-    console.error(`[holiday-whatsapp] Failed: ${err.message}`);
+    logger.error(`[holiday-whatsapp] Failed: ${err.message}`);
     return { sent: false, pdfUrl, reason: err.message };
   }
 }

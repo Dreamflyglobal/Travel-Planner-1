@@ -175,7 +175,6 @@ export async function autoSaveLead(
     });
     if (!res.ok) return null;
     const lead: CrmLead = await res.json();
-    console.log("[CRM] Lead saved:", lead.status, lead.name, lead.phone, lead.packageName ?? "");
     if (!lead.assignedTo && status === "new") {
       tryAutoAssign(lead.leadId).catch(() => {});
     }
@@ -232,7 +231,6 @@ export async function saveAbandonedLead(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: name.trim(), phone: phone.trim(), type, email, notes }),
     });
-    console.log("[CRM] Abandoned lead saved:", type, name);
   } catch {
     // non-blocking
   }

@@ -164,4 +164,38 @@ Tables:
 - **Top-up**: Agent dashboard Wallet tab — Razorpay top-up with quick-amount chips (₹500/1k/2k/5k). Admin panel → Agent Management → Top Up button (calls `creditWallet` for logging).
 - **Pay with Wallet**: All 4 booking pages (flight, bus, hotel, package) show "Pay with Wallet" button to agents with sufficient balance. Instant, no OTP.
 
+## Production Deployment
+
+### Build
+```bash
+pnpm build
+# Builds frontend (Vite) then backend (esbuild) in correct order
+```
+
+### Start API server
+```bash
+pnpm --filter @workspace/api-server run start
+# Runs: node --enable-source-maps ./dist/index.mjs
+# In production, Express also serves the frontend static files from artifacts/travel-booking/dist/public
+```
+
+### Environment variables for VPS
+| Variable | Purpose | Default |
+|---|---|---|
+| `DATABASE_URL` | PostgreSQL connection string | required |
+| `HOTELBEDS_API_KEY` | HotelBeds API key | required for hotel search |
+| `HOTELBEDS_SECRET` | HotelBeds secret | required for hotel search |
+| `HOTELBEDS_API_BASE` | HotelBeds API base URL | `https://api.test.hotelbeds.com` |
+| `TRIPJACK_API_KEY` | TripJack API key | required for flights |
+| `TRIPJACK_BASE_URL` | TripJack base URL | `https://apitest.tripjack.com` |
+| `PORT` | Server port | `3000` |
+| `NODE_ENV` | Set to `production` | `development` |
+| `LOG_LEVEL` | Pino log level | `info` |
+
+### Logging
+All backend logging uses structured pino JSON logs (no console.log). In production (`NODE_ENV=production`), logs are emitted as JSON — pipe through `pino-pretty` for human-readable output if needed.
+
+### Hotel Booking — multi-step flow
+Complete end-to-end: **Search → View Hotel (HotelBeds rooms fetched live) → Select Room → Enter Passenger Details → Confirm with HotelBeds → Show Reference**. Steps: `rooms | details | confirming | confirmed | failed`. Real rateKey per room. Holder + paxes sent to HotelBeds `/bookings`.
+
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.

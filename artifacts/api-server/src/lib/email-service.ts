@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { logger } from "./logger.js";
 import type { FlightTicketData } from "./ticket-pdf.js";
 import { APP_NAME, APP_TAGLINE_LONG, APP_SUPPORT_PHONE, APP_SUPPORT_EMAIL, APP_DEFAULT_FROM, APP_INITIALS } from "./app-config.js";
 
@@ -183,10 +184,10 @@ export async function sendBookingConfirmationEmail(
         },
       ],
     });
-    console.log(`[email] Email sent successfully to ${ticket.passengerEmail} (Booking: ${ticket.bookingId})`);
+    logger.info(`[email] Email sent successfully to ${ticket.passengerEmail} (Booking: ${ticket.bookingId})`);
     return { sent: true };
   } catch (err: any) {
-    console.error(`[email] Failed to send booking confirmation email: ${err.message}`);
+    logger.error(`[email] Failed to send booking confirmation email: ${err.message}`);
     return { sent: false, reason: err.message };
   }
 }
@@ -341,10 +342,10 @@ export async function sendGeneralBookingEmail(
       subject,
       html: generalBookingEmailHTML(data),
     });
-    console.log(`[email] General booking email sent to ${data.passengerEmail} (${data.bookingId})`);
+    logger.info(`[email] General booking email sent to ${data.passengerEmail} (${data.bookingId})`);
     return { sent: true };
   } catch (err: any) {
-    console.error(`[email] Failed to send general booking email: ${err.message}`);
+    logger.error(`[email] Failed to send general booking email: ${err.message}`);
     return { sent: false, reason: err.message };
   }
 }

@@ -16,7 +16,6 @@ export async function checkBackendAvailability(): Promise<boolean> {
     clearTimeout(timeoutId);
     return response.ok;
   } catch {
-    console.log("⚠️ Backend not available, using mock data");
     return false;
   }
 }

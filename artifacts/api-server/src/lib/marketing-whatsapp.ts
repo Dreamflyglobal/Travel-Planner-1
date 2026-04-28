@@ -1,4 +1,5 @@
 import twilio from "twilio";
+import { logger } from "./logger.js";
 
 function formatPhone(raw: string): string {
   const digits = raw.replace(/\D/g, "");
@@ -18,7 +19,7 @@ export async function sendRawMarketingWhatsApp(
   const overrideTo = process.env.TWILIO_WHATSAPP_TO   || "";
 
   if (!accountSid || !authToken || !rawFrom) {
-    console.warn(`[marketing/${logTag}] Twilio not configured — skipping`);
+    logger.warn(`[marketing/${logTag}] Twilio not configured — skipping`);
     return { sent: false, reason: "Twilio not configured" };
   }
 
@@ -31,18 +32,18 @@ export async function sendRawMarketingWhatsApp(
   const toE164    = formatPhone(resolvedTo);
   const toNumber  = `whatsapp:${toE164}`;
 
-  console.log(`[marketing/${logTag}] Sending → ${fromNumber} → ${toNumber}`);
+  logger.info(`[marketing/${logTag}] Sending → ${fromNumber} → ${toNumber}`);
   try {
     const client = twilio(accountSid, authToken);
     const res    = await client.messages.create({ from: fromNumber, to: toNumber, body });
-    console.log(`[marketing/${logTag}] Sent ✓ SID: ${res.sid}`);
+    logger.info(`[marketing/${logTag}] Sent ✓ SID: ${res.sid}`);
     return { sent: true };
   } catch (e: any) {
     const hint =
       e.code === 63016 ? " — recipient not opted in to Twilio sandbox" :
       e.code === 63007 ? " — FROM not WhatsApp-enabled"                :
       e.code === 21211 ? " — TO number invalid"                        : "";
-    console.error(`[marketing/${logTag}] Error ${e.code ?? ""}:`, e.message, hint);
+    logger.error(`[marketing/${logTag}] Error ${e.code ?? ""}:`, e.message, hint);
     return { sent: false, reason: `${e.message}${hint}` };
   }
 }

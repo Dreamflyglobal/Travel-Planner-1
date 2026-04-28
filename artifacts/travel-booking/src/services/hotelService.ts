@@ -32,7 +32,6 @@ export async function fetchHotels(
   if (checkout) params.set("checkout", checkout);
 
   const url = `${API_BASE}/api/hotels/live-search?${params.toString()}`;
-  console.log("[hotelService] Fetching:", url);
 
   const { data } = await axios.get<{ hotels: Hotel[]; total: number; source: string; city: string }>(url);
 
@@ -40,6 +39,5 @@ export async function fetchHotels(
     throw new Error("Unexpected hotels response shape");
   }
 
-  console.log(`[hotelService] Got ${data.hotels.length} hotels (source: ${data.source})`);
   return data.hotels;
 }

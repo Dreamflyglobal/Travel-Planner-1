@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { logger } from "../lib/logger.js";
 import { ilike, eq } from "drizzle-orm";
 import { db, flightsTable } from "@workspace/db";
 import {
@@ -438,7 +439,7 @@ router.post("/flights", async (req, res): Promise<void> => {
 
     if (!apiRes.ok || data?.errors?.length) {
       const reason = data?.errors?.[0]?.message || `HTTP ${apiRes.status}`;
-      console.error(`[flights/tripjack] Search error: ${reason}`);
+      logger.error(`[flights/tripjack] Search error: ${reason}`);
       res.status(apiRes.ok ? 400 : apiRes.status).json({ error: reason });
       return;
     }
@@ -464,16 +465,16 @@ router.post("/flights", async (req, res): Promise<void> => {
       // Log top-level keys so we can identify where traceId lives on the sandbox.
       const topKeys = Object.keys(data || {}).join(", ");
       const srKeys  = Object.keys(data?.searchResult || {}).join(", ");
-      console.warn(
+      logger.warn(
         `[flights/tripjack] traceId not found — top-level keys: [${topKeys}] | searchResult keys: [${srKeys}]`,
       );
     }
 
-    console.log(`[flights/tripjack] ${logLabel}: ${flights.length} flights (${cabinClass}, A${adultCount}C${childCount}I${infantCount}) | traceId: ${traceId || "(none)"}`);
+    logger.info(`[flights/tripjack] ${logLabel}: ${flights.length} flights (${cabinClass}, A${adultCount}C${childCount}I${infantCount}) | traceId: ${traceId || "(none)"}`);
 
     res.json({ flights, total: flights.length, source: "tripjack", traceId });
   } catch (err: any) {
-    console.error("[flights/tripjack] Request failed:", err.message);
+    logger.error("[flights/tripjack] Request failed:", err.message);
     res.status(502).json({ error: `TripJack request failed: ${err.message}` });
   }
 });
@@ -515,7 +516,7 @@ router.get("/airports/search", async (req, res): Promise<void> => {
         return;
       }
     } catch (err: any) {
-      console.warn(`[airports/search] RapidAPI error: ${err?.message}`);
+      logger.warn(`[airports/search] RapidAPI error: ${err?.message}`);
     }
   }
 

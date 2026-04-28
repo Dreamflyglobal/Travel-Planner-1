@@ -145,9 +145,6 @@ export default function PassengerDetailsPage() {
     : 0;
 
   // Debug: confirm current user, role, and pricing
-  console.log("[Agent Debug] currentUser:", user?.id, "| role:", user?.role, "| isApproved:", user?.isApproved, "| agentMarkup:", user?.agentMarkup);
-  console.log("[Agent Debug] isApprovedAgent:", isApprovedAgent, "| agentMarkupPerUnit:", agentMarkupPerUnit, "| commissionPerBooking:", commissionPerBooking);
-  console.log("[PricingFlow/PassengerDetails] rawBase:", rawBasePrice, "| markup:", hiddenMarkupAmount, "| displayedBase:", displayedBasePrice, "| convFee:", convenienceFeeAmount, "| total:", displayedBasePrice + convenienceFeeAmount);
 
   function applyCoupon() {
     const code = couponInput.trim().toUpperCase();

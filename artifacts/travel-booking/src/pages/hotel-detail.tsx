@@ -108,7 +108,6 @@ export default function HotelDetail() {
   const nights     = nightsBetween(checkin, checkout);
   const urlRateKey = p.get("rateKey")  || null;
 
-  console.log("Selected Hotel ID:", id);
 
   // ── Hotel data resolution ──────────────────────────────
   const hotelFromParams = p.get("hotelName") ? {
@@ -212,11 +211,6 @@ export default function HotelDetail() {
       return;
     }
 
-    console.log("Selected Room:", {
-      name:     selectedRoom.name,
-      rateKey:  selectedRoom.rateKey,
-      price:    selectedRoom.priceINR,
-    });
 
     setStep("confirming");
 
@@ -236,10 +230,8 @@ export default function HotelDetail() {
       });
 
       const data = await res.json().catch(() => ({}));
-      console.log("Booking Response:", data);
 
       if (!res.ok) {
-        console.log("Booking Error:", data);
         setBookingError(data.error || `Booking failed (${res.status}). Please try again.`);
         setStep("failed");
         return;
@@ -254,7 +246,6 @@ export default function HotelDetail() {
       setBookingRef(ref);
       setStep("confirmed");
     } catch (err: any) {
-      console.log("Booking Error:", err?.message);
       setBookingError("Network error. Please check your connection and try again.");
       setStep("failed");
     }
