@@ -163,8 +163,27 @@ export default function FlightResults() {
     const apiBase  = (import.meta.env.VITE_API_BASE_URL as string) ?? "";
     const ri       = resultIndex   || "";
     const ti       = searchTraceId || "";
-    const payload  = JSON.stringify({ bookingId: fareKey, traceId: ti, resultIndex: ri });
 
+    // Guard: resultIndex is required by TripJack — stop early if missing
+    if (!ri) {
+      console.warn("[fareQuote/select] missing resultIndex — cannot call fareQuote");
+      isLoadingRef.current = false;
+      setBookingLoadingId(null);
+      toast({
+        variant:     "destructive",
+        title:       "Could not verify fare",
+        description: "Please reselect the flight to get a fresh price.",
+      });
+      return;
+    }
+
+    // TripJack fareQuote priceIds format:
+    //   traceId     = totalPriceList[i].id (= fareKey, the price list ID)
+    //   resultIndex = sI[0].id (the segment ID, extracted by the search mapper)
+    // Always use fresh data — never reuse old fareQuote results.
+    const payload  = JSON.stringify({ traceId: fareKey, resultIndex: ri });
+
+    console.log("FareQuote called with:", fareKey, ri);
     console.info(
       "[fareQuote/select] fareKey:", fareKey,
       "| resultIndex:", ri || "(none)",
@@ -216,6 +235,24 @@ export default function FlightResults() {
           "| fareKey:", fareKey,
           "| response:", data,
         );
+
+        // Retry on "could not verify fare" — recall FareQuote with fresh data
+        const bodyMsg = (
+          data?.errors?.[0]?.message ||
+          data?.message ||
+          data?.error ||
+          ""
+        ).toLowerCase();
+        const isVerifyFareError =
+          bodyMsg.includes("could not verify fare") ||
+          bodyMsg.includes("verify fare");
+        if (isVerifyFareError && attempt < MAX_AUTO_RETRIES) {
+          console.log(
+            "[fareQuote/select] 'Could not verify fare' — recalling FareQuote, retry",
+            attempt + 2,
+          );
+          continue;
+        }
 
         // Retry only for transient HTTP errors; break out for success or 4xx
         if (!isTransientStatus(res.status) || !res.ok === false) break;

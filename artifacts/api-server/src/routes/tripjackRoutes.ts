@@ -18,13 +18,43 @@ router.post("/tj-search", async (req, res): Promise<void> => {
 });
 
 // POST /api/tj-farequote → /fms/v1/air/farequote
+// Accepts: { traceId, resultIndex }
+// TripJack expects: { priceIds: [{ traceId, resultIndex }] }
 router.post("/tj-farequote", async (req, res): Promise<void> => {
+  const { traceId, resultIndex } = req.body as {
+    traceId?:     string;
+    resultIndex?: string;
+  };
+
+  if (!resultIndex) {
+    res.status(400).json({ error: "resultIndex is required for fareQuote" });
+    return;
+  }
+
+  const tjBody = {
+    priceIds: [
+      {
+        ...(traceId     && { traceId }),
+        resultIndex,
+      },
+    ],
+  };
+
+  console.log("[tj-farequote] FareQuote called with:", traceId || "(none)", resultIndex);
+
   try {
-    const data = await tjPostWithRetry("/fms/v1/air/farequote", req.body, {
+    const data = await tjPostWithRetry("/fms/v1/air/farequote", tjBody, {
       context:    "tj-farequote",
       timeoutMs:  15_000,
       maxRetries: 2,
     });
+
+    // Surface application-level "could not verify fare" to the client
+    const respStr = JSON.stringify(data).toLowerCase();
+    if (respStr.includes("could not verify fare") || respStr.includes("verify fare")) {
+      console.warn("[tj-farequote] TripJack returned 'could not verify fare' — forwarding to client for retry");
+    }
+
     res.json(data);
   } catch (err: any) {
     handleTjError(res, err, "tj-farequote");

@@ -157,10 +157,12 @@ function mapTripJackFlight(item: any, idx: number, fromIata: string, toIata: str
     PREMIUM_ECONOMY: "Premium Economy",
   };
 
-  // Flight-level resultIndex — used as fallback when a fare entry has no own resultIndex.
+  // TripJack fareQuote priceIds.resultIndex = sI[0].id (segment ID, e.g. 342).
+  // Fall back to item.resultIndex / item.sI[0].rI if present, else String(idx).
   const flightResultIndex: string =
-    item.resultIndex  ??
-    item.sI?.[0]?.rI  ??
+    String(item.sI?.[0]?.id  ?? "")  ||
+    String(item.resultIndex   ?? "")  ||
+    String(item.sI?.[0]?.rI  ?? "")  ||
     String(idx);
 
   // Map every totalPriceList entry to a fare option object.
@@ -172,11 +174,13 @@ function mapTripJackFlight(item: any, idx: number, fromIata: string, toIata: str
       if (!rawFare) return null;
       const cc = (adultFd?.cc || "ECONOMY").toUpperCase();
 
-      // Each fare entry in totalPriceList may carry its own resultIndex.
-      // Use it when present; fall back to the flight-level value.
+      // resultIndex: prefer sI[0].id (segment ID) used as fareQuote priceIds.resultIndex.
+      // The per-fare tai.tbi keys may carry the segment id; fall back to flight-level.
+      const tbiKeys = pl?.tai?.tbi ? Object.keys(pl.tai.tbi) : [];
       const fareResultIndex: string =
-        pl.resultIndex    ??
-        pl.rI             ??
+        (tbiKeys.length > 0 ? tbiKeys[0] : "")  ||
+        String(pl.resultIndex ?? "")             ||
+        String(pl.rI         ?? "")             ||
         flightResultIndex;
 
       return {
@@ -216,11 +220,12 @@ function mapTripJackFlight(item: any, idx: number, fromIata: string, toIata: str
   const stops = Math.max(0, segCount - 1);
   const stopsLabel = segCount === 1 ? "Non-stop" : segCount === 2 ? "1 Stop" : "Multi-stop";
 
-  // resultIndex: TripJack's unique identifier for this result within the search session.
-  // Required by fareQuote / SSR / book.  Falls back through known field names then to idx.
+  // resultIndex: TripJack fareQuote priceIds.resultIndex = sI[0].id (segment ID).
+  // Falls back through known field names then to array idx.
   const resultIndex: string =
-    item.resultIndex            ??
-    item.sI?.[0]?.rI            ??
+    String(item.sI?.[0]?.id ?? "")  ||
+    String(item.resultIndex  ?? "")  ||
+    String(item.sI?.[0]?.rI ?? "")  ||
     String(idx);
 
   return {
@@ -245,7 +250,7 @@ function mapTripJackFlight(item: any, idx: number, fromIata: string, toIata: str
 }
 
 // ── POST /api/flights — TripJack live search ───────────────────────────────
-const TRIPJACK_BASE = "https://apitest.tripjack.com";
+const TRIPJACK_BASE = process.env.TRIPJACK_BASE_URL || "https://apitest.tripjack.com";
 
 // Map our cabin class values → TripJack cabin class codes
 function resolveCabinClass(raw?: string): string {
