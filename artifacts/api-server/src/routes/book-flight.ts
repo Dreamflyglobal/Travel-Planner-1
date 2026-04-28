@@ -1,13 +1,8 @@
 import { Router } from "express";
 import { eq } from "drizzle-orm";
-import axios from "axios";
 import { db, bookingsTable, bookingRefundsTable } from "@workspace/db";
-import {
-  getTripJackToken,
-  bustTripJackToken,
-  extractTripJackError,
-  TRIPJACK_BASE,
-} from "../lib/tripjack-auth.js";
+import { extractTripJackError } from "../lib/tripjack-auth.js";
+import { tjPostWithRetry } from "../lib/tj-retry.js";
 import { logger } from "../lib/logger.js";
 
 const router = Router();
@@ -164,19 +159,7 @@ router.post("/book-flight", async (req, res): Promise<void> => {
     return;
   }
 
-  // ── STEP 2: Get TripJack Bearer token ────────────────────────────────────
-  logger.info({ paymentId }, "[book-flight] STEP 2: fetching TripJack token");
-  let token: string;
-  try {
-    token = await getTripJackToken();
-    logger.info({ paymentId }, "[book-flight] TripJack token obtained");
-  } catch (tokenErr: any) {
-    logger.error({ err: tokenErr.message }, "[book-flight] token fetch failed");
-    res.status(503).json({ success: false, error: `TripJack auth failed: ${tokenErr.message}` });
-    return;
-  }
-
-  // ── STEP 3: Call TripJack AirBook ────────────────────────────────────────
+  // ── STEP 2 + 3: Call TripJack AirBook (with retry + fresh token) ──────────
   const tjPayload = {
     bookingId: fareData.bookingId,
     ...(fareData.traceId     && { traceId:     fareData.traceId }),
@@ -187,7 +170,7 @@ router.post("/book-flight", async (req, res): Promise<void> => {
       currency:    "INR",
     }],
     travellerInfo: (passengers as any[]).map((p) => ({
-      fn:  (p.name ?? "").split(" ")[0]              || p.name || "Guest",
+      fn:  (p.name ?? "").split(" ")[0]                 || p.name || "Guest",
       ln:  (p.name ?? "").split(" ").slice(1).join(" ") || ".",
       ti:  "MR",
       dob: "",
@@ -207,12 +190,14 @@ router.post("/book-flight", async (req, res): Promise<void> => {
     {
       paymentId,
       tjBookingId:  fareData.bookingId,
+      traceId:      fareData.traceId     ?? null,
+      resultIndex:  fareData.resultIndex ?? null,
       finalPrice:   totalPrice,
-      passengers:   passengers.length,
+      passengerCount: passengers.length,
       seats:        passengers.map((p: any) => p.seatCode).filter(Boolean),
       baggage:      passengers.map((p: any) => p.baggageCode).filter(Boolean),
     },
-    "[book-flight] STEP 3: calling TripJack /fms/v1/air/book",
+    "[book-flight] STEP 2+3: calling TripJack /fms/v1/air/book (with retry)",
   );
 
   let tjSuccess    = false;
@@ -221,37 +206,27 @@ router.post("/book-flight", async (req, res): Promise<void> => {
   let tjError: string | undefined;
 
   try {
-    const { data } = await axios.post(
-      `${TRIPJACK_BASE}/fms/v1/air/book`,
-      tjPayload,
-      {
-        headers: {
-          Authorization:  `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        timeout: 30_000,
-      },
-    );
-
-    logger.info(
-      { paymentId, snippet: JSON.stringify(data).substring(0, 400) },
-      "[book-flight] TripJack AirBook response",
-    );
+    const data = await tjPostWithRetry("/fms/v1/air/book", tjPayload, {
+      context:    "book-flight/airbook",
+      timeoutMs:  30_000,
+      maxRetries: 2,
+    });
 
     if (data?.status?.success === false || (data?.errors?.length ?? 0) > 0) {
       tjError = extractTripJackError(data, "TripJack booking failed");
+      logger.warn({ paymentId, tjError }, "[book-flight] TripJack returned failure in body");
     } else {
       tjSuccess    = true;
-      pnr          = data?.data?.pnr       || undefined;
+      pnr          = data?.data?.pnr      || undefined;
       tjBookingRef = data?.data?.bookingId || undefined;
+      logger.info({ paymentId, pnr, tjBookingRef }, "[book-flight] TripJack AirBook SUCCESS");
     }
   } catch (err: any) {
-    if (err?.response?.status === 401) bustTripJackToken();
     const errBody = err?.response?.data;
-    tjError = errBody
-      ? extractTripJackError(errBody, err.message)
-      : err.message;
-    logger.error({ paymentId, error: tjError }, "[book-flight] TripJack request failed");
+    tjError = err.isTransient
+      ? "Temporary airline issue. Please try again."
+      : (errBody ? extractTripJackError(errBody, err.message) : err.message);
+    logger.error({ paymentId, error: tjError }, "[book-flight] TripJack AirBook failed after retries");
   }
 
   // ── STEP 4: Persist booking ──────────────────────────────────────────────
