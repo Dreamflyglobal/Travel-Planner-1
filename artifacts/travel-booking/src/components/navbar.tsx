@@ -68,6 +68,139 @@ export function Navbar() {
       .slice(0, 2);
   };
 
+  // ── Admin mode navbar (completely separate from B2C) ─────────────────────────
+  if (isAdmin) {
+    return (
+      <header className="sticky top-0 z-50 w-full border-b bg-slate-900 shadow-sm">
+        <div className="container mx-auto">
+          <div className="flex h-16 items-center justify-between px-4">
+            {/* Admin Brand */}
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-purple-600 flex items-center justify-center shadow">
+                <ShieldCheck className="h-5 w-5 text-white" />
+              </div>
+              <div className="flex flex-col">
+                <span className="font-bold text-white text-base leading-tight">
+                  {branding.companyName}
+                </span>
+                <span className="text-[10px] text-purple-300 font-semibold uppercase tracking-widest -mt-0.5">
+                  Admin Panel
+                </span>
+              </div>
+            </div>
+
+            {/* Admin Nav Links - Desktop */}
+            <nav className="hidden md:flex items-center gap-1">
+              <Link href="/master-admin/dashboard">
+                <Button
+                  variant="ghost"
+                  className={cn(
+                    "text-slate-300 hover:text-white hover:bg-white/10 gap-2 h-10",
+                    location.startsWith("/master-admin/dashboard") && "bg-white/10 text-white font-semibold"
+                  )}
+                >
+                  <ShieldCheck className="h-4 w-4" />
+                  Dashboard
+                </Button>
+              </Link>
+            </nav>
+
+            {/* Admin Right Actions */}
+            <div className="flex items-center gap-3">
+              <Link href="/master-admin/dashboard" className="hidden md:block">
+                <Button size="sm" className="bg-purple-600 hover:bg-purple-700 text-white gap-2 border-0">
+                  <ShieldCheck className="h-4 w-4" />
+                  Admin Dashboard
+                </Button>
+              </Link>
+
+              {/* Admin avatar + logout */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="relative h-9 w-9 rounded-full hover:bg-white/10">
+                    <Avatar className="h-9 w-9 border-2 border-purple-400/30">
+                      <AvatarFallback className="bg-purple-700 text-white font-bold text-sm">
+                        AD
+                      </AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-52">
+                  <DropdownMenuLabel>
+                    <div className="flex flex-col space-y-0.5">
+                      <p className="text-sm font-semibold">Admin</p>
+                      <p className="text-xs text-muted-foreground">{user?.email}</p>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link href="/master-admin/dashboard" className="cursor-pointer text-purple-700 font-medium">
+                      <ShieldCheck className="mr-2 h-4 w-4 text-purple-600" />
+                      Admin Dashboard
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={logout} className="text-destructive cursor-pointer">
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Logout
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Mobile admin menu */}
+              <Sheet>
+                <SheetTrigger asChild>
+                  <Button variant="ghost" size="icon" className="md:hidden text-white hover:bg-white/10">
+                    <Menu className="h-5 w-5" />
+                    <span className="sr-only">Toggle Menu</span>
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="left" className="w-72 p-0 bg-slate-900 border-slate-700">
+                  <div className="flex flex-col h-full">
+                    <div className="p-6 border-b border-slate-700">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-lg bg-purple-600 flex items-center justify-center">
+                          <ShieldCheck className="h-5 w-5 text-white" />
+                        </div>
+                        <div>
+                          <p className="font-bold text-white text-sm">{branding.companyName}</p>
+                          <p className="text-[10px] text-purple-300 uppercase tracking-widest font-semibold">Admin Panel</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex-1 p-4">
+                      <Link href="/master-admin/dashboard">
+                        <Button
+                          className="w-full justify-start gap-3 h-12 bg-purple-600 hover:bg-purple-700 text-white border-0"
+                        >
+                          <ShieldCheck className="h-5 w-5" />
+                          Admin Dashboard
+                        </Button>
+                      </Link>
+                    </div>
+                    <div className="p-4 border-t border-slate-700">
+                      <p className="text-xs text-slate-400 mb-3">Logged in as Admin</p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={logout}
+                        className="w-full gap-2 text-red-400 border-slate-600 hover:bg-slate-800 hover:text-red-300"
+                      >
+                        <LogOut className="h-4 w-4" />
+                        Logout
+                      </Button>
+                    </div>
+                  </div>
+                </SheetContent>
+              </Sheet>
+            </div>
+          </div>
+        </div>
+      </header>
+    );
+  }
+
+  // ── B2C navbar (regular users, agents, staff) ─────────────────────────────────
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-white shadow-sm">
       <div className="container mx-auto">
@@ -199,17 +332,6 @@ export function Navbar() {
                       </DropdownMenuItem>
                     </>
                   )}
-                  {isAdmin && (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem asChild>
-                        <Link href="/master-admin/dashboard" className="cursor-pointer text-purple-700 font-semibold">
-                          <ShieldCheck className="mr-2 h-4 w-4 text-purple-600" />
-                          Admin Dashboard
-                        </Link>
-                      </DropdownMenuItem>
-                    </>
-                  )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={logout} className="text-destructive cursor-pointer">
                     <LogOut className="mr-2 h-4 w-4" />
@@ -300,17 +422,6 @@ export function Navbar() {
                             >
                               <Building2 className="h-5 w-5 text-blue-600" />
                               Agent Dashboard
-                            </Button>
-                          </Link>
-                        )}
-                        {isAdmin && (
-                          <Link href="/master-admin/dashboard">
-                            <Button
-                              variant={location.startsWith("/master-admin") ? "secondary" : "ghost"}
-                              className="w-full justify-start gap-3 h-12 text-purple-700"
-                            >
-                              <ShieldCheck className="h-5 w-5 text-purple-600" />
-                              Admin Dashboard
                             </Button>
                           </Link>
                         )}

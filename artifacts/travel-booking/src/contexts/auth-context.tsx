@@ -40,17 +40,49 @@ export function isValidPhone(phone: string): boolean {
 }
 
 // ── Token helpers ─────────────────────────────────────────────────────────────
+// Admin sessions are stored under "admin_jwt"; B2C user sessions under "jwt_token".
+// This keeps the two roles fully isolated — logging in as admin never pollutes
+// the B2C user session and vice-versa.
 
+const ADMIN_TOKEN_KEY = "admin_jwt";
+const USER_TOKEN_KEY  = "jwt_token";
+
+function isAdminJwt(token: string): boolean {
+  try {
+    const p = JSON.parse(atob(token.split(".")[1]));
+    return p.userId === 0 && p.role === "admin";
+  } catch {
+    return false;
+  }
+}
+
+/** Returns the active token: admin_jwt if an admin session exists, else jwt_token */
 function getToken(): string | null {
-  return localStorage.getItem("jwt_token");
+  const adminToken = localStorage.getItem(ADMIN_TOKEN_KEY);
+  if (adminToken && isAdminJwt(adminToken)) return adminToken;
+  return localStorage.getItem(USER_TOKEN_KEY);
 }
 
+/** Store a B2C user token */
 function setToken(token: string) {
-  localStorage.setItem("jwt_token", token);
+  localStorage.setItem(USER_TOKEN_KEY, token);
 }
 
+/** Store an admin token (kept separate from B2C sessions) */
+function setAdminToken(token: string) {
+  localStorage.setItem(ADMIN_TOKEN_KEY, token);
+}
+
+/** Clear the B2C user token */
 function clearToken() {
-  localStorage.removeItem("jwt_token");
+  localStorage.removeItem(USER_TOKEN_KEY);
+}
+
+/** Clear both tokens (full logout) */
+function clearAllTokens() {
+  localStorage.removeItem(USER_TOKEN_KEY);
+  localStorage.removeItem(ADMIN_TOKEN_KEY);
+  localStorage.removeItem("isAdmin");
 }
 
 function authHeader(): Record<string, string> {
@@ -93,19 +125,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loaded, setLoaded] = useState(false);
 
   const loadUser = async () => {
-    const token = getToken();
-    if (!token) { setLoaded(true); return; }
-
-    // Special admin token (id 0)
-    try {
-      // Decode payload without verifying (verification is server-side)
-      const payload = JSON.parse(atob(token.split(".")[1]));
-      if (payload.userId === 0 && payload.role === "admin") {
+    // ── 1. Check dedicated admin_jwt key first ────────────────────────────────
+    const adminToken = localStorage.getItem(ADMIN_TOKEN_KEY);
+    if (adminToken) {
+      if (isAdminJwt(adminToken)) {
         setUser({ id: 0, name: "Admin", email: "admin@dreamflyglobal.com", role: "admin" });
         setLoaded(true);
         return;
       }
-    } catch {}
+      // Stale / invalid admin token — remove it
+      localStorage.removeItem(ADMIN_TOKEN_KEY);
+    }
+
+    // ── 2. Migrate legacy admin sessions stored in jwt_token ──────────────────
+    const legacyToken = localStorage.getItem(USER_TOKEN_KEY);
+    if (legacyToken && isAdminJwt(legacyToken)) {
+      // Move to the correct key; clear from user slot
+      localStorage.setItem(ADMIN_TOKEN_KEY, legacyToken);
+      localStorage.removeItem(USER_TOKEN_KEY);
+      setUser({ id: 0, name: "Admin", email: "admin@dreamflyglobal.com", role: "admin" });
+      setLoaded(true);
+      return;
+    }
+
+    // ── 3. Regular B2C user session ───────────────────────────────────────────
+    const token = localStorage.getItem(USER_TOKEN_KEY);
+    if (!token) { setLoaded(true); return; }
 
     try {
       const res = await fetch(`${API}/api/auth/me`, {
@@ -290,8 +335,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
-    clearToken();
-    localStorage.removeItem("isAdmin");
+    clearAllTokens();
     setUser(null);
   };
 

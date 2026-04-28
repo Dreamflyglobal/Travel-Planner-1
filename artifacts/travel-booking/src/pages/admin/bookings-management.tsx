@@ -103,7 +103,10 @@ const TYPE_OPTIONS: Array<{ value: string; label: string }> = [
 function getAuthHeader(): Record<string, string> {
   if (typeof window === "undefined") return {};
   try {
-    const token = window.localStorage.getItem("jwt_token");
+    // Prefer admin_jwt (dedicated admin session key); fall back to legacy jwt_token
+    const token =
+      window.localStorage.getItem("admin_jwt") ||
+      window.localStorage.getItem("jwt_token");
     return token ? { Authorization: `Bearer ${token}` } : {};
   } catch {
     return {};

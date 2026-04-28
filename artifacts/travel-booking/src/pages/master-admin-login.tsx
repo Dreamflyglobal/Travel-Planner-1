@@ -51,9 +51,9 @@ export default function MasterAdminLogin() {
         return;
       }
 
-      // Persist auth state
-      localStorage.setItem("jwt_token", data.token);
-      localStorage.setItem("isAdmin", "true");
+      // Persist admin session in its own key — keeps B2C user sessions untouched
+      localStorage.setItem("admin_jwt", data.token);
+      localStorage.removeItem("jwt_token"); // ensure B2C slot is clear for this session
 
       // Refresh AuthContext so navbar / AdminGuard pick up the new admin user
       await refreshUser();
