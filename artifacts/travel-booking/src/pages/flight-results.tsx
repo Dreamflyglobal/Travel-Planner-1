@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { useAbandonedLeadTracker } from "@/hooks/use-abandoned-lead-tracker";
 import { useMarketing } from "@/hooks/use-marketing";
 import { getHiddenMarkupAmount } from "@/lib/pricing";
-import { useFlightSearch, type FlightSearchOptions, type FareOption } from "@/lib/use-flight-search";
+import { useFlightSearch, type FlightSearchOptions, type FareOption, type LiveFlight } from "@/lib/use-flight-search";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
@@ -25,14 +25,25 @@ import {
   WifiOff,
   Pencil,
   ChevronRight,
-  ChevronDown,
   Loader2,
+  Luggage,
+  UtensilsCrossed,
+  Utensils,
+  X,
+  CheckCircle,
+  XCircle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 // ── Airline branding colours ──────────────────────────────────────────────────
 const AIRLINE_COLORS: Record<string, string> = {
@@ -105,7 +116,17 @@ export default function FlightResults() {
   const [stopsFilter,      setStopsFilter]      = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<"cheapest" | "fastest" | "earliest" | "latest">("cheapest");
   const [showMobileFilters, setShowMobileFilters] = useState(false);
-  const [expandedFlight,   setExpandedFlight]  = useState<number | null>(null);
+
+  // Fare selection modal — replaces the old inline expanded panel
+  type FareModalState = {
+    flight: LiveFlight;
+    effectiveMarkup: number;
+    normalMarkup: number;
+    savings: number | null;
+    finalPrice: number;
+    searchBasePrice: number;
+  };
+  const [fareModal, setFareModal] = useState<FareModalState | null>(null);
 
   const { user, isAgent } = useAuth();
   const { toast } = useToast();
@@ -673,8 +694,24 @@ export default function FlightResults() {
     </Card>
   );
 
+  // ── Modal derived values ─────────────────────────────────────────────────
+  const mf  = fareModal?.flight ?? null;
+  const mEm = fareModal?.effectiveMarkup ?? 0;
+  const mNm = fareModal?.normalMarkup    ?? 0;
+  const mSv = fareModal?.savings         ?? null;
+
+  function fareDetails(cls: string) {
+    const c = cls.toUpperCase();
+    if (c === "BUSINESS" || c === "FIRST")
+      return { refundable: true,  checked: "30 kg", cabin: "10 kg", meal: true  };
+    if (c === "PREMIUM_ECONOMY")
+      return { refundable: true,  checked: "20 kg", cabin: "7 kg",  meal: true  };
+    return   { refundable: false, checked: "15 kg", cabin: "7 kg",  meal: false };
+  }
+
   // ── Main Render ────────────────────────────────────────────────────────────
   return (
+    <>
     <div className="min-h-screen flex flex-col bg-slate-50">
 
       {/* ── Compact top bar ── */}
@@ -1037,17 +1074,12 @@ export default function FlightResults() {
                                 {flight.fareOptions && flight.fareOptions.length > 0 ? (
                                   <Button
                                     size="lg"
-                                    onClick={() => setExpandedFlight(expandedFlight === flight.id ? null : flight.id)}
-                                    className={cn(
-                                      "w-full font-bold text-sm gap-1.5 shadow-sm transition-all",
-                                      expandedFlight === flight.id
-                                        ? "bg-blue-700 hover:bg-blue-800 text-white"
-                                        : "bg-orange-500 hover:bg-orange-600 text-white"
-                                    )}
+                                    onClick={() => setFareModal({ flight, effectiveMarkup, normalMarkup, savings, finalPrice, searchBasePrice })}
+                                    className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm gap-1.5 shadow-sm"
                                   >
                                     <Plane className="w-4 h-4" />
                                     Select Flight
-                                    <ChevronDown className={cn("w-4 h-4 ml-auto transition-transform", expandedFlight === flight.id && "rotate-180")} />
+                                    <ChevronRight className="w-4 h-4 ml-auto" />
                                   </Button>
                                 ) : (
                                   <Button
@@ -1083,116 +1115,12 @@ export default function FlightResults() {
                                   </Button>
                                 )}
                                 <p className="text-[10px] text-muted-foreground text-center">
-                                  {flight.fareOptions && flight.fareOptions.length > 0
-                                    ? "Select fare below · all taxes included"
-                                    : "Taxes & fees included"}
+                                  Taxes & fees included
                                 </p>
                               </div>
                             </div>
 
                           </div>
-
-                          {/* ── Expanded fare options panel ── */}
-                          {expandedFlight === flight.id && flight.fareOptions && flight.fareOptions.length > 0 && (
-                            <div className="border-t border-blue-100 bg-blue-50/60 px-5 py-4">
-                              <p className="text-[11px] font-bold text-blue-700 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                                <Plane className="w-3.5 h-3.5" /> Choose your fare class
-                              </p>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                {flight.fareOptions.map((fare: FareOption) => {
-                                  const fareWithMarkup = fare.totalFare + effectiveMarkup;
-                                  const bookParams = new URLSearchParams({
-                                    id:             String(flight.id),
-                                    airline:        flight.airline,
-                                    flightNumber:   flight.flightNumber,
-                                    from:           flight.origin,
-                                    to:             flight.destination,
-                                    departure:      flight.departureTime,
-                                    arrival:        flight.arrivalTime,
-                                    duration:       String(flight.duration),
-                                    date:           date || "",
-                                    price:          String(fare.totalFare),
-                                    markup:         String(effectiveMarkup),
-                                    priceWithMarkup:String(fareWithMarkup),
-                                    normalMarkup:   String(normalMarkup),
-                                    agentSavings:   String(savings ?? 0),
-                                    travelers:      String(travelers),
-                                    cabinClass:     fare.cabinClass,
-                                    cabinLabel:     fare.cabinLabel,
-                                    fareKey:        fare.fareId,
-                                  });
-                                  const isFareLoading = bookingLoadingId === fare.fareId;
-                                  const isPremium = fare.cabinClass === "BUSINESS" || fare.cabinClass === "FIRST" || fare.cabinClass === "PREMIUM_ECONOMY";
-                                  return (
-                                    <div
-                                      key={fare.fareId || fare.cabinClass}
-                                      className={cn(
-                                        "p-3.5 rounded-xl border-2 bg-white flex flex-col gap-3",
-                                        bookingLoadingId && bookingLoadingId !== fare.fareId ? "opacity-50" : "",
-                                        isPremium ? "border-purple-200" : "border-slate-200"
-                                      )}
-                                    >
-                                      {/* Cabin class label + seats */}
-                                      <div className="flex items-start justify-between gap-2">
-                                        <div>
-                                          <p className="font-bold text-sm text-slate-800">{fare.cabinLabel}</p>
-                                          <p className={cn(
-                                            "text-[10px] font-semibold mt-0.5",
-                                            fare.seatsLeft <= 5 ? "text-red-500" : "text-slate-400"
-                                          )}>
-                                            {fare.seatsLeft <= 5 ? `🔥 Only ${fare.seatsLeft} left` : `${fare.seatsLeft} seats`}
-                                          </p>
-                                        </div>
-                                        {isPremium && (
-                                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 uppercase tracking-wide shrink-0">
-                                            {fare.cabinLabel}
-                                          </span>
-                                        )}
-                                      </div>
-
-                                      {/* Price */}
-                                      <div>
-                                        <p className="text-2xl font-extrabold text-blue-700 tabular-nums leading-none">
-                                          ₹{fareWithMarkup.toLocaleString("en-IN")}
-                                        </p>
-                                        <p className="text-[10px] text-muted-foreground mt-0.5">per person · all taxes incl.</p>
-                                        {travelers > 1 && (
-                                          <p className="text-xs text-slate-500 mt-0.5">
-                                            Total <span className="font-semibold">₹{(fareWithMarkup * travelers).toLocaleString("en-IN")}</span> for {travelers}
-                                          </p>
-                                        )}
-                                      </div>
-
-                                      {/* Select button — the sole trigger for this fare */}
-                                      <Button
-                                        size="sm"
-                                        disabled={!!bookingLoadingId}
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          if (bookingLoadingId) return;
-                                          userClickedRef.current = true;
-                                          const ri = flight.resultIndex || fare.resultIndex;
-                                          // Prefer traceId embedded in the flight object (set at search time);
-                                          // fall back to the hook-level traceId as a safety net.
-                                          const ti = (flight as any).traceId || traceId || "";
-                                          console.log("TRACE:", ti || "(none)");
-                                          console.log("RESULT:", ri || "(none)");
-                                          console.log("[fareSelect] fareId:", fare.fareId, "| cabinClass:", fare.cabinClass, "| resultIndex:", ri, "| traceId:", ti || "(none)");
-                                          handleSelectFlight(fare.fareId, bookParams, true, ri, ti);
-                                        }}
-                                        className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs h-8 gap-1"
-                                      >
-                                        {isFareLoading
-                                          ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Checking fare…</>
-                                          : <>Select {fare.cabinLabel} <ChevronRight className="w-3.5 h-3.5" /></>
-                                        }
-                                      </Button>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          )}
 
                         </CardContent>
                       </Card>
@@ -1205,5 +1133,193 @@ export default function FlightResults() {
         </div>
       </div>
     </div>
+
+    {/* ── Fare Selection Modal ──────────────────────────────────────────────── */}
+    <Dialog open={!!fareModal} onOpenChange={(open) => { if (!open) setFareModal(null); }}>
+      <DialogContent className="max-w-2xl p-0 overflow-hidden gap-0 rounded-2xl">
+        {mf && (
+          <DialogHeader className="p-0">
+            <div className={cn("bg-gradient-to-r p-5 text-white", airlineGradient(mf.airline))}>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center shrink-0">
+                  <span className="font-extrabold text-sm tracking-tight">{mf.airline.substring(0, 2).toUpperCase()}</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <DialogTitle className="text-white font-bold text-base leading-tight">{mf.airline}</DialogTitle>
+                  <p className="text-white/70 text-xs mt-0.5">{mf.flightNumber}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-[10px] text-white/60 uppercase tracking-wide font-semibold">Date</p>
+                  <p className="text-sm font-bold">{date}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="text-left shrink-0">
+                  <p className="text-3xl font-extrabold tabular-nums leading-none">{mf.departureTime}</p>
+                  <p className="text-white/80 font-semibold text-sm mt-0.5">{mf.origin}</p>
+                </div>
+                <div className="flex-1 flex flex-col items-center px-2">
+                  <p className="text-white/70 text-xs font-medium mb-1">{mf.duration}</p>
+                  <div className="w-full flex items-center gap-1">
+                    <div className="flex-1 h-px bg-white/30" />
+                    <Plane className="w-4 h-4 text-white/80" />
+                    <div className="flex-1 h-px bg-white/30" />
+                  </div>
+                  <p className={cn(
+                    "text-[10px] font-bold mt-1 uppercase tracking-wide",
+                    (mf.stopsLabel ?? (mf.stops === 0 ? "Non-stop" : "Stop")) === "Non-stop" ? "text-green-300" : "text-amber-300"
+                  )}>
+                    {mf.stopsLabel ?? (mf.stops === 0 ? "Non-stop" : mf.stops === 1 ? "1 Stop" : "2+ Stops")}
+                  </p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-3xl font-extrabold tabular-nums leading-none">{mf.arrivalTime}</p>
+                  <p className="text-white/80 font-semibold text-sm mt-0.5">{mf.destination}</p>
+                </div>
+              </div>
+            </div>
+          </DialogHeader>
+        )}
+
+        {mf && (
+          <div className="bg-slate-50 px-5 pt-4 pb-2">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Choose your fare class</p>
+            <div className={cn(
+              "grid gap-3",
+              (mf.fareOptions?.length ?? 0) >= 3 ? "grid-cols-1 sm:grid-cols-3" :
+              (mf.fareOptions?.length ?? 0) === 2 ? "grid-cols-1 sm:grid-cols-2" :
+              "grid-cols-1 max-w-xs mx-auto"
+            )}>
+              {(mf.fareOptions ?? []).map((fare: FareOption) => {
+                const fareWithMarkup = fare.totalFare + mEm;
+                const fd = fareDetails(fare.cabinClass);
+                const isPremium = fare.cabinClass === "BUSINESS" || fare.cabinClass === "FIRST" || fare.cabinClass === "PREMIUM_ECONOMY";
+                const isFareLoading = bookingLoadingId === fare.fareId;
+                const headerBg = isPremium ? "bg-purple-600" : "bg-blue-600";
+                const priceColor = isPremium ? "text-purple-700" : "text-blue-700";
+                const btnClass  = isPremium ? "bg-purple-600 hover:bg-purple-700" : "bg-orange-500 hover:bg-orange-600";
+                const bookParams = new URLSearchParams({
+                  id:             String(mf.id),
+                  airline:        mf.airline,
+                  flightNumber:   mf.flightNumber,
+                  from:           mf.origin,
+                  to:             mf.destination,
+                  departure:      mf.departureTime,
+                  arrival:        mf.arrivalTime,
+                  duration:       String(mf.duration),
+                  date:           date || "",
+                  price:          String(fare.totalFare),
+                  markup:         String(mEm),
+                  priceWithMarkup:String(fareWithMarkup),
+                  normalMarkup:   String(mNm),
+                  agentSavings:   String(mSv ?? 0),
+                  travelers:      String(travelers),
+                  cabinClass:     fare.cabinClass,
+                  cabinLabel:     fare.cabinLabel,
+                  fareKey:        fare.fareId,
+                });
+                return (
+                  <div
+                    key={fare.fareId || fare.cabinClass}
+                    className={cn(
+                      "bg-white rounded-2xl border-2 shadow-sm overflow-hidden flex flex-col",
+                      isPremium ? "border-purple-300" : "border-slate-200",
+                      bookingLoadingId && bookingLoadingId !== fare.fareId ? "opacity-40 pointer-events-none" : ""
+                    )}
+                  >
+                    <div className={cn("px-4 py-2.5 flex items-center justify-between", headerBg)}>
+                      <p className="text-white font-bold text-sm">{fare.cabinLabel}</p>
+                      {fare.seatsLeft <= 5 ? (
+                        <span className="text-[9px] bg-red-500 text-white font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide">
+                          🔥 {fare.seatsLeft} left
+                        </span>
+                      ) : (
+                        <span className="text-[9px] bg-white/20 text-white font-semibold px-1.5 py-0.5 rounded-full">
+                          {fare.seatsLeft} seats
+                        </span>
+                      )}
+                    </div>
+                    <div className="p-4 flex flex-col gap-3 flex-1">
+                      <div>
+                        {mSv !== null && mSv > 0 && (
+                          <p className="text-xs line-through text-slate-400 tabular-nums leading-none mb-0.5">
+                            ₹{(fare.totalFare + mNm).toLocaleString("en-IN")}
+                          </p>
+                        )}
+                        <p className={cn("text-2xl font-extrabold tabular-nums leading-none", priceColor)}>
+                          ₹{fareWithMarkup.toLocaleString("en-IN")}
+                        </p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">per person · all incl.</p>
+                        {travelers > 1 && (
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            Total <span className="font-semibold text-slate-700">₹{(fareWithMarkup * travelers).toLocaleString("en-IN")}</span> for {travelers}
+                          </p>
+                        )}
+                      </div>
+                      <div className="space-y-1.5 border-t border-slate-100 pt-3">
+                        <div className="flex items-center gap-2">
+                          {fd.refundable
+                            ? <CheckCircle className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                            : <XCircle    className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                          }
+                          <span className={cn("text-xs font-medium", fd.refundable ? "text-green-700" : "text-red-500")}>
+                            {fd.refundable ? "Refundable" : "Non-refundable"}
+                          </span>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <Luggage className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
+                          <span className="text-xs text-slate-600 leading-snug">
+                            <span className="font-semibold">{fd.checked}</span> check-in &amp; <span className="font-semibold">{fd.cabin}</span> cabin
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {fd.meal
+                            ? <Utensils        className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                            : <UtensilsCrossed className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+                          }
+                          <span className={cn("text-xs font-medium", fd.meal ? "text-orange-600" : "text-slate-400")}>
+                            {fd.meal ? "Complimentary meal" : "No meal included"}
+                          </span>
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        disabled={!!bookingLoadingId}
+                        onClick={() => {
+                          if (bookingLoadingId) return;
+                          userClickedRef.current = true;
+                          const ri = mf.resultIndex || fare.resultIndex;
+                          const ti = (mf as any).traceId || traceId || "";
+                          console.log("TRACE:", ti || "(none)");
+                          console.log("RESULT:", ri || "(none)");
+                          handleSelectFlight(fare.fareId, bookParams, true, ri, ti);
+                        }}
+                        className={cn("w-full text-white font-bold text-sm h-9 gap-1.5 mt-auto", btnClass)}
+                      >
+                        {isFareLoading
+                          ? <><Loader2 className="w-4 h-4 animate-spin" /> Checking fare…</>
+                          : <>Continue <ChevronRight className="w-4 h-4" /></>
+                        }
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+          <p className="text-[11px] text-slate-400">All prices include taxes &amp; fees</p>
+          <button
+            onClick={() => setFareModal(null)}
+            className="text-xs text-slate-500 hover:text-slate-800 flex items-center gap-1 font-medium"
+          >
+            <X className="w-3.5 h-3.5" /> Close
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
