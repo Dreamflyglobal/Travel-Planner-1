@@ -37,7 +37,6 @@ import {
   DEFAULT_WEBSITE_SETTINGS,
   sanitizeWhatsappNumber,
 } from "@/contexts/website-settings-context";
-import { ApiKeysSection } from "@/pages/admin/api-keys-section";
 import { Link } from "wouter";
 import { APP_NAME } from "@/lib/app-config";
 import { ClipboardList, ArrowRight } from "lucide-react";
@@ -422,7 +421,7 @@ export default function AdminSettings() {
         <SectionHeader
           icon={<CreditCard className="w-5 h-5 text-amber-600" />}
           title="Payment Settings"
-          description="Global payment toggle. Razorpay credentials are managed securely in the API Keys section."
+          description="Global payment toggle. Razorpay credentials are configured via environment variables."
         />
 
         <Card className="mb-8">
@@ -444,8 +443,7 @@ export default function AdminSettings() {
             <div className="flex items-start gap-3 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-sm">
               <ShieldCheck className="w-4 h-4 mt-0.5 text-emerald-600 shrink-0" />
               <p className="text-emerald-800">
-                <strong>Razorpay Key ID and Secret</strong> are stored securely on the server — never in your browser.
-                Manage them in the <strong>API Keys &amp; Provider Settings</strong> section below.
+                <strong>Razorpay Key ID and Secret</strong> are configured securely via environment variables on the server.
               </p>
             </div>
           </CardContent>
@@ -514,16 +512,6 @@ export default function AdminSettings() {
 
         {/* Website Settings — modular, independent of branding/site/notification settings */}
         <WebsiteSettingsSection />
-
-        <Separator className="my-6" />
-
-        {/* API Settings — server-stored API keys, fetched via /api/admin/api-keys */}
-        <SectionHeader
-          icon={<Sparkles className="w-5 h-5 text-indigo-600" />}
-          title="API Settings"
-          description="Securely manage external provider API keys. Stored on the server, never in the browser."
-        />
-        <ApiKeysSection />
 
         <Separator className="my-6" />
 

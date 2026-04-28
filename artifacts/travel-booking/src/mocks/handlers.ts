@@ -598,11 +598,7 @@ export const handlers = [
   http.post('/api/tj-farequote', () => passthrough()),
   http.post('/api/tj-ssr',       () => passthrough()),
   http.post('/api/tj-book',      () => passthrough()),
-  // Admin test routes
-  http.post('/api/test-tripjack-real',     () => passthrough()),
-  http.post('/api/admin/test-tripjack',    () => passthrough()),
   http.post('/api/admin/test-razorpay',    () => passthrough()),
-  http.post('/api/admin/test-hotelbeds',   () => passthrough()),
 
   // Live search endpoints — all pass through to real backend
   http.get('/api/flights/live-search', () => passthrough()),
