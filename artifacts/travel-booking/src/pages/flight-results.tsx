@@ -181,9 +181,10 @@ export default function FlightResults() {
     //   traceId     = totalPriceList[i].id (= fareKey, the price list ID)
     //   resultIndex = sI[0].id (the segment ID, extracted by the search mapper)
     // Always use fresh data — never reuse old fareQuote results.
-    const payload  = JSON.stringify({ traceId: fareKey, resultIndex: ri });
+    const fareQuotePayload = { traceId: fareKey, resultIndex: ri };
+    const payload = JSON.stringify(fareQuotePayload);
 
-    console.log("FareQuote called with:", fareKey, ri);
+    console.log("FareQuote Body:", { priceIds: [{ traceId: fareKey, resultIndex: ri }] });
     console.info(
       "[fareQuote/select] fareKey:", fareKey,
       "| resultIndex:", ri || "(none)",
@@ -287,31 +288,14 @@ export default function FlightResults() {
       return;
     }
 
-    // ── HTTP-level errors (after retries) ─────────────────────────────────
+    // ── HTTP-level errors (after retries) — always stop the flow ─────────
     if (!res!.ok) {
       setBookingLoadingId(null);
-
-      // If the backend returned an auth/token error, treat it the same as a
-      // TripJack body auth error: bypass fare validation and navigate anyway.
-      // This covers the case where TRIPJACK_API_KEY is not yet configured.
-      const errorMsg = (data?.error || data?.message || "").toLowerCase();
-      const AUTH_BYPASS = ["authentication failed", "invalid access", "access denied",
-                           "unauthorized", "forbidden", "invalid token", "auth failed"];
-      const isServerAuthError = AUTH_BYPASS.some(s => errorMsg.includes(s));
-
-      if (isServerAuthError) {
-        console.warn("[fareQuote/select] backend auth bypass — navigating with fareKey as bookingId");
-        sessionStorage.setItem("ww_tj_farequote",     JSON.stringify(data));
-        sessionStorage.setItem("ww_tj_booking_id",    fareKey);
-        sessionStorage.setItem("ww_tj_farequote_key", fareKey);
-        setLocation(`/booking/flight?${urlParams.toString()}`);
-        return;
-      }
+      console.warn("[fareQuote/select] fareQuote failed — HTTP", res!.status, "— stopping flow");
 
       if (!userClickedRef.current) return;
 
       if (isTransientStatus(res!.status)) {
-        console.warn("[fareQuote/select] server error", res!.status, "— still failing after retries");
         toast({
           variant:     "destructive",
           title:       "Temporary airline issue",
@@ -319,11 +303,10 @@ export default function FlightResults() {
           action:      <ToastAction altText="Retry" onClick={manualRetry}>Retry</ToastAction>,
         });
       } else {
-        console.warn("[fareQuote/select] client error", res!.status);
         toast({
           variant:     "destructive",
           title:       "Could not verify fare",
-          description: "Please go back and select the flight again.",
+          description: "Please reselect the flight to get a fresh price.",
         });
       }
       return;
@@ -368,21 +351,20 @@ export default function FlightResults() {
       const isServerHiccup = SERVER_SIGNALS.some(s => msg.includes(s));
       const isSoldOut      = SOLDOUT_SIGNALS.some(s => msg.includes(s));
 
-      // ── Auth / session error ───────────────────────────────────────────────
-      // TripJack returned an auth rejection — this is NOT a fare availability
-      // problem. Cache what we have and navigate to the passenger page so the
-      // user can still attempt to book. The booking step will re-validate.
-      if (isAuthError && !isSoldOut) {
-        console.warn("[fareQuote/select] auth bypass — navigating with fareKey as bookingId");
-        sessionStorage.setItem("ww_tj_farequote",     JSON.stringify(data));
-        sessionStorage.setItem("ww_tj_booking_id",    fareKey);
-        sessionStorage.setItem("ww_tj_farequote_key", fareKey);
-        setLocation(`/booking/flight?${urlParams.toString()}`);
+      console.warn("[fareQuote/select] fareQuote error — stopping flow:", rawMsg || "(no message)");
+
+      // Always stop the flow on fareQuote failure — require explicit user click for toast
+      if (!userClickedRef.current) return;
+
+      if (isAuthError) {
+        // Auth/configuration error — tell user to reselect
+        toast({
+          variant:     "destructive",
+          title:       "Could not verify fare",
+          description: "Please reselect the flight to get a fresh price.",
+        });
         return;
       }
-
-      // Remaining error paths show a toast — require explicit user click
-      if (!userClickedRef.current) return;
 
       // ── Explicit sold out ──────────────────────────────────────────────────
       if (isSoldOut && !isServerHiccup) {
@@ -394,8 +376,7 @@ export default function FlightResults() {
         return;
       }
 
-      // ── Server hiccup OR unrecognised — default to retryable error ─────────
-      // Never default to "sold out" for unknown errors — that creates false blocks.
+      // ── Server hiccup OR unrecognised — retryable ─────────────────────────
       toast({
         variant:     "destructive",
         title:       "Temporary airline issue",

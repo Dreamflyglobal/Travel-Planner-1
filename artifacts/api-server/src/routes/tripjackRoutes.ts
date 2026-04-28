@@ -31,19 +31,19 @@ router.post("/tj-farequote", async (req, res): Promise<void> => {
     return;
   }
 
-  const tjBody = {
+  const fareQuoteBody = {
     priceIds: [
       {
-        ...(traceId     && { traceId }),
+        ...(traceId && { traceId }),
         resultIndex,
       },
     ],
   };
 
-  console.log("[tj-farequote] FareQuote called with:", traceId || "(none)", resultIndex);
+  console.log("FareQuote Body:", JSON.stringify(fareQuoteBody));
 
   try {
-    const data = await tjPostWithRetry("/fms/v1/air/farequote", tjBody, {
+    const data = await tjPostWithRetry("/fms/v1/air/farequote", fareQuoteBody, {
       context:    "tj-farequote",
       timeoutMs:  15_000,
       maxRetries: 2,
