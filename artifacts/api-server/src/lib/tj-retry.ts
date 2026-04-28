@@ -1,20 +1,33 @@
 /**
  * Shared TripJack API client with:
  *  - 2 automatic retries on transient / busy failures
+ *  - Token refresh + 1 retry on "Invalid Access" / "Token expired" responses
  *  - 15-second per-attempt timeout
  *  - "Server busy" detection inside a 200-OK body
  *  - Structured logging: context, attempt, status
  *
- * Authentication: direct "apikey" header — no Bearer token exchange.
+ * Authentication: Bearer token obtained via TripJack's /oms/v1/user/token endpoint.
+ * The token is cached in memory by tripjack-auth.ts; call bustTripJackToken() to
+ * force a refresh on the next attempt.
  */
 import axios from "axios";
 import {
   getTripJackHeaders,
-  bustTripJackToken,       // no-op — kept for compatibility
+  bustTripJackToken,
   extractTripJackError,
   TRIPJACK_BASE,
 } from "./tripjack-auth.js";
 import { logger } from "./logger.js";
+
+// ── Auth-error signals (body-level — after a 200 OK) ─────────────────────
+const AUTH_ERROR_PATTERNS = [
+  /invalid[\s_-]?access/i,
+  /token[\s_-]?expired/i,
+  /session[\s_-]?expired/i,
+  /authentication[\s_-]?failed/i,
+  /access[\s_-]?denied/i,
+  /unauthorized/i,
+];
 
 // ── Patterns that indicate a transient/busy TripJack error ────────────────
 const BUSY_PATTERNS = [
@@ -33,6 +46,11 @@ function isBodyBusy(data: unknown): boolean {
   return BUSY_PATTERNS.some((p) => p.test(msg));
 }
 
+function isBodyAuthError(data: unknown): boolean {
+  const msg = extractTripJackError(data, "");
+  return AUTH_ERROR_PATTERNS.some((p) => p.test(msg));
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -47,23 +65,27 @@ export interface TjPostOptions {
 }
 
 /**
- * POST to TripJack with automatic retry on transient failures.
+ * POST to TripJack with automatic retry on transient failures and token refresh
+ * on auth errors.
  *
  * Retry policy
  * ─────────────
  *  Attempt 1 → sends request
- *  Attempt 2 → waits 1 s, retries
- *  Attempt 3 → waits 2 s, retries
+ *  On body auth error  → bust token, re-fetch headers, retry ONCE immediately
+ *  Attempt 2 → waits 1 s, retries (transient errors only)
+ *  Attempt 3 → waits 2 s, retries (transient errors only)
  *
  * Retried automatically on:
  *  · HTTP 5xx / network error / ECONNABORTED / ETIMEDOUT
  *  · 200-OK body that contains a "busy / timeout / airline-error" message
+ *  · 200-OK body with "Invalid Access" / "Token expired" (token refresh, once)
  *
  * NOT retried on:
- *  · HTTP 401 / 403 (invalid API key — fix the key, retrying won't help)
+ *  · HTTP 401 / 403 (hard auth rejection from the HTTP layer)
  *  · HTTP 400 (bad request — fix the payload)
  *
- * Throws with `isAuthError = true` if the API key is missing or invalid (401/403).
+ * Throws with `isAuthError = true` if the API key is missing or the token
+ * fetch itself fails.
  * Throws with `isTransient = true` after all retries exhausted on a busy-type error.
  */
 export async function tjPostWithRetry(
@@ -74,24 +96,27 @@ export async function tjPostWithRetry(
   const { maxRetries = 2, timeoutMs = 15_000, context = path } = options;
   const totalAttempts = maxRetries + 1;
 
-  // ── Resolve headers once (API key doesn't change between retries) ─────────
-  let headers: Record<string, string>;
-  try {
-    headers = await getTripJackHeaders();
-  } catch (authErr: any) {
-    logger.error({ context, err: authErr.message }, "[tj-retry] API key missing");
-    const e = new Error(authErr.message) as any;
-    e.isAuthError = true;
-    throw e;
-  }
-
   console.log("[tj-retry] Calling Booking API:", path);
+
+  // Track whether we have already done a token-refresh retry so we only do it once.
+  let tokenRefreshUsed = false;
 
   for (let attempt = 1; attempt <= totalAttempts; attempt++) {
     if (attempt > 1) {
       const delay = (attempt - 1) * 1000;
       logger.info({ context, attempt, delay }, `[tj-retry] retrying after ${delay}ms`);
       await sleep(delay);
+    }
+
+    // ── Resolve fresh headers each attempt (picks up busted token) ────────
+    let headers: Record<string, string>;
+    try {
+      headers = await getTripJackHeaders();
+    } catch (authErr: any) {
+      logger.error({ context, err: authErr.message }, "[tj-retry] token fetch failed");
+      const e = new Error(authErr.message) as any;
+      e.isAuthError = true;
+      throw e;
     }
 
     const url = `${TRIPJACK_BASE}${path}`;
@@ -107,12 +132,24 @@ export async function tjPostWithRetry(
       const errCode    = err.code ?? "?";
       const errBody    = err.response?.data;
 
-      // 401 / 403 → invalid API key — non-retryable
+      // 401 / 403 → hard auth rejection from HTTP layer — bust cache and try once
       if (httpStatus === 401 || httpStatus === 403) {
+        if (!tokenRefreshUsed) {
+          tokenRefreshUsed = true;
+          bustTripJackToken();
+          logger.warn(
+            { context, attempt, status: httpStatus },
+            "[tj-retry] HTTP auth error — busting token and retrying",
+          );
+          // Don't consume one of the regular retry slots — loop immediately
+          attempt--; // will be incremented by for-loop
+          continue;
+        }
+
         const reason = errBody ? extractTripJackError(errBody, "Invalid API key") : "Invalid API key";
         logger.error(
           { context, attempt, status: httpStatus, reason },
-          "[tj-retry] auth rejected — check TRIPJACK_API_KEY and IP whitelist",
+          "[tj-retry] auth rejected after token refresh — check TRIPJACK_API_KEY and IP whitelist",
         );
         const e = new Error(
           `TripJack authentication failed: ${reason}. ` +
@@ -155,6 +192,17 @@ export async function tjPostWithRetry(
       { context, attempt, traceId, resultIndex, pnr: pnr ?? undefined },
       "[tj-retry] response received",
     );
+
+    // ── Detect "Invalid Access" / "Token expired" in 200-OK body ────────
+    if (isBodyAuthError(data) && !tokenRefreshUsed) {
+      tokenRefreshUsed = true;
+      bustTripJackToken();
+      const msg = extractTripJackError(data, "auth error");
+      logger.warn({ context, attempt, msg }, "[tj-retry] body auth error — busting token and retrying");
+      // Retry immediately without consuming a regular retry slot
+      attempt--;
+      continue;
+    }
 
     // ── Detect "server busy" hidden inside a 200-OK body ────────────────
     if (data?.status?.success === false && isBodyBusy(data)) {
