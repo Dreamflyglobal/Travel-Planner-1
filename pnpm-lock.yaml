@@ -4,60 +4,6 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-catalogs:
-  default:
-    '@tailwindcss/vite':
-      specifier: ^4.2.4
-      version: 4.2.4
-    '@tanstack/react-query':
-      specifier: ^5.100.5
-      version: 5.100.5
-    '@types/node':
-      specifier: ^22.19.17
-      version: 22.19.17
-    '@types/react':
-      specifier: ^19.2.14
-      version: 19.2.14
-    '@types/react-dom':
-      specifier: ^19.2.3
-      version: 19.2.3
-    '@vitejs/plugin-react':
-      specifier: ^4.7.0
-      version: 4.7.0
-    class-variance-authority:
-      specifier: ^0.7.1
-      version: 0.7.1
-    clsx:
-      specifier: ^2.1.1
-      version: 2.1.1
-    drizzle-orm:
-      specifier: ^0.43.1
-      version: 0.43.1
-    framer-motion:
-      specifier: ^11.18.2
-      version: 11.18.2
-    lucide-react:
-      specifier: ^0.503.0
-      version: 0.503.0
-    react:
-      specifier: ^19.2.5
-      version: 19.2.5
-    react-dom:
-      specifier: ^19.2.5
-      version: 19.2.5
-    tailwind-merge:
-      specifier: ^3.5.0
-      version: 3.5.0
-    tailwindcss:
-      specifier: ^4.2.4
-      version: 4.2.4
-    vite:
-      specifier: ^6.4.2
-      version: 6.4.2
-    zod:
-      specifier: ^3.25.76
-      version: 3.25.76
-
 importers:
 
   .: {}
@@ -83,7 +29,7 @@ importers:
         specifier: ^2
         version: 2.8.6
       drizzle-orm:
-        specifier: 'catalog:'
+        specifier: ^0.43.1
         version: 0.43.1(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(pg@8.20.0)
       express:
         specifier: ^5
@@ -132,7 +78,7 @@ importers:
         specifier: ^9.0.10
         version: 9.0.10
       '@types/node':
-        specifier: 'catalog:'
+        specifier: ^22.19.17
         version: 22.19.17
       '@types/nodemailer':
         specifier: ^8.0.0
@@ -240,28 +186,28 @@ importers:
         specifier: ^1.2.8
         version: 1.2.8(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@tailwindcss/vite':
-        specifier: 'catalog:'
+        specifier: ^4.2.4
         version: 4.2.4(vite@6.4.2(@types/node@22.19.17)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.3))
       '@types/node':
-        specifier: 'catalog:'
+        specifier: ^22.19.17
         version: 22.19.17
       '@types/react':
-        specifier: 'catalog:'
+        specifier: ^19.2.14
         version: 19.2.14
       '@types/react-dom':
-        specifier: 'catalog:'
+        specifier: ^19.2.3
         version: 19.2.3(@types/react@19.2.14)
       '@vitejs/plugin-react':
-        specifier: 'catalog:'
+        specifier: ^4.7.0
         version: 4.7.0(vite@6.4.2(@types/node@22.19.17)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.3))
       chokidar:
         specifier: ^4.0.3
         version: 4.0.3
       class-variance-authority:
-        specifier: 'catalog:'
+        specifier: ^0.7.1
         version: 0.7.1
       clsx:
-        specifier: 'catalog:'
+        specifier: ^2.1.1
         version: 2.1.1
       cmdk:
         specifier: ^1.1.1
@@ -276,25 +222,25 @@ importers:
         specifier: ^3.3.3
         version: 3.3.3
       framer-motion:
-        specifier: 'catalog:'
+        specifier: ^11.18.2
         version: 11.18.2(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       input-otp:
         specifier: ^1.4.2
         version: 1.4.2(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       lucide-react:
-        specifier: 'catalog:'
+        specifier: ^0.503.0
         version: 0.503.0(react@19.2.5)
       next-themes:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       react:
-        specifier: 'catalog:'
+        specifier: ^19.2.5
         version: 19.2.5
       react-day-picker:
         specifier: ^9.11.1
         version: 9.14.0(react@19.2.5)
       react-dom:
-        specifier: 'catalog:'
+        specifier: ^19.2.5
         version: 19.2.5(react@19.2.5)
       react-hook-form:
         specifier: ^7.66.0
@@ -309,10 +255,10 @@ importers:
         specifier: ^2.0.7
         version: 2.0.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       tailwind-merge:
-        specifier: 'catalog:'
+        specifier: ^3.5.0
         version: 3.5.0
       tailwindcss:
-        specifier: 'catalog:'
+        specifier: ^4.2.4
         version: 4.2.4
       tailwindcss-animate:
         specifier: ^1.0.7
@@ -324,10 +270,10 @@ importers:
         specifier: ^1.1.2
         version: 1.1.2(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       vite:
-        specifier: 'catalog:'
+        specifier: ^6.4.2
         version: 6.4.2(@types/node@22.19.17)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.3)
       zod:
-        specifier: 'catalog:'
+        specifier: ^3.25.76
         version: 3.25.76
 
   artifacts/travel-booking:
@@ -430,31 +376,31 @@ importers:
         specifier: ^0.5.15
         version: 0.5.19(tailwindcss@4.2.4)
       '@tailwindcss/vite':
-        specifier: 'catalog:'
+        specifier: ^4.2.4
         version: 4.2.4(vite@6.4.2(@types/node@22.19.17)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.3))
       '@tanstack/react-query':
-        specifier: 'catalog:'
+        specifier: ^5.100.5
         version: 5.100.5(react@19.2.5)
       '@types/node':
-        specifier: 'catalog:'
+        specifier: ^22.19.17
         version: 22.19.17
       '@types/react':
-        specifier: 'catalog:'
+        specifier: ^19.2.14
         version: 19.2.14
       '@types/react-dom':
-        specifier: 'catalog:'
+        specifier: ^19.2.3
         version: 19.2.3(@types/react@19.2.14)
       '@vitejs/plugin-react':
-        specifier: 'catalog:'
+        specifier: ^4.7.0
         version: 4.7.0(vite@6.4.2(@types/node@22.19.17)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.3))
       '@workspace/api-client-react':
         specifier: workspace:*
         version: link:../../lib/api-client-react
       class-variance-authority:
-        specifier: 'catalog:'
+        specifier: ^0.7.1
         version: 0.7.1
       clsx:
-        specifier: 'catalog:'
+        specifier: ^2.1.1
         version: 2.1.1
       cmdk:
         specifier: ^1.1.1
@@ -466,25 +412,25 @@ importers:
         specifier: ^8.6.0
         version: 8.6.0(react@19.2.5)
       framer-motion:
-        specifier: 'catalog:'
+        specifier: ^11.18.2
         version: 11.18.2(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       input-otp:
         specifier: ^1.4.2
         version: 1.4.2(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       lucide-react:
-        specifier: 'catalog:'
+        specifier: ^0.503.0
         version: 0.503.0(react@19.2.5)
       next-themes:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       react:
-        specifier: 'catalog:'
+        specifier: ^19.2.5
         version: 19.2.5
       react-day-picker:
         specifier: ^9.11.1
         version: 9.14.0(react@19.2.5)
       react-dom:
-        specifier: 'catalog:'
+        specifier: ^19.2.5
         version: 19.2.5(react@19.2.5)
       react-hook-form:
         specifier: ^7.55.0
@@ -502,10 +448,10 @@ importers:
         specifier: ^2.0.7
         version: 2.0.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       tailwind-merge:
-        specifier: 'catalog:'
+        specifier: ^3.5.0
         version: 3.5.0
       tailwindcss:
-        specifier: 'catalog:'
+        specifier: ^4.2.4
         version: 4.2.4
       tw-animate-css:
         specifier: ^1.4.0
@@ -514,19 +460,19 @@ importers:
         specifier: ^1.1.2
         version: 1.1.2(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       vite:
-        specifier: 'catalog:'
+        specifier: ^6.4.2
         version: 6.4.2(@types/node@22.19.17)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.3)
       wouter:
         specifier: ^3.3.5
         version: 3.9.0(react@19.2.5)
       zod:
-        specifier: 'catalog:'
+        specifier: ^3.25.76
         version: 3.25.76
 
   lib/api-client-react:
     dependencies:
       '@tanstack/react-query':
-        specifier: 'catalog:'
+        specifier: ^5.100.5
         version: 5.100.5(react@19.2.5)
       react:
         specifier: '>=18'
@@ -541,13 +487,13 @@ importers:
   lib/api-zod:
     dependencies:
       zod:
-        specifier: 'catalog:'
+        specifier: ^3.25.76
         version: 3.25.76
 
   lib/db:
     dependencies:
       drizzle-orm:
-        specifier: 'catalog:'
+        specifier: ^0.43.1
         version: 0.43.1(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(pg@8.20.0)
       drizzle-zod:
         specifier: ^0.8.3
@@ -556,11 +502,11 @@ importers:
         specifier: ^8.20.0
         version: 8.20.0
       zod:
-        specifier: 'catalog:'
+        specifier: ^3.25.76
         version: 3.25.76
     devDependencies:
       '@types/node':
-        specifier: 'catalog:'
+        specifier: ^22.19.17
         version: 22.19.17
       '@types/pg':
         specifier: ^8.18.0
