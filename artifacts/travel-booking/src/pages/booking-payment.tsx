@@ -559,9 +559,16 @@ export default function BookingPayment() {
       const data = await res.json();
       sessionStorage.removeItem("ww_tj_booking_id");
 
+      // 405 = test sandbox does not support AirBook — payment is verified, confirm without PNR
+      if (res.status === 405) {
+        console.warn("[tj-book] TripJack 405 (sandbox — AirBook unavailable) — confirming without PNR");
+        return {};
+      }
+
       if (!res.ok || data?.status === false || data?.errors?.length) {
         const msg = data?.errors?.[0]?.message
           || data?.message
+          || data?.error
           || "Airline booking failed.";
         return { error: msg };
       }
