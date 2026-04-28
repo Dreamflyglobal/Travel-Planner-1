@@ -120,6 +120,17 @@ const EMPTY_REVEAL: Record<FieldKey, boolean> = {
   tboApiKey: false, paymentApiKey: false, paymentApiSecret: false,
 };
 
+function getAdminHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  const headers: Record<string, string> = { ...extra };
+  try {
+    const token = typeof window !== "undefined"
+      ? window.localStorage.getItem("jwt_token")
+      : null;
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+  } catch { /* ignore */ }
+  return headers;
+}
+
 export function ApiKeysSection() {
   const { toast } = useToast();
   const [loading,    setLoading]    = useState(true);
@@ -137,6 +148,7 @@ export function ApiKeysSection() {
     try {
       const res = await fetch("/api/admin/api-keys", {
         credentials: "include",
+        headers:     getAdminHeaders(),
       });
       if (!res.ok) {
         if (res.status === 401 || res.status === 403) {
@@ -181,7 +193,7 @@ export function ApiKeysSection() {
       const res = await fetch("/api/admin/api-keys", {
         method:      "POST",
         credentials: "include",
-        headers:     { "Content-Type": "application/json" },
+        headers:     getAdminHeaders({ "Content-Type": "application/json" }),
         body:        JSON.stringify(payload),
       });
       if (!res.ok) {
@@ -218,7 +230,7 @@ export function ApiKeysSection() {
       const res  = await fetch(url, {
         method:      "POST",
         credentials: "include",
-        headers:     { "Content-Type": "application/json" },
+        headers:     getAdminHeaders({ "Content-Type": "application/json" }),
         body:        JSON.stringify(body),
       });
       const json = await res.json().catch(() => ({}));
