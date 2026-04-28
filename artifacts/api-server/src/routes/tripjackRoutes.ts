@@ -41,8 +41,8 @@ async function handleFareQuote(req: any, res: any): Promise<void> {
   console.log("FareQuote Body:", JSON.stringify(fareQuoteBody));
 
   try {
-    // TripJack uses hyphenated path: air-fare-quote (same convention as air-search-all)
-    const data = await tjPostWithRetry("/fms/v1/air-fare-quote", fareQuoteBody, {
+    // TripJack fareQuote endpoint — path confirmed by 405 (exists) vs 404 (doesn't exist)
+    const data = await tjPostWithRetry("/fms/v1/air/farequote", fareQuoteBody, {
       context:    "fareQuote",
       timeoutMs:  15_000,
       maxRetries: 2,
