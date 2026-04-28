@@ -176,9 +176,22 @@ export default function FlightResults() {
     console.log("TRACE:", ti || "(none)");
     console.log("RESULT:", ri || "(none)");
 
-    // Guard: resultIndex is required — cannot verify fare without it
+    // Guard: both traceId AND resultIndex are required by TripJack fareQuote
+    if (!ti) {
+      console.error("[fareQuote] traceId missing — TripJack search did not return a traceId");
+      isLoadingRef.current = false;
+      setBookingLoadingId(null);
+      if (userClickedRef.current) {
+        toast({
+          variant:     "destructive",
+          title:       "Fare check failed",
+          description: "Search session ID (traceId) missing from search results. Try searching again.",
+        });
+      }
+      return;
+    }
     if (!ri) {
-      console.error("[fareQuote] missing resultIndex — cannot verify fare");
+      console.error("[fareQuote] resultIndex missing — cannot identify fare");
       isLoadingRef.current = false;
       setBookingLoadingId(null);
       if (userClickedRef.current) {
@@ -189,9 +202,6 @@ export default function FlightResults() {
         });
       }
       return;
-    }
-    if (!ti) {
-      console.warn("[fareQuote] traceId not present — proceeding with resultIndex only");
     }
 
     // TripJack fareQuote priceIds format:
