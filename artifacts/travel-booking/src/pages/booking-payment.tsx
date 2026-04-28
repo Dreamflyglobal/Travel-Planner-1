@@ -880,30 +880,102 @@ export default function BookingPayment() {
           } catch { bookingUserId = user?.id || "guest"; }
         }
 
-        let booking: any;
-        if (session.type === "flight") booking = buildFlightBooking(session as FlightBookingSession, paymentId, bookingRef, bookingUserId);
-        else if (session.type === "bus") booking = buildBusBooking(session as BusBookingSession, paymentId, bookingRef, bookingUserId);
-        else booking = buildHotelBooking(session as HotelBookingSession, paymentId, bookingRef, bookingUserId);
+        // ── Flight: one backend call handles TJ booking + DB save + auto-refund ──
+        let flightBookResult: {
+          success: boolean; duplicate?: boolean;
+          pnr?: string; tjBookingRef?: string;
+          error?: string; refundInitiated?: boolean;
+        } | null = null;
 
-        try {
-          await createBooking.mutateAsync({ data: booking });
-          console.log("Booking saved");
-        } catch (err) {
-          console.error("Booking save failed:", err);
-          // Payment was collected but our DB failed — attempt an automatic refund.
-          const refundResult = await attemptRefund(paymentId, totalAfterCoupon, "booking_save_failed");
-          console.log("[refund] result:", refundResult);
-          setProcessing(false);
-          const refundMsg = refundResult.initiated
-            ? `Payment successful but booking failed. Refund initiated — allow 5–7 business days. Payment ID: ${paymentId}`
-            : `Payment successful but booking failed. Refund will be processed manually. Payment ID: ${paymentId} — please contact support.`;
-          setPaymentError(refundMsg);
-          toast({
-            title: "Refund Initiated",
-            description: `₹${totalAfterCoupon.toLocaleString("en-IN")} will be refunded to your account.`,
-            duration: 12000,
-          });
-          return;
+        if (session.type === "flight") {
+          const fs = session as FlightBookingSession;
+          // Build the full details blob (same shape as before, for the DB record)
+          const flightMeta = buildFlightBooking(fs, paymentId, bookingRef, bookingUserId);
+
+          // Pull fareData from sessionStorage (set during farequote step)
+          let traceId: string | undefined;
+          let resultIndex: string | undefined;
+          try {
+            const fqStr = sessionStorage.getItem("ww_tj_farequote");
+            if (fqStr) {
+              const fq = JSON.parse(fqStr);
+              traceId     = fq?.data?.traceId ?? fq?.traceId ?? undefined;
+              resultIndex = fq?.data?.results?.[0]?.resultIndex
+                         ?? fq?.data?.resultIndex
+                         ?? undefined;
+            }
+          } catch { /* use undefined */ }
+
+          const tjBookingId = sessionStorage.getItem("ww_tj_booking_id") ?? "";
+
+          try {
+            const apiRes = await fetch("/api/book-flight", {
+              method:  "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                paymentId,
+                amount:   totalAfterCoupon,
+                fareData: { bookingId: tjBookingId, traceId, resultIndex },
+                passengers: fs.passengers.map((p, idx) => ({
+                  name:        p.name,
+                  email:       p.email,
+                  phone:       p.phone,
+                  gender:      p.gender,
+                  seatCode:    fs.selectedSeats[idx] || undefined,
+                  baggageCode: fs.extraBaggageCode   || undefined,
+                })),
+                bookingMeta: {
+                  bookingRef,
+                  passengerName:  flightMeta.passengerName,
+                  passengerEmail: flightMeta.passengerEmail,
+                  passengerPhone: flightMeta.passengerPhone,
+                  travelDate:     flightMeta.travelDate,
+                  totalPrice:     totalAfterCoupon,
+                  details:        flightMeta.details,
+                },
+              }),
+            });
+            flightBookResult = await apiRes.json();
+          } catch {
+            flightBookResult = { success: false, error: "Could not reach booking server." };
+          }
+
+          sessionStorage.removeItem("ww_tj_booking_id");
+
+          if (!flightBookResult?.success && !flightBookResult?.duplicate) {
+            setProcessing(false);
+            const refundMsg = flightBookResult?.refundInitiated
+              ? `Booking failed: ${flightBookResult?.error}. Refund initiated — allow 5–7 business days. Payment ID: ${paymentId}`
+              : `Booking failed: ${flightBookResult?.error}. Please contact support for a refund. Payment ID: ${paymentId}`;
+            setPaymentError(refundMsg);
+            toast({ variant: "destructive", title: "Booking Failed", description: flightBookResult?.error, duration: 8000 });
+            return;
+          }
+        } else {
+          // ── Bus / Hotel: existing flow (createBooking → DB save) ────────────
+          const booking = session.type === "bus"
+            ? buildBusBooking(session as BusBookingSession, paymentId, bookingRef, bookingUserId)
+            : buildHotelBooking(session as HotelBookingSession, paymentId, bookingRef, bookingUserId);
+
+          try {
+            await createBooking.mutateAsync({ data: booking });
+            console.log("Booking saved");
+          } catch (err) {
+            console.error("Booking save failed:", err);
+            const refundResult = await attemptRefund(paymentId, totalAfterCoupon, "booking_save_failed");
+            console.log("[refund] result:", refundResult);
+            setProcessing(false);
+            const refundMsg = refundResult.initiated
+              ? `Payment successful but booking failed. Refund initiated — allow 5–7 business days. Payment ID: ${paymentId}`
+              : `Payment successful but booking failed. Refund will be processed manually. Payment ID: ${paymentId} — please contact support.`;
+            setPaymentError(refundMsg);
+            toast({
+              title:       "Refund Initiated",
+              description: `₹${totalAfterCoupon.toLocaleString("en-IN")} will be refunded to your account.`,
+              duration: 12000,
+            });
+            return;
+          }
         }
 
         if (appliedCoupon) recordCouponUsage(appliedCoupon.code, custPhone);
@@ -998,19 +1070,9 @@ export default function BookingPayment() {
           flightBaggageKg:  session.type === "flight" ? (session as FlightBookingSession).extraBaggageKg   : undefined,
           flightBaggageCost:session.type === "flight" ? (session as FlightBookingSession).extraBaggageCost : undefined,
         };
-        const rzTjResult = session.type === "flight" ? await attemptTjBook(session as FlightBookingSession) : undefined;
-        if (rzTjResult?.error) {
-          const refundResult = await attemptRefund(paymentId, totalAfterCoupon, "tj_book_failed");
-          setProcessing(false);
-          const refundMsg = refundResult.initiated
-            ? `Booking failed: ${rzTjResult.error}. Refund initiated — allow 5–7 business days. Payment ID: ${paymentId}`
-            : `Booking failed: ${rzTjResult.error}. Please contact support for a refund. Payment ID: ${paymentId}`;
-          setPaymentError(refundMsg);
-          toast({ variant: "destructive", title: "Booking Failed", description: rzTjResult.error, duration: 8000 });
-          return;
-        }
-        if (rzTjResult?.pnr)          (lastSuccessful as any).tjPnr        = rzTjResult.pnr;
-        if (rzTjResult?.tjBookingRef) (lastSuccessful as any).tjBookingRef = rzTjResult.tjBookingRef;
+        // PNR and TJ booking ref come from the backend response (flight only)
+        if (flightBookResult?.pnr)          (lastSuccessful as any).tjPnr        = flightBookResult.pnr;
+        if (flightBookResult?.tjBookingRef) (lastSuccessful as any).tjBookingRef = flightBookResult.tjBookingRef;
         localStorage.setItem("lastSuccessfulBooking", JSON.stringify(lastSuccessful));
         paymentDoneRef.current = true;
         clearBookingSession();

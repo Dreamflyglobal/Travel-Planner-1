@@ -594,6 +594,7 @@ export const handlers = [
   http.post('/api/fareQuote',    () => passthrough()),
   http.post('/api/ssr',          () => passthrough()),
   http.post('/api/book',         () => passthrough()),
+  http.post('/api/book-flight',  () => passthrough()),
   http.post('/api/tj-search',    () => passthrough()),
   http.post('/api/tj-farequote', () => passthrough()),
   http.post('/api/tj-ssr',       () => passthrough()),
