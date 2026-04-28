@@ -1,0 +1,17 @@
+{
+  "name": "Dream Fly Global",
+  "short_name": "Dream Fly",
+  "description": "Book flights, hotels, buses and holiday packages at the best prices.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1d4ed8",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

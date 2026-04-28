@@ -94,7 +94,7 @@ export async function openRazorpayCheckout(opts: RazorpayPaymentOptions) {
     amount:      order.amount,           // paise (from Razorpay API)
     currency:    order.currency || "INR",
     name:        APP_NAME,
-    description: opts.description || "Travel Booking",
+    description: opts.description || APP_NAME,
     image:       "",
     order_id:    order.id,               // required — links payment to order
     prefill: {
