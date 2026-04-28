@@ -247,10 +247,26 @@ export default function FlightBooking() {
       const fqCached: any = JSON.parse(prefetchedStr!);
       console.info("[fareQuote] using pre-fetched data | bookingId:", resolvedBookingId || "(non-TJ fare)", "| isTjFare:", isTjFare);
 
-      // Fallback fare (fareQuote was unavailable at selection) — skip price check,
-      // use fareKey as bookingId, and proceed straight to SSR.
-      const isFallbackFare = !!fqCached?.fallback || !!fqCached?.nonTj;
-      if (!isFallbackFare) {
+      // Stale fallback data (fareQuote was bypassed) — reject and redirect
+      if (fqCached?.fallback) {
+        console.error("[fareQuote] stale fallback data found — invalid booking session, redirecting");
+        sessionStorage.removeItem("ww_tj_farequote");
+        sessionStorage.removeItem("ww_tj_booking_id");
+        sessionStorage.removeItem("ww_tj_farequote_key");
+        toast({
+          variant:     "destructive",
+          title:       "Fare data expired",
+          description: "Could not verify this fare. Please select the flight again.",
+        });
+        setSubmitting(false);
+        setSubmitStep("");
+        setLocation("/flights");
+        return;
+      }
+
+      // Non-TJ fare (synthetic) — skip price check, proceed directly
+      const isNonTjFare = !!fqCached?.nonTj;
+      if (!isNonTjFare) {
         // Real fareQuote data — check whether price changed
         const tf: number = fqCached?.data?.totalPriceInfo?.totalFareDetail?.fC?.TF ?? 0;
         if (tf > 0 && Math.abs(tf - rawPrice * travelers) > 1) {
@@ -263,7 +279,7 @@ export default function FlightBooking() {
           return;
         }
       }
-      // Price consistent (or fallback) — skip network block; SSR will use resolvedBookingId
+      // Price consistent — skip network block; SSR will use resolvedBookingId
     } else {
       // ── No cached fareQuote — session was cleared (page refresh / direct URL) ──
       // Try to recover using the flight data saved to localStorage at selection time.
@@ -323,25 +339,42 @@ export default function FlightBooking() {
               return;
             }
           } else {
-            // fareQuote still failed — proceed without verification
-            console.warn("[fareQuote] retry failed — proceeding without fareQuote");
-            resolvedBookingId = fareKey;
-            sessionStorage.setItem("ww_tj_farequote",     JSON.stringify({ fallback: true }));
-            sessionStorage.setItem("ww_tj_booking_id",    fareKey);
-            sessionStorage.setItem("ww_tj_farequote_key", fareKey);
+            // fareQuote retry failed — invalid booking session
+            console.error("[fareQuote] retry failed — invalid booking session");
+            toast({
+              variant:     "destructive",
+              title:       "Cannot verify fare",
+              description: "Failed to verify this fare. Please select the flight again.",
+            });
+            setSubmitting(false);
+            setSubmitStep("");
+            setLocation("/flights");
+            return;
           }
         } else {
-          // No resultIndex stored — proceed without fareQuote
-          resolvedBookingId = fareKey;
-          sessionStorage.setItem("ww_tj_farequote",     JSON.stringify({ fallback: true }));
-          sessionStorage.setItem("ww_tj_booking_id",    fareKey);
-          sessionStorage.setItem("ww_tj_farequote_key", fareKey);
+          // No resultIndex stored — cannot verify fare
+          console.error("[fareQuote] missing resultIndex in stored flight — invalid booking session");
+          toast({
+            variant:     "destructive",
+            title:       "Invalid booking session",
+            description: "Fare data is missing. Please select the flight again.",
+          });
+          setSubmitting(false);
+          setSubmitStep("");
+          setLocation("/flights");
+          return;
         }
-      } catch {
-        resolvedBookingId = fareKey;
-        sessionStorage.setItem("ww_tj_farequote",     JSON.stringify({ fallback: true }));
-        sessionStorage.setItem("ww_tj_booking_id",    fareKey);
-        sessionStorage.setItem("ww_tj_farequote_key", fareKey);
+      } catch (err) {
+        console.error("[fareQuote] unexpected error during retry:", err);
+        toast({
+          variant:     "destructive",
+          title:       "Booking error",
+          description: "An unexpected error occurred. Please try again.",
+        });
+        setSubmitting(false);
+        setSubmitStep("");
+        setLocation("/flights");
+        return;
       }
     }
 

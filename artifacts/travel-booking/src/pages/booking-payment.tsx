@@ -559,12 +559,6 @@ export default function BookingPayment() {
       const data = await res.json();
       sessionStorage.removeItem("ww_tj_booking_id");
 
-      // 405 = test sandbox does not support AirBook — payment is verified, confirm without PNR
-      if (res.status === 405) {
-        console.warn("[tj-book] TripJack 405 (sandbox — AirBook unavailable) — confirming without PNR");
-        return {};
-      }
-
       if (!res.ok || data?.status === false || data?.errors?.length) {
         const msg = data?.errors?.[0]?.message
           || data?.message
@@ -906,13 +900,14 @@ export default function BookingPayment() {
           // Pull fareData from sessionStorage (set during farequote step)
           let traceId: string | undefined;
           let resultIndex: string | undefined;
+          let fqData: any = null;
           try {
             const fqStr = sessionStorage.getItem("ww_tj_farequote");
             if (fqStr) {
-              const fq = JSON.parse(fqStr);
-              traceId     = fq?.data?.traceId ?? fq?.traceId ?? undefined;
-              resultIndex = fq?.data?.results?.[0]?.resultIndex
-                         ?? fq?.data?.resultIndex
+              fqData = JSON.parse(fqStr);
+              traceId     = fqData?.data?.traceId ?? fqData?.traceId ?? undefined;
+              resultIndex = fqData?.data?.results?.[0]?.resultIndex
+                         ?? fqData?.data?.resultIndex
                          ?? undefined;
             }
           } catch { /* use undefined */ }
@@ -923,12 +918,22 @@ export default function BookingPayment() {
                            ?? "";
           const isTjFare = sessionStorage.getItem("ww_is_tj_fare") !== "0";
 
+          console.log("TRACE:", traceId ?? "(none)");
+          console.log("RESULT:", resultIndex ?? "(none)");
           console.info(
             "[book-flight] bookingId:", tjBookingId || "(non-TJ fare)",
             "| traceId:", traceId ?? "(none)",
             "| resultIndex:", resultIndex ?? "(none)",
             "| isTjFare:", isTjFare,
           );
+
+          // Guard: reject stale fallback fare data — fare was never verified
+          if (isTjFare && fqData?.fallback) {
+            setProcessing(false);
+            setPaymentError("Invalid booking session: fare not verified. Please select your flight again.");
+            toast({ variant: "destructive", title: "Invalid Booking Session", description: "Please go back and select your flight again.", duration: 8000 });
+            return;
+          }
 
           // Guard: TJ fare bookingId must be present (session may have expired)
           if (isTjFare && !tjBookingId) {

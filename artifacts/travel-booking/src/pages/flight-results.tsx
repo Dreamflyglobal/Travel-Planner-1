@@ -173,22 +173,21 @@ export default function FlightResults() {
     const ri       = resultIndex   || "";
     const ti       = searchTraceId || "";
 
-    // Fallback: proceed to booking without a fareQuote result.
-    // Store { fallback: true } (not "") so the booking page's hasPrefetch check
-    // passes and skips the price-change dialog without showing "Session expired".
-    const proceedToBookingFallback = () => {
-      sessionStorage.setItem("ww_tj_farequote",     JSON.stringify({ fallback: true }));
-      sessionStorage.setItem("ww_tj_booking_id",    fareKey);
-      sessionStorage.setItem("ww_tj_farequote_key", fareKey);
+    console.log("TRACE:", ti || "(none)");
+    console.log("RESULT:", ri || "(none)");
+
+    // Guard: resultIndex is required by TripJack — cannot verify fare without it
+    if (!ri) {
+      console.error("[fareQuote/select] missing resultIndex — cannot verify fare");
       isLoadingRef.current = false;
       setBookingLoadingId(null);
-      setLocation(`/booking/flight?${urlParams.toString()}`);
-    };
-
-    // Guard: resultIndex is required by TripJack — fall back if missing
-    if (!ri) {
-      console.warn("[fareQuote/select] missing resultIndex — proceeding without fareQuote");
-      proceedToBookingFallback();
+      if (userClickedRef.current) {
+        toast({
+          variant:     "destructive",
+          title:       "Invalid flight data",
+          description: "Could not retrieve fare details. Please select the flight again.",
+        });
+      }
       return;
     }
 
@@ -202,7 +201,7 @@ export default function FlightResults() {
     console.log("FareQuote Body:", { priceIds: [{ traceId: ti, resultIndex: ri }] });
     console.info(
       "[fareQuote/select] fareKey:", fareKey,
-      "| resultIndex:", ri || "(none)",
+      "| resultIndex:", ri,
       "| traceId:", ti || "(none)",
     );
 
@@ -323,9 +322,14 @@ export default function FlightResults() {
         });
         return;
       }
-      // Non-transient HTTP error (e.g. 405 on test sandbox) — proceed to booking
-      console.warn("[fareQuote/select] non-transient HTTP error", res!.status, "— proceeding without fareQuote");
-      proceedToBookingFallback();
+      // Non-transient HTTP error — stop the flow, require retry
+      console.warn("[fareQuote/select] non-transient HTTP error", res!.status, "— stopping flow");
+      toast({
+        variant:     "destructive",
+        title:       "Cannot verify fare",
+        description: "The airline returned an error verifying this fare. Please try again.",
+        action:      <ToastAction altText="Retry" onClick={manualRetry}>Retry</ToastAction>,
+      });
       return;
     }
 
@@ -374,9 +378,12 @@ export default function FlightResults() {
       if (!userClickedRef.current) return;
 
       if (isAuthError) {
-        // Auth/configuration error — proceed to booking without fareQuote
-        console.warn("[fareQuote/select] auth error from TripJack — proceeding without fareQuote");
-        proceedToBookingFallback();
+        console.error("[fareQuote/select] auth/config error from TripJack — stopping flow");
+        toast({
+          variant:     "destructive",
+          title:       "Fare verification failed",
+          description: "Could not authenticate with the airline. Please contact support.",
+        });
         return;
       }
 

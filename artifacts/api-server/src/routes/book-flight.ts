@@ -327,8 +327,7 @@ router.post("/book-flight", async (req, res): Promise<void> => {
     "[book-flight] STEP 2+3: calling TripJack /fms/v1/air/book (with retry)",
   );
 
-  let tjSuccess        = false;
-  let tjSandboxPending = false;   // true when TripJack returned 405 (test sandbox)
+  let tjSuccess    = false;
   let pnr: string | undefined;
   let tjBookingRef: string | undefined;
   let tjError: string | undefined;
@@ -350,24 +349,11 @@ router.post("/book-flight", async (req, res): Promise<void> => {
       logger.info({ paymentId, pnr, tjBookingRef }, "[book-flight] TripJack AirBook SUCCESS");
     }
   } catch (err: any) {
-    const httpStatus = (err?.status ?? err?.response?.status ?? 0) as number;
-    const errBody    = err?.response?.data;
-
-    if (httpStatus === 405) {
-      // 405 = Method Not Allowed — the test sandbox does not support /fms/v1/air/book.
-      // Payment is already Razorpay-verified; confirm booking without PNR and skip the refund.
-      tjSuccess        = true;
-      tjSandboxPending = true;
-      logger.warn(
-        { paymentId },
-        "[book-flight] TripJack returned 405 (sandbox — AirBook unavailable) — confirming without PNR",
-      );
-    } else {
-      tjError = err.isTransient
-        ? "Temporary airline issue. Please try again."
-        : (errBody ? extractTripJackError(errBody, err.message) : err.message);
-      logger.error({ paymentId, error: tjError }, "[book-flight] TripJack AirBook failed after retries");
-    }
+    const errBody = err?.response?.data;
+    tjError = err.isTransient
+      ? "Temporary airline issue. Please try again."
+      : (errBody ? extractTripJackError(errBody, err.message) : err.message);
+    logger.error({ paymentId, error: tjError }, "[book-flight] TripJack AirBook failed after retries");
   }
 
   // ── STEP 4: Persist booking ──────────────────────────────────────────────
@@ -379,7 +365,6 @@ router.post("/book-flight", async (req, res): Promise<void> => {
     tjBookingRef: tjBookingRef ?? null,
     paymentId,
     bookingRef,
-    ...(tjSandboxPending ? { tjNote: "AirBook pending — test sandbox (405)" } : {}),
     ...(tjSuccess ? {} : { tjBookingFailed: tjError ?? "unknown" }),
   };
 
