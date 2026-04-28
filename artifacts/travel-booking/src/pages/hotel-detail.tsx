@@ -145,6 +145,14 @@ export default function HotelDetail() {
   const savings         = (agentMarkupFlat !== null && normalMarkup > agentMarkupFlat)
     ? (normalMarkup - agentMarkupFlat) * nights : null;
 
+  // Normalise image list — backend may return imageUrl / photos / images depending on source
+  const PLACEHOLDER = "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&q=80";
+  const hotelImages: string[] =
+    (hotel as any).images?.length   ? (hotel as any).images  :
+    (hotel as any).photos?.length   ? (hotel as any).photos  :
+    (hotel as any).imageUrl         ? [(hotel as any).imageUrl] :
+    [PLACEHOLDER];
+
   function handleBookNow() {
     const bookParams = new URLSearchParams({
       hotelId:      String(hotel!.id),
@@ -160,7 +168,7 @@ export default function HotelDetail() {
       markup:       String(effectiveMarkup),
       normalMarkup: String(normalMarkup),
       agentSavings: String(savings ?? 0),
-      image:        encodeURIComponent(hotel!.images[0] ?? ""),
+      image:        encodeURIComponent(hotelImages[0] ?? ""),
     });
     setLocation(`/hotels/booking?${bookParams.toString()}`);
   }
@@ -193,12 +201,11 @@ export default function HotelDetail() {
               <Card className="overflow-hidden shadow-sm border">
                 <div className="relative">
                   <img
-                    src={hotel.images[activeImage]}
+                    src={hotelImages[activeImage] ?? PLACEHOLDER}
                     alt={hotel.name}
                     className="w-full h-72 md:h-96 object-cover"
                     onError={(e) => {
-                      (e.target as HTMLImageElement).src =
-                        "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&q=80";
+                      (e.target as HTMLImageElement).src = PLACEHOLDER;
                     }}
                   />
                   <div className="absolute top-3 left-3 flex gap-1.5">
@@ -207,9 +214,9 @@ export default function HotelDetail() {
                     ))}
                   </div>
                 </div>
-                {hotel.images.length > 1 && (
+                {hotelImages.length > 1 && (
                   <div className="p-3 bg-slate-100 flex gap-2 overflow-x-auto">
-                    {hotel.images.map((img, i) => (
+                    {hotelImages.map((img, i) => (
                       <button
                         key={i}
                         onClick={() => setActiveImage(i)}
