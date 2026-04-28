@@ -222,6 +222,7 @@ router.get("/hotels/live-search", async (req, res): Promise<void> => {
         const firstRate   = h.rooms?.[0]?.rates?.[0];
         const netPrice    = parseFloat(firstRate?.net || "0");
         const pricePerNight = netPrice > 0 ? Math.round(netPrice * 84) : (3500 + idx * 500);
+        const rateKey: string | null = firstRate?.rateKey ?? null;
         const boardName: string = (firstRate?.boardName || "").toUpperCase();
         const amenities: string[] = ["WiFi", "AC"];
         if (boardName.includes("BREAKFAST") || boardName.includes("BB")) amenities.push("Breakfast");
@@ -248,6 +249,7 @@ router.get("/hotels/live-search", async (req, res): Promise<void> => {
           imageUrl,
           photos: [imageUrl],
           description: `${h.name} — a ${h.categoryName || `${stars}-star`} property in ${h.zoneName || city}.`,
+          rateKey,
         };
       });
 
@@ -342,6 +344,67 @@ router.get("/hotels/:id", async (req, res): Promise<void> => {
       description: hotel.description ?? undefined,
     })
   );
+});
+
+// ── POST /api/hotels/book ────────────────────────────────────────────────────
+router.post("/hotels/book", async (req, res): Promise<void> => {
+  const { rateKey, hotelId, hotelName } = req.body ?? {};
+
+  if (!rateKey) {
+    res.status(400).json({ error: "rateKey is required to book a hotel." });
+    return;
+  }
+
+  const keysRows = await db.select().from(apiKeysTable).limit(1);
+  const keysRow  = keysRows[0] ?? {};
+  const hbApiKey = (keysRow as any).hotelApiKey   || process.env.HOTELBEDS_API_KEY || "";
+  const hbSecret = (keysRow as any).hotelApiSecret || process.env.HOTELBEDS_SECRET  || "";
+
+  if (!hbApiKey || !hbSecret) {
+    res.status(503).json({ error: "HotelBeds credentials not configured." });
+    return;
+  }
+
+  const bookingPayload = {
+    holder: { name: "Test", surname: "User" },
+    rooms: [{ rateKey }],
+    clientReference: `DFG-${Date.now()}`,
+    remark: "Dream Fly Global test booking",
+    tolerance: 2,
+  };
+
+  console.log(`[hotels/book] Booking hotel ${hotelId ?? "?"} ("${hotelName ?? "?"}") with rateKey: ${rateKey.slice(0, 60)}...`);
+
+  try {
+    const hbRes = await fetch("https://api.test.hotelbeds.com/hotel-api/1.0/bookings", {
+      method: "POST",
+      headers: {
+        "Api-key":      hbApiKey,
+        "X-Signature":  hotelbedsSignature(hbApiKey, hbSecret),
+        "Content-Type": "application/json",
+        "Accept":       "application/json",
+      },
+      body: JSON.stringify(bookingPayload),
+      signal: AbortSignal.timeout(20_000),
+    });
+
+    const data = await hbRes.json().catch(() => null);
+    console.log("Booking Response:", JSON.stringify(data));
+
+    if (!hbRes.ok) {
+      console.log("[hotels/book] HotelBeds booking error:", hbRes.status, JSON.stringify(data));
+      res.status(hbRes.status).json({
+        error: data?.error?.message || `HotelBeds booking failed (${hbRes.status})`,
+        details: data,
+      });
+      return;
+    }
+
+    res.json({ success: true, booking: data?.booking ?? data });
+  } catch (err: any) {
+    console.log("[hotels/book] Error:", err?.message ?? err);
+    res.status(500).json({ error: `Booking request failed: ${err?.message}` });
+  }
 });
 
 export default router;

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import type { JSX } from "react";
 import { useParams, useLocation, useSearch } from "wouter";
 import { useAuth } from "@/contexts/auth-context";
@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Building2, Star, MapPin, ArrowLeft, Wifi, Car, Utensils, Waves,
-  Dumbbell, Wind, Tv, Coffee, CheckCircle2, ChevronRight, Users, Calendar,
+  Dumbbell, Wind, Tv, Coffee, CheckCircle2, ChevronRight, Users, Calendar, Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MOCK_HOTELS } from "./hotel-results";
@@ -30,7 +30,7 @@ const AMENITY_ICONS: Record<string, JSX.Element> = {
   "Room Service":         <span className="text-lg">🛎️</span>,
 };
 
-function getRooms(basePrice: number) {
+function getRooms(basePrice: number, rateKey: string | null) {
   return [
     {
       type:      "Standard",
@@ -38,6 +38,7 @@ function getRooms(basePrice: number) {
       capacity:  2,
       amenities: ["Non-AC", "WiFi", "TV"],
       desc:      "Comfortable room with modern amenities and great city views.",
+      rateKey,
     },
     {
       type:      "Deluxe",
@@ -45,6 +46,7 @@ function getRooms(basePrice: number) {
       capacity:  2,
       amenities: ["AC", "WiFi", "TV", "Mini Bar"],
       desc:      "Spacious deluxe room with premium furnishings and en-suite bathroom.",
+      rateKey,
     },
     {
       type:      "Suite",
@@ -52,6 +54,7 @@ function getRooms(basePrice: number) {
       capacity:  4,
       amenities: ["AC", "WiFi", "TV", "Mini Bar", "Jacuzzi", "City View"],
       desc:      "Expansive suite with separate living area, Jacuzzi, and panoramic views.",
+      rateKey,
     },
   ];
 }
@@ -81,6 +84,7 @@ export default function HotelDetail() {
   const checkout  = p.get("checkout")  || "";
   const guests    = p.get("guests")    || "1";
   const nights    = nightsBetween(checkin, checkout);
+  const urlRateKey = p.get("rateKey")  || null;
 
   console.log("Selected Hotel ID:", id);
 
@@ -120,8 +124,11 @@ export default function HotelDetail() {
 
   const hotel = hotelFromParams || mockHotel;
 
-  const [activeImage,   setActiveImage]   = useState(0);
-  const [selectedRoom,  setSelectedRoom]  = useState<string>("Deluxe");
+  const [activeImage,    setActiveImage]   = useState(0);
+  const [selectedRoomType, setSelectedRoomType] = useState<string>("Deluxe");
+  const [bookingState,   setBookingState]  = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [bookingError,   setBookingError]  = useState<string>("");
+  const [bookingRef,     setBookingRef]    = useState<string>("");
 
   if (!hotel) {
     return (
@@ -139,8 +146,9 @@ export default function HotelDetail() {
   const agentMarkupFlat: number | null = (isAgent && user?.agentMarkup !== undefined) ? user.agentMarkup : null;
   const normalMarkup    = getHiddenMarkupAmount(hotel.pricePerNight, "hotels");
   const effectiveMarkup = agentMarkupFlat !== null ? agentMarkupFlat : normalMarkup;
-  const rooms           = getRooms(hotel.pricePerNight + effectiveMarkup);
-  const chosen          = rooms.find((r) => r.type === selectedRoom) ?? rooms[1];
+  const hotelRateKey    = urlRateKey ?? (hotel as any).rateKey ?? null;
+  const rooms           = getRooms(hotel.pricePerNight + effectiveMarkup, hotelRateKey);
+  const chosen          = rooms.find((r) => r.type === selectedRoomType) ?? rooms[1];
   const totalPrice      = chosen.price * nights;
   const savings         = (agentMarkupFlat !== null && normalMarkup > agentMarkupFlat)
     ? (normalMarkup - agentMarkupFlat) * nights : null;
@@ -153,25 +161,50 @@ export default function HotelDetail() {
     (hotel as any).imageUrl         ? [(hotel as any).imageUrl] :
     [PLACEHOLDER];
 
-  function handleBookNow() {
-    const bookParams = new URLSearchParams({
-      hotelId:      String(hotel!.id),
-      hotelName:    hotel!.name,
-      city:         hotel!.city,
-      location:     hotel!.location,
-      stars:        String(hotel!.stars),
-      rating:       String(hotel!.rating),
-      checkin, checkout, guests,
-      nights:       String(nights),
-      roomType:     chosen.type,
-      roomPrice:    String(chosen.price),
-      markup:       String(effectiveMarkup),
-      normalMarkup: String(normalMarkup),
-      agentSavings: String(savings ?? 0),
-      image:        encodeURIComponent(hotelImages[0] ?? ""),
-    });
-    setLocation(`/hotels/booking?${bookParams.toString()}`);
-  }
+  const handleBookNow = useCallback(async () => {
+    console.log("Selected Room:", { type: chosen.type, price: chosen.price, rateKey: chosen.rateKey });
+
+    if (!chosen.rateKey) {
+      setBookingState("error");
+      setBookingError("Room selection failed. Please try again.");
+      return;
+    }
+
+    setBookingState("loading");
+    setBookingError("");
+
+    try {
+      const res = await fetch("/api/hotels/book", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rateKey:   chosen.rateKey,
+          hotelId:   hotel!.id,
+          hotelName: hotel!.name,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setBookingError(data?.error || `Booking failed (${res.status}). Please try again.`);
+        setBookingState("error");
+        return;
+      }
+
+      const ref =
+        data?.booking?.reference        ||
+        data?.booking?.bookingReference ||
+        data?.booking?.clientReference  ||
+        `DFG-${Date.now()}`;
+
+      setBookingRef(ref);
+      setBookingState("success");
+    } catch (err: any) {
+      setBookingError("Network error. Please check your connection and try again.");
+      setBookingState("error");
+    }
+  }, [chosen, hotel]);
 
   return (
     <Layout>
@@ -274,13 +307,17 @@ export default function HotelDetail() {
                 <CardContent className="p-6">
                   <h3 className="font-bold text-slate-900 mb-4 text-base">Available Room Types</h3>
                   <div className="space-y-3">
-                    {getRooms(hotel.pricePerNight + effectiveMarkup).map((room) => (
+                    {rooms.map((room) => (
                       <button
                         key={room.type}
-                        onClick={() => setSelectedRoom(room.type)}
+                        onClick={() => {
+                          setSelectedRoomType(room.type);
+                          setBookingState("idle");
+                          setBookingError("");
+                        }}
                         className={cn(
                           "w-full text-left p-4 rounded-xl border-2 transition-all",
-                          selectedRoom === room.type
+                          selectedRoomType === room.type
                             ? "border-blue-600 bg-blue-50"
                             : "border-slate-200 bg-white hover:border-blue-200 hover:bg-blue-50/50"
                         )}
@@ -289,7 +326,7 @@ export default function HotelDetail() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1">
                               <p className="font-bold text-slate-900">{room.type} Room</p>
-                              {selectedRoom === room.type && (
+                              {selectedRoomType === room.type && (
                                 <Badge className="bg-blue-600 text-white border-0 text-[10px]">Selected</Badge>
                               )}
                             </div>
@@ -368,17 +405,37 @@ export default function HotelDetail() {
                       <p className="text-[11px] text-muted-foreground text-right">Convenience fee applied at payment</p>
                     </div>
 
-                    <Button
-                      onClick={handleBookNow}
-                      className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white font-bold gap-2"
-                    >
-                      Book Now <ChevronRight className="w-4 h-4" />
-                    </Button>
-
-                    <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
-                      Free cancellation before check-in
-                    </div>
+                    {bookingState === "success" ? (
+                      <div className="bg-green-50 border border-green-300 rounded-xl p-4 text-center space-y-1">
+                        <CheckCircle2 className="w-8 h-8 text-green-600 mx-auto" />
+                        <p className="font-bold text-green-800 text-sm">Booking Confirmed!</p>
+                        <p className="text-green-700 text-xs">Reference: <strong>{bookingRef}</strong></p>
+                        <p className="text-green-600 text-[11px]">A confirmation will be sent to your registered email.</p>
+                      </div>
+                    ) : (
+                      <>
+                        {bookingState === "error" && bookingError && (
+                          <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-700">
+                            {bookingError}
+                          </div>
+                        )}
+                        <Button
+                          onClick={handleBookNow}
+                          disabled={bookingState === "loading"}
+                          className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white font-bold gap-2 disabled:opacity-70"
+                        >
+                          {bookingState === "loading" ? (
+                            <><Loader2 className="w-4 h-4 animate-spin" /> Confirming Booking...</>
+                          ) : (
+                            <>Book Now <ChevronRight className="w-4 h-4" /></>
+                          )}
+                        </Button>
+                        <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
+                          Free cancellation before check-in
+                        </div>
+                      </>
+                    )}
                   </CardContent>
                 </Card>
 

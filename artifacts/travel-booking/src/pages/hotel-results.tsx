@@ -420,6 +420,7 @@ export default function HotelResults() {
                       normalMarkup: String(normalMarkup),
                       agentSavings: String(savings ?? 0),
                       image:        encodeURIComponent(hotelImg),
+                      ...(hotel.rateKey ? { rateKey: hotel.rateKey } : {}),
                     });
 
                     return (
