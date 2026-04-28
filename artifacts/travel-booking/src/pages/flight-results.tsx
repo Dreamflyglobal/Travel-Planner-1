@@ -1037,6 +1037,16 @@ export default function FlightResults() {
                                         }
                                       }
                                     }
+                                    // Calculate segment flight duration from ISO timestamps
+                                    let segDurLabel = "";
+                                    if (seg.departure && seg.arrival) {
+                                      const durMs = new Date(seg.arrival).getTime() - new Date(seg.departure).getTime();
+                                      if (durMs > 0) {
+                                        const dH = Math.floor(durMs / 3_600_000);
+                                        const dM = Math.floor((durMs % 3_600_000) / 60_000);
+                                        segDurLabel = dH > 0 ? `${dH}h ${dM.toString().padStart(2, "0")}m` : `${dM}m`;
+                                      }
+                                    }
                                     return (
                                       <div key={si}>
                                         {/* Layover badge between segments */}
@@ -1070,10 +1080,15 @@ export default function FlightResults() {
                                                 </p>
                                                 <p className="text-[10px] text-slate-400 leading-none mt-0.5 max-w-[70px] truncate">{seg.fromCity}</p>
                                               </div>
-                                              <div className="flex-1 flex items-center gap-1 px-1">
-                                                <div className="flex-1 h-px bg-slate-200" />
-                                                <Plane className="w-3 h-3 text-slate-300 shrink-0" />
-                                                <div className="flex-1 h-px bg-slate-200" />
+                                              <div className="flex-1 flex flex-col items-center gap-0.5 px-1">
+                                                <div className="flex items-center gap-1 w-full">
+                                                  <div className="flex-1 h-px bg-slate-200" />
+                                                  <Plane className="w-3 h-3 text-slate-300 shrink-0" />
+                                                  <div className="flex-1 h-px bg-slate-200" />
+                                                </div>
+                                                {segDurLabel && (
+                                                  <p className="text-[10px] text-slate-400 tabular-nums whitespace-nowrap leading-none">{segDurLabel}</p>
+                                                )}
                                               </div>
                                               <div className="text-center shrink-0">
                                                 <p className="text-base font-extrabold text-slate-800 tabular-nums leading-none">{seg.arrivalTime}</p>
