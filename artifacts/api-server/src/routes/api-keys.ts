@@ -202,21 +202,29 @@ router.post("/admin/api-keys/test", requireAdmin, async (req, res) => {
           method: "POST",
           headers: { "Content-Type": "application/json", apikey: key.trim() },
           body: JSON.stringify(payload),
-          signal: AbortSignal.timeout(12_000),
+          signal: AbortSignal.timeout(15_000),
         });
 
         const body: any = await r.json().catch(() => ({}));
-        console.log("[api-keys] TripJack response:", JSON.stringify(body));
+        console.log("[api-keys] TripJack HTTP", r.status, JSON.stringify(body));
 
-        if (r.status === 200) {
+        // TripJack returns HTTP 200 even for auth failures — must inspect the body
+        const statusBlock = body?.status;
+        if (statusBlock?.success === false) {
+          const desc = statusBlock?.messages?.[0]?.description
+            || statusBlock?.messages?.[0]?.code
+            || body?.message
+            || "Authentication or validation error";
+          return res.json({ success: true, ok: false, message: `TripJack error: ${desc}` });
+        }
+        if (body?.searchResult || body?.tripInfos || statusBlock?.success === true) {
           return res.json({ success: true, ok: true, message: "TripJack API key is valid and working." });
         }
-
-        const msg = body?.message || body?.error || body?.errors?.[0] || `HTTP ${r.status}`;
-        return res.json({ success: true, ok: false, message: `TripJack error: ${msg}` });
+        const fallback = body?.message || body?.error || `HTTP ${r.status}`;
+        return res.json({ success: true, ok: false, message: `TripJack error: ${fallback}` });
       } catch (err: any) {
         if (err.name === "TimeoutError" || err.code === "ABORT_ERR") {
-          return res.json({ success: true, ok: false, message: "TripJack did not respond within 12 seconds. Check your network or try again." });
+          return res.json({ success: true, ok: false, message: "TripJack did not respond within 15 seconds. Check your network or try again." });
         }
         return res.json({ success: true, ok: false, message: `Could not reach TripJack: ${err.message}` });
       }

@@ -226,13 +226,19 @@ export function ApiKeysSection() {
   async function handleTest(group: string) {
     setTesting(group);
     try {
-      const res = await fetch("/api/admin/api-keys/test", {
+      // Flight (TripJack) uses the dedicated real-test route that checks body status
+      const url = group === "flight"
+        ? "/api/test-tripjack-real"
+        : "/api/admin/api-keys/test";
+      const body = group === "flight" ? {} : { which: group };
+
+      const res = await fetch(url, {
         method:  "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeader() },
-        body:    JSON.stringify({ which: group }),
+        body:    JSON.stringify(body),
       });
       const json = await res.json();
-      if (!res.ok || !json.success) {
+      if (!res.ok || json.success === false) {
         toast({ title: "Test failed", description: json.error || json.message || "Could not test the key.", variant: "destructive" });
         return;
       }
