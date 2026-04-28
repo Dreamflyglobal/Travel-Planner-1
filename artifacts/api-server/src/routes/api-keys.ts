@@ -158,23 +158,116 @@ router.post("/admin/api-keys/test", requireAdmin, async (req, res) => {
   try {
     const row = await getOrCreateRow();
     const map: Record<string, string> = {
-      flight:  row.flightApiKey     || process.env["TRIPJACK_API_KEY"] || "",
-      bus:     row.busApiKey        || process.env["RAPIDAPI_KEY"]     || "",
-      hotel:   row.hotelApiKey      || process.env["HOTELBEDS_API_KEY"]|| "",
-      payment: row.paymentApiKey    || process.env["RAZORPAY_KEY_ID"]  || "",
-      tbo:     row.tboApiKey        || process.env["TBO_API_KEY"]      || "",
+      flight:  row.flightApiKey     || process.env["TRIPJACK_API_KEY"]  || "",
+      bus:     row.busApiKey        || process.env["RAPIDAPI_KEY"]      || "",
+      hotel:   row.hotelApiKey      || process.env["HOTELBEDS_API_KEY"] || "",
+      payment: row.paymentApiKey    || process.env["RAZORPAY_KEY_ID"]   || "",
+      tbo:     row.tboApiKey        || process.env["TBO_API_KEY"]       || "",
+    };
+    const secretMap: Record<string, string> = {
+      payment: row.paymentApiSecret || process.env["RAZORPAY_KEY_SECRET"] || "",
     };
 
     const key = map[which] ?? "";
     if (!key) {
-      return res.json({ success: false, ok: false, message: "No key configured for this provider." });
+      return res.json({ success: true, ok: false, message: "No API key configured for this provider. Set one above and save first." });
     }
+
+    // ── TripJack live probe ────────────────────────────────────────────────
+    if (which === "flight") {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 30);
+      const travelDate = tomorrow.toISOString().slice(0, 10);
+
+      const payload = {
+        searchQuery: {
+          cabinClass: "ECONOMY",
+          paxInfo: { ADULT: "1", CHILD: "0", INFANT: "0" },
+          routeInfos: [
+            {
+              fromCityOrAirport: { code: "DEL" },
+              toCityOrAirport:   { code: "BOM" },
+              travelDate,
+            },
+          ],
+          searchModifiers: { isDirectFlight: false, isConnectingFlight: false },
+        },
+      };
+
+      try {
+        const r = await fetch("https://apitest.tripjack.com/fms/v1/air-search-all", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", apikey: key },
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(12_000),
+        });
+
+        const body: any = await r.json().catch(() => ({}));
+
+        if (r.status === 401 || r.status === 403) {
+          return res.json({ success: true, ok: false, message: `TripJack rejected the key: ${r.status} ${body?.message ?? "Unauthorized"}` });
+        }
+        if (!r.ok) {
+          const msg = body?.message || body?.error || `HTTP ${r.status}`;
+          return res.json({ success: true, ok: false, message: `TripJack returned an error: ${msg}` });
+        }
+        // A 200 with search data (or even an empty result) confirms the key is accepted
+        return res.json({ success: true, ok: true, message: "TripJack API key is valid and working." });
+      } catch (err: any) {
+        if (err.name === "TimeoutError" || err.code === "ABORT_ERR") {
+          return res.json({ success: true, ok: false, message: "TripJack did not respond within 12 seconds. Check your network or try again." });
+        }
+        return res.json({ success: true, ok: false, message: `Could not reach TripJack: ${err.message}` });
+      }
+    }
+
+    // ── Razorpay live probe ────────────────────────────────────────────────
+    if (which === "payment") {
+      const secret = secretMap.payment;
+      if (!secret) {
+        return res.json({ success: true, ok: false, message: "Razorpay Key Secret is not configured. Save both Key ID and Key Secret before testing." });
+      }
+      try {
+        const credentials = Buffer.from(`${key}:${secret}`).toString("base64");
+        const r = await fetch("https://api.razorpay.com/v1/orders?count=1", {
+          headers: { Authorization: `Basic ${credentials}`, "Content-Type": "application/json" },
+          signal: AbortSignal.timeout(10_000),
+        });
+        const body: any = await r.json().catch(() => ({}));
+
+        if (r.status === 401) {
+          return res.json({ success: true, ok: false, message: "Razorpay rejected the credentials. Check your Key ID and Key Secret." });
+        }
+        if (!r.ok) {
+          const msg = body?.error?.description || body?.error || `HTTP ${r.status}`;
+          return res.json({ success: true, ok: false, message: `Razorpay error: ${msg}` });
+        }
+        const mode = key.startsWith("rzp_live_") ? "live" : "test";
+        return res.json({ success: true, ok: true, message: `Razorpay credentials verified (${mode} mode).` });
+      } catch (err: any) {
+        if (err.name === "TimeoutError" || err.code === "ABORT_ERR") {
+          return res.json({ success: true, ok: false, message: "Razorpay did not respond within 10 seconds." });
+        }
+        return res.json({ success: true, ok: false, message: `Could not reach Razorpay: ${err.message}` });
+      }
+    }
+
+    // ── TBO / Bus / Hotel — format check only (no public test endpoint) ────
     const looksValid = key.trim().length >= 8;
+    const providerLabels: Record<string, string> = {
+      tbo:   "TBO",
+      bus:   "Bus provider",
+      hotel: "Hotel provider",
+    };
+    const label = providerLabels[which] ?? which;
     return res.json({
       success: true,
       ok: looksValid,
-      message: looksValid ? "Key is set and looks well-formed." : "Key is configured but appears too short.",
+      message: looksValid
+        ? `${label} key is configured and looks well-formed. Live validation is not available for this provider.`
+        : `${label} key is configured but appears too short — please double-check it.`,
     });
+
   } catch (err) {
     logger.error({ err }, "[api-keys] test failed");
     return res.status(500).json({ success: false, error: "Test failed" });

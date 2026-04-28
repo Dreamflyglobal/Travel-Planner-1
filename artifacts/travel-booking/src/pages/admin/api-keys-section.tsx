@@ -227,11 +227,11 @@ export function ApiKeysSection() {
         toast({ title: "Test failed", description: json.error || json.message || "Could not test the key.", variant: "destructive" });
         return;
       }
-      toast({
-        title:       json.ok ? "Key looks good" : "Key not usable",
-        description: json.message,
-        variant:     json.ok ? "default" : "destructive",
-      });
+      if (json.ok) {
+        toast({ title: "API working", description: json.message });
+      } else {
+        toast({ title: "Test failed", description: json.message || "Key did not pass validation.", variant: "destructive" });
+      }
     } catch (e) {
       toast({ title: "Test failed", description: e instanceof Error ? e.message : "Could not reach the server.", variant: "destructive" });
     } finally {
@@ -353,16 +353,19 @@ export function ApiKeysSection() {
                           {showDraft ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
                       </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleTest(group)}
-                        disabled={testing === group}
-                        data-testid={`button-test-${group}`}
-                      >
-                        {testing === group ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Test"}
-                      </Button>
+                      {key !== "paymentApiSecret" && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleTest(group)}
+                          disabled={testing === group}
+                          title={key === "paymentApiKey" ? "Tests both Key ID and Secret together against Razorpay" : undefined}
+                          data-testid={`button-test-${group}`}
+                        >
+                          {testing === group ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Test"}
+                        </Button>
+                      )}
                     </div>
                   </div>
                 );
