@@ -384,8 +384,23 @@ router.post("/flights", async (req, res): Promise<void> => {
       || [];
     const flights = onward.map((item, idx) => mapTripJackFlight(item, idx, f0, t0));
 
-    // traceId ties every fareQuote / SSR / book call back to this search session.
-    const traceId: string = data?.searchResult?.traceId || "";
+    // traceId — check every known location TripJack may return it.
+    const traceId: string =
+      data?.searchResult?.traceId ||
+      data?.traceId               ||
+      data?.data?.traceId         ||
+      onward?.[0]?.traceId        ||
+      "";
+
+    if (!traceId) {
+      // Log top-level keys so we can identify where traceId lives on the sandbox.
+      const topKeys = Object.keys(data || {}).join(", ");
+      const srKeys  = Object.keys(data?.searchResult || {}).join(", ");
+      console.warn(
+        `[flights/tripjack] traceId not found — top-level keys: [${topKeys}] | searchResult keys: [${srKeys}]`,
+      );
+    }
+
     console.log(`[flights/tripjack] ${logLabel}: ${flights.length} flights (${cabinClass}, A${adultCount}C${childCount}I${infantCount}) | traceId: ${traceId || "(none)"}`);
 
     res.json({ flights, total: flights.length, source: "tripjack", traceId });

@@ -176,9 +176,9 @@ export default function FlightResults() {
     console.log("TRACE:", ti || "(none)");
     console.log("RESULT:", ri || "(none)");
 
-    // Guard: resultIndex is required by TripJack — cannot verify fare without it
-    if (!ri) {
-      console.error("[fareQuote/select] missing resultIndex — cannot verify fare");
+    // Guard: both traceId and resultIndex are required — cannot verify fare without them
+    if (!ri || !ti) {
+      console.error("[fareQuote] missing", !ti ? "traceId" : "resultIndex", "— cannot verify fare");
       isLoadingRef.current = false;
       setBookingLoadingId(null);
       if (userClickedRef.current) {
@@ -200,7 +200,7 @@ export default function FlightResults() {
 
     console.log("FareQuote Body:", { traceId: ti || "(none)", resultIndex: ri });
     console.info(
-      "[fareQuote/select] fareKey:", fareKey,
+      "[fareQuote] fareKey:", fareKey,
       "| resultIndex:", ri,
       "| traceId:", ti || "(none)",
     );
@@ -227,7 +227,7 @@ export default function FlightResults() {
 
     for (let attempt = 0; attempt <= MAX_AUTO_RETRIES; attempt++) {
       if (attempt > 0) {
-        console.info(`[fareQuote/select] auto-retry attempt ${attempt + 1}…`);
+        console.info(`[fareQuote] auto-retry attempt ${attempt + 1}…`);
         await new Promise<void>(r => setTimeout(r, RETRY_DELAY_MS));
       }
 
@@ -236,7 +236,7 @@ export default function FlightResults() {
       fetchErr = null;
 
       try {
-        res  = await fetch(`${apiBase}/api/tj-farequote`, {
+        res  = await fetch(`${apiBase}/api/tripjack/fareQuote`, {
           method:  "POST",
           headers: { "Content-Type": "application/json" },
           body:    payload,
@@ -245,7 +245,7 @@ export default function FlightResults() {
         clearTimeout(timeoutId);
         data = await res.json().catch(() => ({}));
         console.info(
-          "[fareQuote/select] status:", res.status,
+          "[fareQuote] status:", res.status,
           "| attempt:", attempt + 1,
           "| fareKey:", fareKey,
           "| response:", data,
@@ -263,7 +263,7 @@ export default function FlightResults() {
           bodyMsg.includes("verify fare");
         if (isVerifyFareError && attempt < MAX_AUTO_RETRIES) {
           console.log(
-            "[fareQuote/select] 'Could not verify fare' — recalling FareQuote, retry",
+            "[fareQuote] 'Could not verify fare' — recalling FareQuote, retry",
             attempt + 2,
           );
           toast({
@@ -276,14 +276,14 @@ export default function FlightResults() {
         // Retry only for transient HTTP errors; break out for success or 4xx
         if (!isTransientStatus(res.status) || !res.ok === false) break;
         if (attempt < MAX_AUTO_RETRIES) {
-          console.warn(`[fareQuote/select] transient HTTP ${res.status} — will retry`);
+          console.warn(`[fareQuote] transient HTTP ${res.status} — will retry`);
           continue;
         }
       } catch (err: any) {
         clearTimeout(timeoutId);
         fetchErr = err;
         if (attempt < MAX_AUTO_RETRIES) {
-          console.warn(`[fareQuote/select] fetch error on attempt ${attempt + 1}: ${err?.message} — will retry`);
+          console.warn(`[fareQuote] fetch error on attempt ${attempt + 1}: ${err?.message} — will retry`);
           continue;
         }
       }
@@ -294,7 +294,7 @@ export default function FlightResults() {
 
     // Network / timeout failure (all attempts exhausted)
     if (fetchErr) {
-      console.error("[fareQuote/select] network/fetch error:", fetchErr.message);
+      console.error("[fareQuote] network/fetch error:", fetchErr.message);
       setBookingLoadingId(null);
       if (!userClickedRef.current) return;
       toast({
@@ -309,7 +309,7 @@ export default function FlightResults() {
     // ── HTTP-level errors (after retries) ────────────────────────────────
     if (!res!.ok) {
       setBookingLoadingId(null);
-      console.warn("[fareQuote/select] fareQuote failed — HTTP", res!.status, "— stopping flow");
+      console.warn("[fareQuote] fareQuote failed — HTTP", res!.status, "— stopping flow");
 
       if (!userClickedRef.current) return;
 
@@ -323,7 +323,7 @@ export default function FlightResults() {
         return;
       }
       // Non-transient HTTP error — stop the flow, require retry
-      console.warn("[fareQuote/select] non-transient HTTP error", res!.status, "— stopping flow");
+      console.warn("[fareQuote] non-transient HTTP error", res!.status, "— stopping flow");
       toast({
         variant:     "destructive",
         title:       "Cannot verify fare",
@@ -338,7 +338,7 @@ export default function FlightResults() {
       const rawMsg: string = data?.errors?.[0]?.message || data?.message || "";
       const msg  = rawMsg.toLowerCase();
       const tf: number = data?.data?.totalPriceInfo?.totalFareDetail?.fC?.TF ?? 0;
-      console.warn("[fareQuote/select] TripJack error:", rawMsg || "(no message)", "| tf:", tf);
+      console.warn("[fareQuote] TripJack error:", rawMsg || "(no message)", "| tf:", tf);
 
       // Price changed — still a valid fare; passenger page shows the dialog
       const isPriceChange = tf > 0 &&
@@ -372,13 +372,13 @@ export default function FlightResults() {
       const isServerHiccup = SERVER_SIGNALS.some(s => msg.includes(s));
       const isSoldOut      = SOLDOUT_SIGNALS.some(s => msg.includes(s));
 
-      console.warn("[fareQuote/select] fareQuote error — stopping flow:", rawMsg || "(no message)");
+      console.warn("[fareQuote] fareQuote error — stopping flow:", rawMsg || "(no message)");
 
       // Always stop the flow on fareQuote failure — require explicit user click for toast
       if (!userClickedRef.current) return;
 
       if (isAuthError) {
-        console.error("[fareQuote/select] auth/config error from TripJack — stopping flow");
+        console.error("[fareQuote] auth/config error from TripJack — stopping flow");
         toast({
           variant:     "destructive",
           title:       "Fare verification failed",
@@ -419,7 +419,7 @@ export default function FlightResults() {
     sessionStorage.setItem("ww_tj_farequote",     JSON.stringify(data));
     sessionStorage.setItem("ww_tj_booking_id",    resolvedId);
     sessionStorage.setItem("ww_tj_farequote_key", fareKey);
-    console.info("[fareQuote/select] cached — resolvedId:", resolvedId);
+    console.info("[fareQuote] cached — resolvedId:", resolvedId);
     setBookingLoadingId(null);
     setLocation(`/booking/flight?${urlParams.toString()}`);
   }
