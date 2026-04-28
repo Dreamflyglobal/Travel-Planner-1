@@ -491,15 +491,15 @@ export default function BookingPayment() {
     } catch { /* localStorage unavailable — continue */ }
 
     try {
-      const res = await fetch(`${apiBase}/api/admin/refund`, {
+      const res = await fetch(`${apiBase}/api/refund`, {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ paymentId, amount }),
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        console.info("[refund] initiated:", data.refund?.id, "paymentId:", paymentId);
-        return { initiated: true, refundId: data.refund?.refundId };
+        console.info("[refund] initiated:", data.refundId, "paymentId:", paymentId);
+        return { initiated: true, refundId: data.refundId };
       }
       console.warn("[refund] backend returned error:", data.error ?? res.status, "paymentId:", paymentId);
       return { initiated: false, error: data.error ?? `HTTP ${res.status}` };
@@ -938,7 +938,7 @@ export default function BookingPayment() {
               body: JSON.stringify({
                 paymentId,
                 amount:   totalAfterCoupon,
-                fareData: { bookingId: tjBookingId, traceId, resultIndex },
+                fareData: { bookingId: tjBookingId, traceId, resultIndex, fare: totalAfterCoupon },
                 passengers: fs.passengers.map((p, idx) => ({
                   name:        p.name,
                   email:       p.email,

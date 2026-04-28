@@ -95,6 +95,75 @@ async function doRazorpayRefund(
   };
 }
 
+// ── POST /api/refund ─────────────────────────────────────────────────────────
+// Public endpoint (no admin auth required) to refund a Razorpay payment.
+// Used by the frontend when the booking API call fails entirely (network error)
+// and the backend auto-refund inside /api/book-flight did not run.
+//
+// Body: { paymentId: string, amount?: number }
+// Returns: { success: true, refundId? } | { success: false, error }
+router.post("/refund", async (req, res): Promise<void> => {
+  const { paymentId, amount } = req.body ?? {};
+
+  if (!paymentId || typeof paymentId !== "string") {
+    res.status(400).json({ success: false, error: "paymentId is required" });
+    return;
+  }
+
+  logger.info({ paymentId, amount }, "[refund] standalone refund requested");
+
+  const keyId     = process.env["RAZORPAY_KEY_ID"]     ?? "";
+  const keySecret = process.env["RAZORPAY_KEY_SECRET"] ?? "";
+
+  const isDemo =
+    !keyId ||
+    !keySecret ||
+    paymentId.startsWith("pay_DEMO") ||
+    paymentId.startsWith("demo_") ||
+    paymentId.startsWith("wallet_") ||
+    paymentId.startsWith("cred_");
+
+  if (isDemo) {
+    const refundId = `rfnd_demo_${Date.now()}`;
+    logger.info({ paymentId, refundId }, "[refund] demo refund — no live credentials");
+    res.json({ success: true, refundId, demo: true });
+    return;
+  }
+
+  try {
+    const auth    = Buffer.from(`${keyId}:${keySecret}`).toString("base64");
+    const payload: Record<string, unknown> = { speed: "normal" };
+    if (amount && Number(amount) > 0) {
+      payload.amount = Math.round(Number(amount) * 100); // paise
+    }
+
+    const resp = await fetch(
+      `https://api.razorpay.com/v1/payments/${encodeURIComponent(paymentId)}/refund`,
+      {
+        method:  "POST",
+        headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/json" },
+        body:    JSON.stringify(payload),
+      },
+    );
+    const json = (await resp.json().catch(() => ({}))) as Record<string, unknown>;
+
+    if (!resp.ok) {
+      const errObj  = (json?.error as Record<string, unknown> | undefined) ?? {};
+      const errMsg  = (errObj?.description as string) || (errObj?.reason as string) || `Razorpay ${resp.status}`;
+      logger.error({ paymentId, status: resp.status }, "[refund] Razorpay refund failed");
+      res.status(502).json({ success: false, error: errMsg });
+      return;
+    }
+
+    const refundId = json?.id as string | undefined;
+    logger.info({ paymentId, refundId }, "[refund] Razorpay refund initiated");
+    res.json({ success: true, refundId });
+  } catch (err: any) {
+    logger.error({ paymentId, err: err?.message }, "[refund] network error calling Razorpay");
+    res.status(500).json({ success: false, error: err?.message ?? "Refund request failed" });
+  }
+});
+
 // ── POST /api/book-flight ──────────────────────────────────────────────────
 // Body: {
 //   paymentId:   string                          — Razorpay payment ID
@@ -136,7 +205,7 @@ router.post("/book-flight", async (req, res): Promise<void> => {
     "[book-flight] fareData received",
   );
 
-  const totalPrice     = Number(amount) || Number(bookingMeta?.totalPrice) || 0;
+  const totalPrice     = Number(amount) || Number(fareData?.fare) || Number(bookingMeta?.totalPrice) || 0;
   const bookingRef     = String(bookingMeta?.bookingRef     ?? `BK-${Date.now().toString(36).toUpperCase()}`);
   const travelDate     = String(bookingMeta?.travelDate     ?? new Date().toISOString().split("T")[0]);
   const passengerName  = String(bookingMeta?.passengerName  ?? passengers[0]?.name  ?? "Unknown");
