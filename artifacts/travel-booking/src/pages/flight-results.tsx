@@ -147,6 +147,15 @@ export default function FlightResults() {
     // Mark whether this is a TripJack fare (read at payment to decide validation)
     sessionStorage.setItem("ww_is_tj_fare", isTjFare ? "1" : "0");
 
+    // Persist the selection to localStorage so the booking page survives a
+    // page refresh or re-navigation (traceId + resultIndex must stay consistent).
+    localStorage.setItem("ww_selected_flight", JSON.stringify({
+      fareKey,
+      resultIndex: resultIndex || "",
+      traceId:     searchTraceId || "",
+    }));
+    localStorage.setItem("ww_flight_selected_at", String(Date.now()));
+
     // Non-TJ fare (synthetic / Booking.com) → skip fareQuote, navigate directly.
     // Store a placeholder so the passenger page's cache check passes and the
     // backend knows to skip the TripJack AirBook step (empty bookingId = non-TJ).
@@ -164,9 +173,11 @@ export default function FlightResults() {
     const ri       = resultIndex   || "";
     const ti       = searchTraceId || "";
 
-    // Fallback: proceed to booking without a fareQuote result
+    // Fallback: proceed to booking without a fareQuote result.
+    // Store { fallback: true } (not "") so the booking page's hasPrefetch check
+    // passes and skips the price-change dialog without showing "Session expired".
     const proceedToBookingFallback = () => {
-      sessionStorage.setItem("ww_tj_farequote",     "");
+      sessionStorage.setItem("ww_tj_farequote",     JSON.stringify({ fallback: true }));
       sessionStorage.setItem("ww_tj_booking_id",    fareKey);
       sessionStorage.setItem("ww_tj_farequote_key", fareKey);
       isLoadingRef.current = false;

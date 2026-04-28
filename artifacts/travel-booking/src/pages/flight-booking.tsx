@@ -162,6 +162,35 @@ export default function FlightBooking() {
     setErrors((prev)     => { const next = [...prev]; next[i] = { ...next[i], [field]: undefined }; return next; });
   }
 
+  // ── Session validity check on page load ───────────────────────────────────
+  // Redirect to search if no stored flight or if the selection is > 10 minutes old.
+  useEffect(() => {
+    const storedStr = localStorage.getItem("ww_selected_flight");
+    const storedAt  = Number(localStorage.getItem("ww_flight_selected_at") || "0");
+    const SESSION_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+    if (!storedStr) {
+      toast({
+        variant:     "destructive",
+        title:       "Please reselect your flight",
+        description: "No flight selection found. Redirecting to search…",
+      });
+      setLocation("/flights");
+      return;
+    }
+
+    if (storedAt && Date.now() - storedAt > SESSION_TTL_MS) {
+      localStorage.removeItem("ww_selected_flight");
+      localStorage.removeItem("ww_flight_selected_at");
+      toast({
+        variant:     "destructive",
+        title:       "Session expired",
+        description: "Your selection has expired. Please reselect your flight.",
+      });
+      setLocation("/flights");
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const totalBase = (baseFare + convFee) * travelers;
 
   async function handleContinue() {
@@ -218,31 +247,102 @@ export default function FlightBooking() {
       const fqCached: any = JSON.parse(prefetchedStr!);
       console.info("[fareQuote] using pre-fetched data | bookingId:", resolvedBookingId || "(non-TJ fare)", "| isTjFare:", isTjFare);
 
-      // Still check whether the cached data shows a different price
-      const tf: number = fqCached?.data?.totalPriceInfo?.totalFareDetail?.fC?.TF ?? 0;
-      if (tf > 0 && Math.abs(tf - rawPrice * travelers) > 1) {
-        const newRawPerPerson = Math.round(tf / travelers);
-        const newBaseFare     = newRawPerPerson + hiddenMarkup;
-        const newTotal        = (newBaseFare + convFee) * travelers;
-        setPriceChangeInfo({ oldTotal: totalBase, newTotal, newRawPrice: newRawPerPerson, newBaseFare, resolvedBookingId });
+      // Fallback fare (fareQuote was unavailable at selection) — skip price check,
+      // use fareKey as bookingId, and proceed straight to SSR.
+      const isFallbackFare = !!fqCached?.fallback || !!fqCached?.nonTj;
+      if (!isFallbackFare) {
+        // Real fareQuote data — check whether price changed
+        const tf: number = fqCached?.data?.totalPriceInfo?.totalFareDetail?.fC?.TF ?? 0;
+        if (tf > 0 && Math.abs(tf - rawPrice * travelers) > 1) {
+          const newRawPerPerson = Math.round(tf / travelers);
+          const newBaseFare     = newRawPerPerson + hiddenMarkup;
+          const newTotal        = (newBaseFare + convFee) * travelers;
+          setPriceChangeInfo({ oldTotal: totalBase, newTotal, newRawPrice: newRawPerPerson, newBaseFare, resolvedBookingId });
+          setSubmitting(false);
+          setSubmitStep("");
+          return;
+        }
+      }
+      // Price consistent (or fallback) — skip network block; SSR will use resolvedBookingId
+    } else {
+      // ── No cached fareQuote — session was cleared (page refresh / direct URL) ──
+      // Try to recover using the flight data saved to localStorage at selection time.
+      // Use the stored traceId + resultIndex so fareQuote gets the exact same values.
+      const storedFlightStr = localStorage.getItem("ww_selected_flight");
+      const storedAt        = Number(localStorage.getItem("ww_flight_selected_at") || "0");
+      const SESSION_TTL_MS  = 10 * 60 * 1000;
+      const isExpired       = storedAt > 0 && Date.now() - storedAt > SESSION_TTL_MS;
+
+      if (!storedFlightStr || isExpired) {
+        console.warn("[fareQuote] no stored flight or session expired — redirecting to search");
+        if (isExpired) {
+          localStorage.removeItem("ww_selected_flight");
+          localStorage.removeItem("ww_flight_selected_at");
+        }
+        toast({
+          variant:     "destructive",
+          title:       "Session expired",
+          description: "Please reselect your flight to continue.",
+        });
         setSubmitting(false);
         setSubmitStep("");
+        setLocation("/flights");
         return;
       }
-      // Price consistent — skip the network block entirely; SSR will use resolvedBookingId
-    } else {
-      // No pre-fetched fareQuote in session — the user likely refreshed the page
-      // or landed here via a direct URL. Send them back to search so they can
-      // select a flight and have the fare verified before proceeding.
-      console.warn("[fareQuote] no cached data — redirecting to search");
-      toast({
-        variant:     "destructive",
-        title:       "Session expired",
-        description: "Please select your flight again to continue.",
-      });
-      setSubmitting(false);
-      setSubmitStep("");
-      return;
+
+      // Have valid stored flight — retry fareQuote with the original traceId + resultIndex
+      try {
+        const sf = JSON.parse(storedFlightStr);
+        const ri = sf.resultIndex as string;
+        const ti = sf.traceId    as string;
+        console.info("[fareQuote] retrying with stored flight | resultIndex:", ri || "(none)", "| traceId:", ti || "(none)");
+
+        if (ri) {
+          const fqRes  = await fetch(`${apiBase}/api/tj-farequote`, {
+            method:  "POST",
+            headers: { "Content-Type": "application/json" },
+            body:    JSON.stringify({ traceId: ti, resultIndex: ri }),
+          });
+          const fqData = await fqRes.json().catch(() => ({}));
+
+          if (fqRes.ok && fqData?.status !== false) {
+            resolvedBookingId = fqData?.data?.bookingId || fareKey;
+            sessionStorage.setItem("ww_tj_farequote",     JSON.stringify(fqData));
+            sessionStorage.setItem("ww_tj_booking_id",    resolvedBookingId);
+            sessionStorage.setItem("ww_tj_farequote_key", fareKey);
+            console.info("[fareQuote] retry succeeded | bookingId:", resolvedBookingId);
+            // Check for price change
+            const tf: number = fqData?.data?.totalPriceInfo?.totalFareDetail?.fC?.TF ?? 0;
+            if (tf > 0 && Math.abs(tf - rawPrice * travelers) > 1) {
+              const newRawPerPerson = Math.round(tf / travelers);
+              const newBaseFare     = newRawPerPerson + hiddenMarkup;
+              const newTotal        = (newBaseFare + convFee) * travelers;
+              setPriceChangeInfo({ oldTotal: totalBase, newTotal, newRawPrice: newRawPerPerson, newBaseFare, resolvedBookingId });
+              setSubmitting(false);
+              setSubmitStep("");
+              return;
+            }
+          } else {
+            // fareQuote still failed — proceed without verification
+            console.warn("[fareQuote] retry failed — proceeding without fareQuote");
+            resolvedBookingId = fareKey;
+            sessionStorage.setItem("ww_tj_farequote",     JSON.stringify({ fallback: true }));
+            sessionStorage.setItem("ww_tj_booking_id",    fareKey);
+            sessionStorage.setItem("ww_tj_farequote_key", fareKey);
+          }
+        } else {
+          // No resultIndex stored — proceed without fareQuote
+          resolvedBookingId = fareKey;
+          sessionStorage.setItem("ww_tj_farequote",     JSON.stringify({ fallback: true }));
+          sessionStorage.setItem("ww_tj_booking_id",    fareKey);
+          sessionStorage.setItem("ww_tj_farequote_key", fareKey);
+        }
+      } catch {
+        resolvedBookingId = fareKey;
+        sessionStorage.setItem("ww_tj_farequote",     JSON.stringify({ fallback: true }));
+        sessionStorage.setItem("ww_tj_booking_id",    fareKey);
+        sessionStorage.setItem("ww_tj_farequote_key", fareKey);
+      }
     }
 
     // ── Step 2: SSR — seats & baggage (optional — failure shows empty state) ──
