@@ -7,6 +7,7 @@ import {
   LayoutDashboard, TrendingUp, Package,
   MessageSquare, FileText, ClipboardList, LogOut, Menu, X,
   ShieldCheck, UserCheck, ChevronRight, Receipt, Users, Award, Settings, BarChart2,
+  MessageCircle, Globe,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +23,8 @@ const NAV_ITEMS = [
   { label: "Staff Incentives", href: "/master-admin/staff-incentives", icon: Award },
   { label: "Leads",            href: "/master-admin/leads",            icon: FileText },
   { label: "Enquiries",        href: "/master-admin/enquiries",        icon: ClipboardList },
+  { label: "CMS Pages",        href: "/master-admin/cms",              icon: Globe },
+  { label: "Support",          href: "/master-admin/support",          icon: MessageCircle },
   { label: "Settings",         href: "/master-admin/settings",         icon: Settings },
 ];
 

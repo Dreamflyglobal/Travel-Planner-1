@@ -8,6 +8,8 @@ export type NotificationSettings = {
   popupMessage: string;
   smsEnabled: boolean;
   smsProvider: string;
+  whatsappNotifEnabled: boolean;
+  whatsappNotifNumber: string;
 };
 
 const STORAGE_KEY = "notification_settings_v1";
@@ -20,6 +22,8 @@ export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
   popupMessage: "Your booking has been confirmed! A confirmation has been sent to your email.",
   smsEnabled: false,
   smsProvider: "",
+  whatsappNotifEnabled: false,
+  whatsappNotifNumber: "",
 };
 
 function loadSettings(): NotificationSettings {
@@ -38,6 +42,8 @@ function loadSettings(): NotificationSettings {
         : DEFAULT_NOTIFICATION_SETTINGS.popupMessage,
       smsEnabled: typeof parsed.smsEnabled === "boolean" ? parsed.smsEnabled : DEFAULT_NOTIFICATION_SETTINGS.smsEnabled,
       smsProvider: typeof parsed.smsProvider === "string" ? parsed.smsProvider : DEFAULT_NOTIFICATION_SETTINGS.smsProvider,
+      whatsappNotifEnabled: typeof parsed.whatsappNotifEnabled === "boolean" ? parsed.whatsappNotifEnabled : DEFAULT_NOTIFICATION_SETTINGS.whatsappNotifEnabled,
+      whatsappNotifNumber: typeof parsed.whatsappNotifNumber === "string" ? parsed.whatsappNotifNumber : DEFAULT_NOTIFICATION_SETTINGS.whatsappNotifNumber,
     };
   } catch {
     return DEFAULT_NOTIFICATION_SETTINGS;

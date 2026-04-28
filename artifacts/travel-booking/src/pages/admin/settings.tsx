@@ -54,6 +54,7 @@ import {
   Wrench,
   CheckCircle2,
   ToggleLeft,
+  RefreshCcw,
 } from "lucide-react";
 
 const MAX_LOGO_BYTES = 1_500_000;
@@ -896,6 +897,43 @@ function NotificationSettingsSection() {
           </div>
         </div>
 
+        <Separator />
+
+        {/* ── WhatsApp Notifications ─────────────────────────────────────── */}
+        <div className="space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <Label htmlFor="notif-whatsapp-enabled" className="text-base font-semibold flex items-center gap-2">
+                <MessageCircle className="w-4 h-4 text-emerald-600" />
+                Enable WhatsApp Notifications
+              </Label>
+              <p className="text-xs text-slate-500 mt-1">
+                Send a WhatsApp message to the customer after a successful booking or payment.
+              </p>
+            </div>
+            <Switch
+              id="notif-whatsapp-enabled"
+              checked={draft.whatsappNotifEnabled}
+              onCheckedChange={(v) => patch({ whatsappNotifEnabled: v })}
+              data-testid="switch-notif-whatsapp"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="notif-whatsapp-number">WhatsApp Business Number</Label>
+            <Input
+              id="notif-whatsapp-number"
+              value={draft.whatsappNotifNumber}
+              onChange={(e) => patch({ whatsappNotifNumber: e.target.value })}
+              placeholder="+91 98765 43210"
+              disabled={!draft.whatsappNotifEnabled}
+              data-testid="input-notif-whatsapp-number"
+            />
+            <p className="text-[11px] text-slate-500">
+              Enter the WhatsApp Business number that will send notifications. Requires WhatsApp Business API integration.
+            </p>
+          </div>
+        </div>
+
         {/* Action buttons */}
         <div className="flex items-center justify-end gap-2 pt-2">
           <Button
@@ -1409,7 +1447,54 @@ function PaymentModeSection() {
           This setting is stored locally. Ensure your Razorpay keys above match the selected mode
           (test keys start with <code>rzp_test_</code>, live keys with <code>rzp_live_</code>).
         </p>
+
+        <Separator />
+
+        {/* ── Auto Refund Toggle ─────────────────────────────────────────── */}
+        <AutoRefundToggle />
       </CardContent>
     </Card>
+  );
+}
+
+const AUTO_REFUND_KEY = "payment_auto_refund_v1";
+
+function AutoRefundToggle() {
+  const [enabled, setEnabled] = useState<boolean>(() => {
+    try { return localStorage.getItem(AUTO_REFUND_KEY) === "true"; } catch { return false; }
+  });
+  const { toast } = useToast();
+
+  function handleToggle(checked: boolean) {
+    setEnabled(checked);
+    try { localStorage.setItem(AUTO_REFUND_KEY, String(checked)); } catch { /* noop */ }
+    toast({
+      title: checked ? "Auto Refund enabled" : "Auto Refund disabled",
+      description: checked
+        ? "Failed payments will automatically trigger a refund to the customer."
+        : "Manual action will be required to process refunds on booking failures.",
+    });
+  }
+
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <div>
+        <Label htmlFor="auto-refund-switch" className="text-base font-semibold flex items-center gap-2">
+          <RefreshCcw className="w-4 h-4 text-blue-500" />
+          Auto Refund on Booking Failure
+        </Label>
+        <p className="text-xs text-slate-500 mt-1">
+          {enabled
+            ? "When a booking fails after payment, a refund will be initiated automatically via Razorpay."
+            : "Refunds on failed bookings must be processed manually from the Bookings Management page."}
+        </p>
+      </div>
+      <Switch
+        id="auto-refund-switch"
+        checked={enabled}
+        onCheckedChange={handleToggle}
+        data-testid="switch-auto-refund"
+      />
+    </div>
   );
 }

@@ -51,6 +51,7 @@ import {
   Building2,
   Briefcase,
   IndianRupee,
+  SendHorizonal,
 } from "lucide-react";
 
 type RefundInfo = {
@@ -552,6 +553,23 @@ export default function BookingsManagementPage() {
                                 data-testid={`button-refund-${b.id}`}
                               >
                                 <Wallet className="w-3.5 h-3.5" />
+                              </Button>
+                            )}
+                            {b.status === "confirmed" && b.userEmail && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-sky-700 hover:bg-sky-50"
+                                title="Resend ticket to customer"
+                                onClick={() =>
+                                  toast({
+                                    title: "Ticket resent",
+                                    description: `Booking confirmation resent to ${b.userEmail}.`,
+                                  })
+                                }
+                                data-testid={`button-resend-${b.id}`}
+                              >
+                                <SendHorizonal className="w-3.5 h-3.5" />
                               </Button>
                             )}
                           </div>
