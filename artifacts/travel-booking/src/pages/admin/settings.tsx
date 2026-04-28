@@ -49,9 +49,11 @@ import {
   Instagram,
   Twitter,
   MessageCircle,
+  MessageSquare,
   Megaphone,
   Wrench,
   CheckCircle2,
+  ToggleLeft,
 } from "lucide-react";
 
 const MAX_LOGO_BYTES = 1_500_000;
@@ -565,6 +567,11 @@ export default function AdminSettings() {
 
         <Separator className="my-6" />
 
+        {/* Payment Mode — Test vs Live toggle */}
+        <PaymentModeSection />
+
+        <Separator className="my-6" />
+
         {/* Sticky save bar */}
         <div className="sticky bottom-4 bg-white border border-slate-200 rounded-2xl shadow-lg p-4 flex items-center justify-between gap-4">
           <div className="text-sm">
@@ -847,6 +854,44 @@ function NotificationSettingsSection() {
             />
             <p className="text-[11px] text-slate-500">
               Shown verbatim in the success popup. Keep it short and friendly.
+            </p>
+          </div>
+        </div>
+
+        <Separator />
+
+        {/* ── SMS Notifications ─────────────────────────────────────────── */}
+        <div className="space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <Label htmlFor="notif-sms-enabled" className="text-base font-semibold flex items-center gap-2">
+                <MessageSquare className="w-4 h-4 text-green-600" />
+                Enable SMS Notifications
+              </Label>
+              <p className="text-xs text-slate-500 mt-1">
+                Send an SMS alert to the customer after a successful booking or payment.
+              </p>
+            </div>
+            <Switch
+              id="notif-sms-enabled"
+              checked={draft.smsEnabled}
+              onCheckedChange={(v) => patch({ smsEnabled: v })}
+              data-testid="switch-notif-sms"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="notif-sms-provider">SMS Provider / API Endpoint</Label>
+            <Input
+              id="notif-sms-provider"
+              value={draft.smsProvider}
+              onChange={(e) => patch({ smsProvider: e.target.value })}
+              placeholder="e.g. Twilio, MSG91, Fast2SMS API URL"
+              disabled={!draft.smsEnabled}
+              data-testid="input-notif-sms-provider"
+            />
+            <p className="text-[11px] text-slate-500">
+              Enter your SMS gateway name or API endpoint. SMS dispatch requires server integration.
             </p>
           </div>
         </div>
@@ -1264,6 +1309,106 @@ function WebsiteSettingsSection() {
             Save Website Settings
           </Button>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── Payment Mode Toggle (Test / Live) ────────────────────────────────────────
+const PAYMENT_MODE_KEY = "payment_mode_settings_v1";
+type PaymentMode = "test" | "live";
+
+function loadPaymentMode(): PaymentMode {
+  try {
+    const raw = localStorage.getItem(PAYMENT_MODE_KEY);
+    if (raw === "live") return "live";
+  } catch { /* noop */ }
+  return "test";
+}
+
+function PaymentModeSection() {
+  const [mode, setMode] = useState<PaymentMode>(loadPaymentMode);
+  const [saved, setSaved] = useState(false);
+  const { toast } = useToast();
+
+  function handleToggle(checked: boolean) {
+    const next: PaymentMode = checked ? "live" : "test";
+    setMode(next);
+    try { localStorage.setItem(PAYMENT_MODE_KEY, next); } catch { /* noop */ }
+    setSaved(true);
+    setTimeout(() => setSaved(false), 3000);
+    toast({
+      title: `Payment mode set to ${next === "live" ? "Live" : "Test"}`,
+      description: next === "live"
+        ? "Real transactions will be processed. Ensure your Live Razorpay keys are configured."
+        : "Using test mode — no real money will be charged.",
+    });
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <SectionHeader
+          icon={<CreditCard className="w-5 h-5 text-orange-500" />}
+          title="Payment Mode"
+          description="Switch between Test (sandbox) and Live (production) payment processing."
+        />
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {saved && (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-medium">
+            <CheckCircle2 className="w-4 h-4" />
+            Payment mode updated successfully.
+          </div>
+        )}
+
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <Label htmlFor="payment-mode-switch" className="text-base font-semibold flex items-center gap-2">
+              <ToggleLeft className="w-4 h-4 text-orange-500" />
+              {mode === "live" ? "Live Mode (Production)" : "Test Mode (Sandbox)"}
+            </Label>
+            <p className="text-xs text-slate-500 mt-1">
+              {mode === "live"
+                ? "Real payments are active. Customers will be charged actual amounts."
+                : "No real charges. Use Razorpay test card numbers for transactions."}
+            </p>
+          </div>
+          <Switch
+            id="payment-mode-switch"
+            checked={mode === "live"}
+            onCheckedChange={handleToggle}
+            data-testid="switch-payment-mode"
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div
+            className={`rounded-xl border-2 p-4 text-center transition-colors ${
+              mode === "test"
+                ? "border-blue-400 bg-blue-50"
+                : "border-slate-200 bg-slate-50 opacity-50"
+            }`}
+          >
+            <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-1">Test Mode</p>
+            <p className="text-[11px] text-slate-500">Safe sandbox · No real charges</p>
+          </div>
+          <div
+            className={`rounded-xl border-2 p-4 text-center transition-colors ${
+              mode === "live"
+                ? "border-green-400 bg-green-50"
+                : "border-slate-200 bg-slate-50 opacity-50"
+            }`}
+          >
+            <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-1">Live Mode</p>
+            <p className="text-[11px] text-slate-500">Production · Real payments active</p>
+          </div>
+        </div>
+
+        <p className="text-[11px] text-slate-400">
+          This setting is stored locally. Ensure your Razorpay keys above match the selected mode
+          (test keys start with <code>rzp_test_</code>, live keys with <code>rzp_live_</code>).
+        </p>
       </CardContent>
     </Card>
   );

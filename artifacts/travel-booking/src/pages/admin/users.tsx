@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { AdminLayout } from "@/components/admin-layout";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -7,9 +7,25 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   Users, Search, Phone, Mail, Calendar, Wallet,
   ChevronDown, ChevronUp, Plane, Building2, Bus, Map,
-  UserCheck, UserPlus, ShieldCheck, BadgeCheck,
+  UserCheck, UserPlus, ShieldCheck, BadgeCheck, Ban, CheckCircle2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+const BLOCKED_USERS_KEY = "blocked_users_v1";
+
+function loadBlockedSet(): Set<string> {
+  try {
+    const raw = localStorage.getItem(BLOCKED_USERS_KEY);
+    if (!raw) return new Set();
+    return new Set(JSON.parse(raw) as string[]);
+  } catch { return new Set(); }
+}
+
+function saveBlockedSet(set: Set<string>) {
+  try {
+    localStorage.setItem(BLOCKED_USERS_KEY, JSON.stringify([...set]));
+  } catch { /* noop */ }
+}
 
 interface StoredUser {
   id: string;
@@ -107,7 +123,14 @@ function StatCard({
   );
 }
 
-function UserRow({ user, bookings }: { user: StoredUser; bookings: StoredBooking[] }) {
+function UserRow({
+  user, bookings, isBlocked, onToggleBlock,
+}: {
+  user: StoredUser;
+  bookings: StoredBooking[];
+  isBlocked: boolean;
+  onToggleBlock: (id: string) => void;
+}) {
   const [open, setOpen] = useState(false);
   const userBookings = getUserBookings(user, bookings);
   const totalSpend = userBookings.reduce((s, b) => s + (b.amount || b.totalAmount || 0), 0);
@@ -120,69 +143,97 @@ function UserRow({ user, bookings }: { user: StoredUser; bookings: StoredBooking
   }[user.role] ?? "bg-gray-100 text-gray-600";
 
   return (
-    <div className="border rounded-xl overflow-hidden">
+    <div className={cn("border rounded-xl overflow-hidden", isBlocked && "border-red-200 bg-red-50/30")}>
       {/* User header row */}
-      <button
-        className="w-full text-left p-4 hover:bg-muted/30 transition-colors flex flex-col sm:flex-row sm:items-center gap-3"
-        onClick={() => setOpen((o) => !o)}
-      >
-        {/* Avatar */}
-        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm shrink-0">
-          {user.name?.charAt(0)?.toUpperCase() || "?"}
-        </div>
+      <div className="p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+        {/* Clickable area (expand) */}
+        <button
+          className="flex flex-col sm:flex-row sm:items-center gap-3 flex-1 text-left hover:bg-muted/20 -m-2 p-2 rounded-lg transition-colors"
+          onClick={() => setOpen((o) => !o)}
+        >
+          {/* Avatar */}
+          <div className={cn(
+            "w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0",
+            isBlocked ? "bg-red-400" : "bg-gradient-to-br from-blue-500 to-purple-600"
+          )}>
+            {isBlocked ? <Ban className="w-4 h-4" /> : (user.name?.charAt(0)?.toUpperCase() || "?")}
+          </div>
 
-        {/* Name + contact */}
-        <div className="flex-1 min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-semibold text-sm truncate">{user.name || "—"}</span>
-            <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full border", roleBadge)}>
-              {user.role}
-            </span>
-            {user.autoCreated && (
-              <span className="text-[10px] bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full">
-                auto-created
+          {/* Name + contact */}
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold text-sm truncate">{user.name || "—"}</span>
+              <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full border", roleBadge)}>
+                {user.role}
               </span>
-            )}
+              {isBlocked && (
+                <span className="text-[10px] bg-red-100 text-red-700 border border-red-200 px-2 py-0.5 rounded-full font-semibold">
+                  blocked
+                </span>
+              )}
+              {user.autoCreated && (
+                <span className="text-[10px] bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full">
+                  auto-created
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1">
+              {user.email && (
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Mail className="w-3 h-3" />{user.email}
+                </span>
+              )}
+              {user.phone && (
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Phone className="w-3 h-3" />{user.phone}
+                </span>
+              )}
+            </div>
           </div>
-          <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1">
-            {user.email && (
-              <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                <Mail className="w-3 h-3" />{user.email}
-              </span>
-            )}
-            {user.phone && (
-              <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                <Phone className="w-3 h-3" />{user.phone}
-              </span>
-            )}
-          </div>
-        </div>
 
-        {/* Stats */}
-        <div className="flex gap-4 sm:gap-6 shrink-0 text-right">
-          <div>
-            <p className="text-xs text-muted-foreground">Bookings</p>
-            <p className="font-bold text-sm">{userBookings.length}</p>
+          {/* Stats */}
+          <div className="flex gap-4 sm:gap-6 shrink-0 text-right">
+            <div>
+              <p className="text-xs text-muted-foreground">Bookings</p>
+              <p className="font-bold text-sm">{userBookings.length}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Total Spend</p>
+              <p className="font-bold text-sm">₹{totalSpend.toLocaleString("en-IN")}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Wallet</p>
+              <p className="font-bold text-sm">₹{(user.walletBalance || 0).toLocaleString("en-IN")}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Joined</p>
+              <p className="font-bold text-sm">{formatDate(user.createdAt)}</p>
+            </div>
+            <div className="flex items-center">
+              {open
+                ? <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+            </div>
           </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Total Spend</p>
-            <p className="font-bold text-sm">₹{totalSpend.toLocaleString("en-IN")}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Wallet</p>
-            <p className="font-bold text-sm">₹{(user.walletBalance || 0).toLocaleString("en-IN")}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Joined</p>
-            <p className="font-bold text-sm">{formatDate(user.createdAt)}</p>
-          </div>
-          <div className="flex items-center">
-            {open
-              ? <ChevronUp className="w-4 h-4 text-muted-foreground" />
-              : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
-          </div>
-        </div>
-      </button>
+        </button>
+
+        {/* Block / Unblock button */}
+        <Button
+          size="sm"
+          variant={isBlocked ? "outline" : "outline"}
+          className={cn(
+            "shrink-0 gap-1.5 text-xs",
+            isBlocked
+              ? "border-green-300 text-green-700 hover:bg-green-50"
+              : "border-red-200 text-red-600 hover:bg-red-50"
+          )}
+          onClick={(e) => { e.stopPropagation(); onToggleBlock(user.id); }}
+        >
+          {isBlocked
+            ? <><CheckCircle2 className="w-3.5 h-3.5" /> Unblock</>
+            : <><Ban className="w-3.5 h-3.5" /> Block</>}
+        </Button>
+      </div>
 
       {/* Expanded: bookings */}
       {open && (
@@ -256,6 +307,7 @@ export default function AdminUsers() {
   const [bookings, setBookings] = useState<StoredBooking[]>([]);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
+  const [blockedSet, setBlockedSet] = useState<Set<string>>(loadBlockedSet);
 
   function load() {
     try {
@@ -270,7 +322,18 @@ export default function AdminUsers() {
     } catch {
       setBookings([]);
     }
+    setBlockedSet(loadBlockedSet());
   }
+
+  const toggleBlock = useCallback((userId: string) => {
+    setBlockedSet((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      saveBlockedSet(next);
+      return next;
+    });
+  }, []);
 
   useEffect(() => { load(); }, []);
 
@@ -315,11 +378,12 @@ export default function AdminUsers() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard icon={Users}     label="Total Users"      value={users.length}          color="bg-blue-100 text-blue-600" />
-          <StatCard icon={UserCheck} label="Customers"        value={customers.length}       color="bg-green-100 text-green-600" />
-          <StatCard icon={UserPlus}  label="Auto-Created"     value={autoCreated.length}     color="bg-amber-100 text-amber-600" />
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          <StatCard icon={Users}      label="Total Users"     value={users.length}          color="bg-blue-100 text-blue-600" />
+          <StatCard icon={UserCheck}  label="Customers"       value={customers.length}       color="bg-green-100 text-green-600" />
+          <StatCard icon={UserPlus}   label="Auto-Created"    value={autoCreated.length}     color="bg-amber-100 text-amber-600" />
           <StatCard icon={BadgeCheck} label="New This Month"  value={newThisMonth.length}    color="bg-purple-100 text-purple-600" />
+          <StatCard icon={Ban}        label="Blocked"         value={blockedSet.size}        color="bg-red-100 text-red-600" />
         </div>
 
         {/* Filters */}
@@ -368,7 +432,13 @@ export default function AdminUsers() {
         ) : (
           <div className="space-y-2">
             {sorted.map((u) => (
-              <UserRow key={u.id} user={u} bookings={bookings} />
+              <UserRow
+                key={u.id}
+                user={u}
+                bookings={bookings}
+                isBlocked={blockedSet.has(u.id)}
+                onToggleBlock={toggleBlock}
+              />
             ))}
           </div>
         )}

@@ -70,6 +70,7 @@ import About from "@/pages/about";
 import Contact from "@/pages/contact";
 import AdminInvoices from "@/pages/admin/invoices";
 import AdminUsers from "@/pages/admin/users";
+import AdminAnalytics from "@/pages/admin/analytics";
 import AdminStaffIncentives from "@/pages/admin/staff-incentives";
 import AdminSettings from "@/pages/admin/settings";
 import AdminBookingsManagement from "@/pages/admin/bookings-management";
@@ -190,6 +191,9 @@ function Router() {
       </Route>
       <Route path="/master-admin/users">
         <AdminGuard><AdminUsers /></AdminGuard>
+      </Route>
+      <Route path="/master-admin/analytics">
+        <AdminGuard><AdminAnalytics /></AdminGuard>
       </Route>
       <Route path="/invoice/:bookingId" component={InvoiceView} />
       <Route component={NotFound} />

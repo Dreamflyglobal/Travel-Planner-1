@@ -6,12 +6,13 @@ import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard, TrendingUp, Package,
   MessageSquare, FileText, ClipboardList, LogOut, Menu, X,
-  ShieldCheck, UserCheck, ChevronRight, Receipt, Users, Award, Settings,
+  ShieldCheck, UserCheck, ChevronRight, Receipt, Users, Award, Settings, BarChart2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { label: "Dashboard",        href: "/master-admin/dashboard",        icon: LayoutDashboard },
+  { label: "Analytics",        href: "/master-admin/analytics",        icon: BarChart2 },
   { label: "Revenue",          href: "/master-admin/revenue",          icon: TrendingUp },
   { label: "All Users",        href: "/master-admin/users",            icon: Users },
   { label: "Agents",           href: "/master-admin/agents",           icon: UserCheck },

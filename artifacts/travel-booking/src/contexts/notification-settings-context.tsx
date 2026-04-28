@@ -6,6 +6,8 @@ export type NotificationSettings = {
   smtpPassword: string;
   popupEnabled: boolean;
   popupMessage: string;
+  smsEnabled: boolean;
+  smsProvider: string;
 };
 
 const STORAGE_KEY = "notification_settings_v1";
@@ -16,6 +18,8 @@ export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
   smtpPassword: "",
   popupEnabled: true,
   popupMessage: "Your booking has been confirmed! A confirmation has been sent to your email.",
+  smsEnabled: false,
+  smsProvider: "",
 };
 
 function loadSettings(): NotificationSettings {
@@ -32,6 +36,8 @@ function loadSettings(): NotificationSettings {
       popupMessage: typeof parsed.popupMessage === "string" && parsed.popupMessage.trim()
         ? parsed.popupMessage
         : DEFAULT_NOTIFICATION_SETTINGS.popupMessage,
+      smsEnabled: typeof parsed.smsEnabled === "boolean" ? parsed.smsEnabled : DEFAULT_NOTIFICATION_SETTINGS.smsEnabled,
+      smsProvider: typeof parsed.smsProvider === "string" ? parsed.smsProvider : DEFAULT_NOTIFICATION_SETTINGS.smsProvider,
     };
   } catch {
     return DEFAULT_NOTIFICATION_SETTINGS;
