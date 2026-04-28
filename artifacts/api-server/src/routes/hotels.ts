@@ -185,7 +185,8 @@ router.get("/hotels/live-search", async (req, res): Promise<void> => {
 
         if (hbRes.ok) {
           const hbBody   = await hbRes.json();
-          const rawHotels: any[] = hbBody?.hotels?.hotels ?? [];
+          console.log("HotelBeds Response:", JSON.stringify(hbBody).slice(0, 800));
+          const rawHotels: any[] = hbBody?.hotels?.hotels ?? hbBody?.hotels ?? [];
 
           if (rawHotels.length > 0) {
             const FALLBACK_IMAGES = [
@@ -248,10 +249,10 @@ router.get("/hotels/live-search", async (req, res): Promise<void> => {
           }
         } else {
           const errText = await hbRes.text().catch(() => "");
-          console.warn(`[hotels/live-search] Hotelbeds HTTP ${hbRes.status}: ${errText.slice(0, 200)}`);
+          console.log("HotelBeds Error:", { status: hbRes.status, body: errText.slice(0, 500) });
         }
       } catch (err: any) {
-        console.warn(`[hotels/live-search] Hotelbeds error: ${err?.message}`);
+        console.log("HotelBeds Error:", err?.message ?? err);
       }
     } else {
       console.log(`[hotels/live-search] No Hotelbeds dest code for city "${city}", skipping Hotelbeds`);

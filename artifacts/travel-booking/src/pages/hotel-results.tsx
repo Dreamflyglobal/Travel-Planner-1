@@ -95,7 +95,7 @@ export default function HotelResults() {
     let cancelled = false;
     setIsLoading(true);
     setIsError(false);
-    fetchHotels()
+    fetchHotels(city || undefined, checkin || undefined, checkout || undefined)
       .then((list) => {
         if (cancelled) return;
         setAllHotels(list);
@@ -109,12 +109,15 @@ export default function HotelResults() {
         setIsLoading(false);
       });
     return () => { cancelled = true; };
-  }, [reloadKey]);
+  }, [reloadKey, city, checkin, checkout]);
 
+  // Backend already returns city-filtered results; keep a loose client-side
+  // fallback filter in case the source returns mixed cities.
   const hotels: any[] = allHotels.filter((h) => {
     if (!city) return true;
-    return h.city.toLowerCase().includes(city.toLowerCase()) ||
-           city.toLowerCase().includes(h.city.toLowerCase());
+    const hc = (h.city || "").toLowerCase();
+    const sc = city.toLowerCase();
+    return hc.includes(sc) || sc.includes(hc) || hc === "unknown";
   });
 
   const fallbackMessage: string | null = null;
