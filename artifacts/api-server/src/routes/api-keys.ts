@@ -175,44 +175,38 @@ router.post("/admin/api-keys/test", requireAdmin, async (req, res) => {
 
     // ── TripJack live probe ────────────────────────────────────────────────
     if (which === "flight") {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 30);
-      const travelDate = tomorrow.toISOString().slice(0, 10);
-
       const payload = {
         searchQuery: {
           cabinClass: "ECONOMY",
-          paxInfo: { ADULT: "1", CHILD: "0", INFANT: "0" },
+          paxInfo: { ADULT: 1, CHILD: 0, INFANT: 0 },
           routeInfos: [
             {
               fromCityOrAirport: { code: "DEL" },
               toCityOrAirport:   { code: "BOM" },
-              travelDate,
+              travelDate: "2026-05-10",
             },
           ],
-          searchModifiers: { isDirectFlight: false, isConnectingFlight: false },
+          searchModifiers: { isDirectFlight: false },
         },
       };
 
       try {
-        const r = await fetch("https://apitest.tripjack.com/fms/v1/air-search-all", {
+        const r = await fetch("https://apitest.tripjack.com/fms/v1/air/search", {
           method: "POST",
-          headers: { "Content-Type": "application/json", apikey: key },
+          headers: { "Content-Type": "application/json", apikey: key.trim() },
           body: JSON.stringify(payload),
           signal: AbortSignal.timeout(12_000),
         });
 
         const body: any = await r.json().catch(() => ({}));
+        console.log("[api-keys] TripJack response:", JSON.stringify(body));
 
-        if (r.status === 401 || r.status === 403) {
-          return res.json({ success: true, ok: false, message: `TripJack rejected the key: ${r.status} ${body?.message ?? "Unauthorized"}` });
+        if (r.status === 200) {
+          return res.json({ success: true, ok: true, message: "TripJack API key is valid and working." });
         }
-        if (!r.ok) {
-          const msg = body?.message || body?.error || `HTTP ${r.status}`;
-          return res.json({ success: true, ok: false, message: `TripJack returned an error: ${msg}` });
-        }
-        // A 200 with search data (or even an empty result) confirms the key is accepted
-        return res.json({ success: true, ok: true, message: "TripJack API key is valid and working." });
+
+        const msg = body?.message || body?.error || body?.errors?.[0] || `HTTP ${r.status}`;
+        return res.json({ success: true, ok: false, message: `TripJack error: ${msg}` });
       } catch (err: any) {
         if (err.name === "TimeoutError" || err.code === "ABORT_ERR") {
           return res.json({ success: true, ok: false, message: "TripJack did not respond within 12 seconds. Check your network or try again." });
