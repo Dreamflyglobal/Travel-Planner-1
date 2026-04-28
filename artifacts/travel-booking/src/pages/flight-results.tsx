@@ -178,13 +178,13 @@ export default function FlightResults() {
     }
 
     // TripJack fareQuote priceIds format:
-    //   traceId     = totalPriceList[i].id (= fareKey, the price list ID)
-    //   resultIndex = sI[0].id (the segment ID, extracted by the search mapper)
-    // Always use fresh data — never reuse old fareQuote results.
-    const fareQuotePayload = { traceId: fareKey, resultIndex: ri };
+    //   traceId     = searchResult.traceId (search session ID from the search API)
+    //   resultIndex = flight.resultIndex (raw resultIndex from TripJack search result)
+    // Always use fresh data from the search — never reuse or recreate these values.
+    const fareQuotePayload = { traceId: ti, resultIndex: ri };
     const payload = JSON.stringify(fareQuotePayload);
 
-    console.log("FareQuote Body:", { priceIds: [{ traceId: fareKey, resultIndex: ri }] });
+    console.log("FareQuote Body:", { priceIds: [{ traceId: ti, resultIndex: ri }] });
     console.info(
       "[fareQuote/select] fareKey:", fareKey,
       "| resultIndex:", ri || "(none)",
@@ -252,6 +252,10 @@ export default function FlightResults() {
             "[fareQuote/select] 'Could not verify fare' — recalling FareQuote, retry",
             attempt + 2,
           );
+          toast({
+            title:       "Refreshing price…",
+            description: "Getting the latest fare from the airline.",
+          });
           continue;
         }
 
@@ -1137,7 +1141,7 @@ export default function FlightResults() {
                                           e.stopPropagation();
                                           if (bookingLoadingId) return;
                                           userClickedRef.current = true;
-                                          const ri = fare.resultIndex || flight.resultIndex;
+                                          const ri = flight.resultIndex || fare.resultIndex;
                                           console.log("[fareSelect] fareId:", fare.fareId, "| cabinClass:", fare.cabinClass, "| resultIndex:", ri, "| traceId:", traceId || "(none)");
                                           handleSelectFlight(fare.fareId, bookParams, true, ri, traceId);
                                         }}

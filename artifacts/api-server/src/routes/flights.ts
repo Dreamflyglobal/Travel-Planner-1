@@ -157,11 +157,12 @@ function mapTripJackFlight(item: any, idx: number, fromIata: string, toIata: str
     PREMIUM_ECONOMY: "Premium Economy",
   };
 
-  // TripJack fareQuote priceIds.resultIndex = sI[0].id (segment ID, e.g. 342).
-  // Fall back to item.resultIndex / item.sI[0].rI if present, else String(idx).
+  // TripJack fareQuote priceIds.resultIndex must be the raw resultIndex from the
+  // TripJack search response — do NOT modify or recreate this value.
+  // Fall back to sI[0].id (segment ID) only if resultIndex is absent.
   const flightResultIndex: string =
-    String(item.sI?.[0]?.id  ?? "")  ||
     String(item.resultIndex   ?? "")  ||
+    String(item.sI?.[0]?.id  ?? "")  ||
     String(item.sI?.[0]?.rI  ?? "")  ||
     String(idx);
 
@@ -220,11 +221,12 @@ function mapTripJackFlight(item: any, idx: number, fromIata: string, toIata: str
   const stops = Math.max(0, segCount - 1);
   const stopsLabel = segCount === 1 ? "Non-stop" : segCount === 2 ? "1 Stop" : "Multi-stop";
 
-  // resultIndex: TripJack fareQuote priceIds.resultIndex = sI[0].id (segment ID).
+  // resultIndex: raw value from TripJack search response — do NOT modify.
+  // TripJack fareQuote expects this exact value back in priceIds.resultIndex.
   // Falls back through known field names then to array idx.
   const resultIndex: string =
-    String(item.sI?.[0]?.id ?? "")  ||
     String(item.resultIndex  ?? "")  ||
+    String(item.sI?.[0]?.id ?? "")  ||
     String(item.sI?.[0]?.rI ?? "")  ||
     String(idx);
 
