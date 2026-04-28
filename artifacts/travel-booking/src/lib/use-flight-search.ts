@@ -7,6 +7,7 @@ export interface FareOption {
   totalFare:   number;
   seatsLeft:   number;
   resultIndex?: string;  // per-fare TripJack result identifier for fareQuote/SSR/book
+  meal?:        string | null;  // "FREE" | "PAID" | null — from API mI field
 }
 
 export interface LiveFlight {

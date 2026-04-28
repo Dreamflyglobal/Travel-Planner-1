@@ -188,6 +188,13 @@ function mapTripJackFlight(item: any, idx: number, fromIata: string, toIata: str
         String(pl.rI         ?? "")             ||
         flightResultIndex;
 
+      // Normalize TripJack meal indicator: "F" → "FREE", "P" → "PAID", else null
+      const rawMeal = adultFd?.mI ?? adultFd?.meal ?? null;
+      const meal: string | null =
+        rawMeal === "F" || rawMeal === "FREE" ? "FREE" :
+        rawMeal === "P" || rawMeal === "PAID" ? "PAID" :
+        null;
+
       return {
         fareId:      pl.id || pl.fareIdentifier || cc,
         cabinClass:  cc,
@@ -195,11 +202,13 @@ function mapTripJackFlight(item: any, idx: number, fromIata: string, toIata: str
         totalFare:   rawFare,
         seatsLeft:   adultFd?.sR ?? 9,
         resultIndex: fareResultIndex,   // ← per-fare TripJack result identifier
+        meal,                           // "FREE" | "PAID" | null
       };
     })
     .filter(Boolean) as Array<{
       fareId: string; cabinClass: string; cabinLabel: string;
       totalFare: number; seatsLeft: number; resultIndex: string;
+      meal: string | null;
     }>;
 
   // TripJack often returns multiple sub-types per cabin class (SAVER, FLEXI, PLUS …).

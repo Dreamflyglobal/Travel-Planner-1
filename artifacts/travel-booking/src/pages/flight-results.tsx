@@ -703,10 +703,10 @@ export default function FlightResults() {
   function fareDetails(cls: string) {
     const c = cls.toUpperCase();
     if (c === "BUSINESS" || c === "FIRST")
-      return { refundable: true,  checked: "30 kg", cabin: "10 kg", meal: true  };
+      return { refundable: true,  checked: "30 kg", cabin: "10 kg" };
     if (c === "PREMIUM_ECONOMY")
-      return { refundable: true,  checked: "20 kg", cabin: "7 kg",  meal: true  };
-    return   { refundable: false, checked: "15 kg", cabin: "7 kg",  meal: false };
+      return { refundable: true,  checked: "20 kg", cabin: "7 kg"  };
+    return   { refundable: false, checked: "15 kg", cabin: "7 kg"  };
   }
 
   // ── Main Render ────────────────────────────────────────────────────────────
@@ -1025,9 +1025,6 @@ export default function FlightResults() {
                                 <span className="inline-flex items-center gap-1 text-[11px] font-medium text-green-700 bg-green-50 border border-green-200 rounded-full px-2.5 py-0.5">
                                   ✓ Refundable
                                 </span>
-                                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-2.5 py-0.5">
-                                  🍽 Free meal
-                                </span>
                                 {flight.seatsAvailable <= 5 && (
                                   <span className="text-[10px] font-bold text-red-500 animate-pulse">↑ Prices rising fast!</span>
                                 )}
@@ -1272,15 +1269,19 @@ export default function FlightResults() {
                             <span className="font-semibold">{fd.checked}</span> check-in &amp; <span className="font-semibold">{fd.cabin}</span> cabin
                           </span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          {fd.meal
-                            ? <Utensils        className="w-3.5 h-3.5 text-orange-400 shrink-0" />
-                            : <UtensilsCrossed className="w-3.5 h-3.5 text-slate-300 shrink-0" />
-                          }
-                          <span className={cn("text-xs font-medium", fd.meal ? "text-orange-600" : "text-slate-400")}>
-                            {fd.meal ? "Complimentary meal" : "No meal included"}
-                          </span>
-                        </div>
+                        {fare.meal === "FREE" || fare.meal === "PAID" ? (
+                          <div className="flex items-center gap-2">
+                            <Utensils className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                            <span className="text-xs font-medium text-orange-600">
+                              {fare.meal === "FREE" ? "Free meal included" : "Paid meal available"}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <UtensilsCrossed className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+                            <span className="text-xs font-medium text-slate-400">No meal included</span>
+                          </div>
+                        )}
                       </div>
                       <Button
                         size="sm"
