@@ -153,280 +153,117 @@ router.get("/hotels/live-search", async (req, res): Promise<void> => {
   const keysRow   = keysRows[0] ?? {};
   const hbApiKey  = (keysRow as any).hotelApiKey  || process.env.HOTELBEDS_API_KEY  || "";
   const hbSecret  = (keysRow as any).hotelApiSecret|| process.env.HOTELBEDS_SECRET   || "";
-  const apiKey    = process.env.RAPIDAPI_KEY;
 
   console.log(`[hotels/live-search] city="${city}" checkin="${checkin}" checkout="${checkout}" hotelbeds=${hbApiKey ? "set" : "not set"}`);
 
-  // ── Try Hotelbeds API if credentials present ─────────────────────────────
+  // ── HotelBeds: always call when credentials are present ──────────────────
   if (hbApiKey && hbSecret) {
     const destCode = hotelbedsDestCode(city);
-    if (destCode) {
-      try {
-        const checkIn  = checkin  || new Date(Date.now() + 7  * 86400000).toISOString().slice(0, 10);
-        const checkOut = checkout || new Date(Date.now() + 9  * 86400000).toISOString().slice(0, 10);
+    const checkIn  = checkin  || new Date(Date.now() + 7  * 86400000).toISOString().slice(0, 10);
+    const checkOut = checkout || new Date(Date.now() + 9  * 86400000).toISOString().slice(0, 10);
 
-        const body = JSON.stringify({
-          stay: { checkIn, checkOut },
-          occupancies: [{ rooms: 1, adults: 2, children: 0 }],
-          destination: { code: destCode },
-        });
-
-        const hbRes = await fetch("https://api.test.hotelbeds.com/hotel-api/1.0/hotels", {
-          method: "POST",
-          headers: {
-            "Api-key": hbApiKey,
-            "X-Signature": hotelbedsSignature(hbApiKey, hbSecret),
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-          },
-          body,
-          signal: AbortSignal.timeout(12_000),
-        });
-
-        if (hbRes.ok) {
-          const hbBody   = await hbRes.json();
-          console.log("HotelBeds Response:", JSON.stringify(hbBody).slice(0, 800));
-          const rawHotels: any[] = hbBody?.hotels?.hotels ?? hbBody?.hotels ?? [];
-
-          if (rawHotels.length > 0) {
-            const FALLBACK_IMAGES = [
-              "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&q=80",
-              "https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=800&q=80",
-              "https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?w=800&q=80",
-              "https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?w=800&q=80",
-              "https://images.unsplash.com/photo-1571003123894-1f0594d2b5d9?w=800&q=80",
-              "https://images.unsplash.com/photo-1444201983204-c43cbd584d93?w=800&q=80",
-              "https://images.unsplash.com/photo-1455587734955-081b22074882?w=800&q=80",
-            ];
-
-            const mapped = rawHotels.slice(0, 15).map((h: any, idx: number) => {
-              // Star rating from categoryCode e.g. "4EST" → 4
-              const stars = parseInt(h.categoryCode) || 3;
-
-              // Price: best rate from first room's cheapest rate
-              const firstRate = h.rooms?.[0]?.rates?.[0];
-              const netPrice  = parseFloat(firstRate?.net || "0");
-              // Hotelbeds prices are in USD in test env — convert to approximate INR (×84)
-              const pricePerNight = netPrice > 0 ? Math.round(netPrice * 84) : (3500 + idx * 500);
-
-              // Board type for amenities
-              const boardName: string = (firstRate?.boardName || "").toUpperCase();
-              const amenities: string[] = ["WiFi", "AC"];
-              if (boardName.includes("BED") || boardName.includes("BREAKFAST") || boardName.includes("BB")) amenities.push("Breakfast");
-              if (boardName.includes("HALF") || boardName.includes("HB"))   amenities.push("Half Board");
-              if (boardName.includes("FULL") || boardName.includes("FB"))   amenities.push("Full Board");
-              if (stars >= 4) amenities.push("Restaurant", "Room Service");
-              if (stars >= 5) amenities.push("Spa", "Concierge");
-              if (stars >= 3) amenities.push("Parking");
-
-              const imageUrl = FALLBACK_IMAGES[idx % FALLBACK_IMAGES.length];
-
-              // Rating: interpolate 3.5–4.9 based on category + index
-              const baseRating = Math.min(5, (stars - 1) * 0.5 + 2.5);
-              const rating     = parseFloat((baseRating + (idx % 5) * 0.1).toFixed(1));
-              const ratingLabel = rating >= 4.5 ? "Exceptional" : rating >= 4.0 ? "Excellent" : rating >= 3.5 ? "Very Good" : "Good";
-
-              return {
-                id: h.code || (10000 + idx),
-                name: h.name || `Hotel ${idx + 1}`,
-                city,
-                location: h.zoneName || h.destinationName || city,
-                stars,
-                rating,
-                ratingCount: 150 + idx * 45,
-                ratingLabel,
-                pricePerNight,
-                amenities,
-                imageUrl,
-                photos: [imageUrl],
-                description: `${h.name} — a ${h.categoryName || `${stars}-star`} property in ${h.zoneName || city}.`,
-              };
-            });
-
-            console.log(`[hotels/live-search] Hotelbeds OK: ${mapped.length} hotels for ${city} (${destCode})`);
-            res.json({ hotels: mapped, total: mapped.length, source: "hotelbeds", city });
-            return;
-          }
-        } else {
-          const errText = await hbRes.text().catch(() => "");
-          console.log("HotelBeds Error:", { status: hbRes.status, body: errText.slice(0, 500) });
-        }
-      } catch (err: any) {
-        console.log("HotelBeds Error:", err?.message ?? err);
-      }
-    } else {
-      console.log(`[hotels/live-search] No Hotelbeds dest code for city "${city}", skipping Hotelbeds`);
+    if (!destCode) {
+      console.log(`HotelBeds Error: No destination code mapped for city "${city}". Add it to HOTELBEDS_DEST_CODES.`);
+      res.json({ hotels: [], total: 0, source: "hotelbeds", city, message: `No HotelBeds destination code for "${city}".` });
+      return;
     }
-  }
 
-  // ── Try RapidAPI if key present ──────────────────────────────────────────
-  if (apiKey) {
-    try {
-      // Step 1: search for destination ID
-      const destRes = await fetch(
-        `https://booking-com15.p.rapidapi.com/api/v1/hotels/searchDestination?query=${encodeURIComponent(city)}&locale=en-gb`,
-        {
-          headers: {
-            "X-RapidAPI-Key": apiKey,
-            "X-RapidAPI-Host": "booking-com15.p.rapidapi.com",
-          },
-          signal: AbortSignal.timeout(8_000),
-        }
-      );
-
-      if (destRes.ok) {
-        const destBody = await destRes.json();
-        const destId = destBody?.data?.[0]?.dest_id;
-
-        if (destId) {
-          // Step 2: search hotels at that destination
-          const hotelRes = await fetch(
-            `https://booking-com15.p.rapidapi.com/api/v1/hotels/searchHotels?dest_id=${destId}&search_type=city&arrival_date=${checkin || "2026-05-01"}&departure_date=${checkout || "2026-05-05"}&adults=2&room_qty=1&page_number=1&units=metric&temperature_unit=c&languagecode=en-us&currency_code=INR`,
-            {
-              headers: {
-                "X-RapidAPI-Key": apiKey,
-                "X-RapidAPI-Host": "booking-com15.p.rapidapi.com",
-              },
-              signal: AbortSignal.timeout(12_000),
-            }
-          );
-
-          if (hotelRes.ok) {
-            const hotelBody = await hotelRes.json();
-            const rawHotels = hotelBody?.data?.hotels || [];
-
-            if (rawHotels.length > 0) {
-              const mapped = rawHotels.slice(0, 12).map((h: any, idx: number) => {
-                // Extract amenities from API response
-                const stars = Math.round(h.property?.propertyClass || 3);
-                const rawAmenities: string[] = [];
-                const accessLabel: string = (h.property?.accessibilityLabel || "").toLowerCase();
-                const badges: any[] = h.property?.badges || [];
-                const badgeNames = badges.map((b: any) => (b.text || b.id || "").toLowerCase());
-
-                // Infer from badges and accessibility label + star tier
-                if (accessLabel.includes("pool") || badgeNames.some((b) => b.includes("pool"))) rawAmenities.push("Pool");
-                if (accessLabel.includes("spa"))  rawAmenities.push("Spa");
-                if (accessLabel.includes("gym") || accessLabel.includes("fitness")) rawAmenities.push("Gym");
-                if (accessLabel.includes("restaurant") || accessLabel.includes("dining")) rawAmenities.push("Restaurant");
-                if (accessLabel.includes("bar")) rawAmenities.push("Bar");
-                if (accessLabel.includes("airport shuttle") || accessLabel.includes("airport transfer")) rawAmenities.push("Airport Shuttle");
-                if (accessLabel.includes("beach")) rawAmenities.push("Beach Access");
-                if (accessLabel.includes("parking") || accessLabel.includes("car park")) rawAmenities.push("Parking");
-                if (accessLabel.includes("breakfast")) rawAmenities.push("Breakfast");
-                if (accessLabel.includes("pet")) rawAmenities.push("Pet Friendly");
-
-                // Star-tier defaults
-                rawAmenities.push("WiFi", "AC");
-                if (stars >= 4) rawAmenities.push("Room Service");
-                if (stars >= 5) { rawAmenities.push("Concierge"); rawAmenities.push("Butler"); }
-
-                // Deduplicate
-                const amenities = [...new Set(rawAmenities)].slice(0, 8);
-
-                // Rating: booking uses 1–10 scale, show as X.X / 10
-                const reviewScore = h.property?.reviewScore || 0;
-                const rating = reviewScore > 0 ? parseFloat(reviewScore.toFixed(1)) : parseFloat((3.5 + idx * 0.1).toFixed(1));
-
-                // Price — gross total (for dates searched) → per-night estimate
-                const grossPrice = h.property?.priceBreakdown?.grossPrice?.value || 0;
-                const pricePerNight = grossPrice > 0 ? Math.round(grossPrice) : (3000 + idx * 500);
-
-                // Pick best available photo
-                const photos: string[] = h.property?.photoUrls || [];
-                const imageUrl = photos[0] || `https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&q=80`;
-
-                return {
-                  id: idx + 1,
-                  name: h.property?.name || `Hotel ${idx + 1}`,
-                  city,
-                  location: h.property?.wishlistName || h.property?.countryCode || city,
-                  stars,
-                  rating,
-                  ratingCount: h.property?.reviewCount || 0,
-                  ratingLabel: h.property?.reviewScoreWord || "Good",
-                  pricePerNight,
-                  amenities,
-                  imageUrl,
-                  photos: photos.slice(0, 5),
-                  description: `${h.property?.name} in ${city} — rated ${h.property?.reviewScoreWord || "Good"} (${reviewScore}/10) by guests.`,
-                  bookingComId: h.property?.id,
-                };
-              });
-              console.log(`[hotels/live-search] RapidAPI OK: ${mapped.length} hotels for ${city}`);
-              res.json({ hotels: mapped, total: mapped.length, source: "rapidapi", city });
-              return;
-            }
-          }
-        }
-      }
-    } catch (err: any) {
-      console.warn(`[hotels/live-search] RapidAPI error: ${err?.message}`);
-    }
-  }
-
-  // ── Fallback: curated city-specific data ────────────────────────────────
-  const cityHotels = getCityHotels(city);
-
-  if (cityHotels) {
-    const hotels = cityHotels.map((h, idx) => ({ ...h, id: idx + 1, city: h.city || city }));
-    console.log(`[hotels/live-search] Fallback curated data: ${hotels.length} hotels for ${city}`);
-    res.json({
-      hotels,
-      total: hotels.length,
-      source: "curated",
-      city,
-      fallbackMessage: `Showing curated top hotels in ${city}.`,
-    });
-    return;
-  }
-
-  // ── Generic fallback for uncovered cities ───────────────────────────────
-  const seed = city.toLowerCase().split("").reduce((a, c) => a + c.charCodeAt(0), 0);
-  const GENERIC_NAMES = [
-    ["Grand Plaza Hotel", 5], ["The Royal Residency", 5], ["Park View Hotel", 4],
-    ["City Centre Inn", 4], ["Business Hotel Premier", 4], ["Comfort Suites", 3],
-    ["The Heritage Inn", 3], ["Budget Stays Express", 3],
-  ] as [string, number][];
-  const GENERIC_IMAGES = [
-    "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&q=80",
-    "https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=800&q=80",
-    "https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?w=800&q=80",
-    "https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?w=800&q=80",
-    "https://images.unsplash.com/photo-1571003123894-1f0594d2b5d9?w=800&q=80",
-    "https://images.unsplash.com/photo-1444201983204-c43cbd584d93?w=800&q=80",
-    "https://images.unsplash.com/photo-1455587734955-081b22074882?w=800&q=80",
-    "https://images.unsplash.com/photo-1568084680786-a84f91d1153c?w=800&q=80",
-  ];
-  const genericHotels = GENERIC_NAMES.map(([name, stars], idx) => {
-    const base = 1500 + ((seed + idx * 13) % 12000);
-    return {
-      id: idx + 1,
-      name: `${name}`,
-      city,
-      location: city,
-      stars,
-      rating: parseFloat((3.5 + ((seed + idx * 7) % 15) / 10).toFixed(1)),
-      ratingCount: 100 + ((seed + idx * 31) % 900),
-      ratingLabel: stars === 5 ? "Excellent" : stars === 4 ? "Very Good" : "Good",
-      pricePerNight: Math.round(base / 100) * 100,
-      amenities: stars === 5
-        ? ["WiFi", "Pool", "Spa", "Restaurant", "Bar", "Gym", "Parking"]
-        : stars === 4
-        ? ["WiFi", "Pool", "Restaurant", "Gym", "Parking"]
-        : ["WiFi", "Restaurant", "Parking"],
-      imageUrl: GENERIC_IMAGES[idx % GENERIC_IMAGES.length],
-      description: `A ${stars}-star property in ${city} offering comfortable stays and quality service.`,
+    const requestBody = {
+      stay: { checkIn, checkOut },
+      occupancies: [{ rooms: 1, adults: 2, children: 0 }],
+      destination: { code: destCode },
     };
-  });
 
-  res.json({
-    hotels: genericHotels,
-    total: genericHotels.length,
-    source: "curated",
-    city,
-    fallbackMessage: `Showing suggested hotels in ${city}.`,
-  });
+    console.log("Calling HotelBeds API...", { city, destCode, checkIn, checkOut, endpoint: "https://api.test.hotelbeds.com/hotel-api/1.0/hotels" });
+
+    try {
+      const hbRes = await fetch("https://api.test.hotelbeds.com/hotel-api/1.0/hotels", {
+        method: "POST",
+        headers: {
+          "Api-key":       hbApiKey,
+          "X-Signature":   hotelbedsSignature(hbApiKey, hbSecret),
+          "Content-Type":  "application/json",
+          "Accept":        "application/json",
+        },
+        body: JSON.stringify(requestBody),
+        signal: AbortSignal.timeout(15_000),
+      });
+
+      const hbBody = await hbRes.json().catch(() => null);
+      console.log("HotelBeds Response:", JSON.stringify(hbBody).slice(0, 1200));
+
+      if (!hbRes.ok) {
+        console.log("HotelBeds Error:", { status: hbRes.status, body: hbBody });
+        res.json({ hotels: [], total: 0, source: "hotelbeds", city, message: `HotelBeds API error ${hbRes.status}` });
+        return;
+      }
+
+      const rawHotels: any[] = hbBody?.hotels?.hotels ?? [];
+      console.log(`HotelBeds: ${rawHotels.length} hotels returned for ${city} (${destCode})`);
+
+      if (rawHotels.length === 0) {
+        res.json({ hotels: [], total: 0, source: "hotelbeds", city, message: `HotelBeds has no inventory for "${city}" (${destCode}) in the test environment for ${checkIn}→${checkOut}.` });
+        return;
+      }
+
+      const FALLBACK_IMAGES = [
+        "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&q=80",
+        "https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=800&q=80",
+        "https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?w=800&q=80",
+        "https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?w=800&q=80",
+        "https://images.unsplash.com/photo-1571003123894-1f0594d2b5d9?w=800&q=80",
+        "https://images.unsplash.com/photo-1444201983204-c43cbd584d93?w=800&q=80",
+        "https://images.unsplash.com/photo-1455587734955-081b22074882?w=800&q=80",
+      ];
+
+      const mapped = rawHotels.slice(0, 20).map((h: any, idx: number) => {
+        const stars = parseInt(h.categoryCode) || 3;
+        const firstRate   = h.rooms?.[0]?.rates?.[0];
+        const netPrice    = parseFloat(firstRate?.net || "0");
+        const pricePerNight = netPrice > 0 ? Math.round(netPrice * 84) : (3500 + idx * 500);
+        const boardName: string = (firstRate?.boardName || "").toUpperCase();
+        const amenities: string[] = ["WiFi", "AC"];
+        if (boardName.includes("BREAKFAST") || boardName.includes("BB")) amenities.push("Breakfast");
+        if (boardName.includes("HALF") || boardName.includes("HB"))      amenities.push("Half Board");
+        if (boardName.includes("FULL") || boardName.includes("FB"))      amenities.push("Full Board");
+        if (stars >= 4) amenities.push("Restaurant", "Room Service");
+        if (stars >= 5) amenities.push("Spa", "Concierge");
+        if (stars >= 3) amenities.push("Parking");
+        const imageUrl    = FALLBACK_IMAGES[idx % FALLBACK_IMAGES.length];
+        const baseRating  = Math.min(5, (stars - 1) * 0.5 + 2.5);
+        const rating      = parseFloat((baseRating + (idx % 5) * 0.1).toFixed(1));
+        const ratingLabel = rating >= 4.5 ? "Exceptional" : rating >= 4.0 ? "Excellent" : rating >= 3.5 ? "Very Good" : "Good";
+        return {
+          id: h.code || (10000 + idx),
+          name: h.name || `Hotel ${idx + 1}`,
+          city,
+          location: h.zoneName || h.destinationName || city,
+          stars,
+          rating,
+          ratingCount: 150 + idx * 45,
+          ratingLabel,
+          pricePerNight,
+          amenities,
+          imageUrl,
+          photos: [imageUrl],
+          description: `${h.name} — a ${h.categoryName || `${stars}-star`} property in ${h.zoneName || city}.`,
+        };
+      });
+
+      console.log(`[hotels/live-search] HotelBeds OK: ${mapped.length} hotels for ${city}`);
+      res.json({ hotels: mapped, total: mapped.length, source: "hotelbeds", city });
+      return;
+
+    } catch (err: any) {
+      console.log("HotelBeds Error:", err?.message ?? err);
+      res.json({ hotels: [], total: 0, source: "hotelbeds", city, message: `HotelBeds request failed: ${err?.message}` });
+      return;
+    }
+  }
+
+  // ── No HotelBeds credentials configured ──────────────────────────────────
+  console.log("HotelBeds Error: HOTELBEDS_API_KEY and HOTELBEDS_SECRET are not configured.");
+  res.json({ hotels: [], total: 0, source: "hotelbeds", city, message: "HotelBeds credentials not configured." });
 });
 
 router.get("/hotels/search", async (req, res): Promise<void> => {
