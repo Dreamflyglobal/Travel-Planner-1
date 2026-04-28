@@ -176,9 +176,9 @@ export default function FlightResults() {
     console.log("TRACE:", ti || "(none)");
     console.log("RESULT:", ri || "(none)");
 
-    // Guard: both traceId and resultIndex are required — cannot verify fare without them
-    if (!ri || !ti) {
-      console.error("[fareQuote] missing", !ti ? "traceId" : "resultIndex", "— cannot verify fare");
+    // Guard: resultIndex is required — cannot verify fare without it
+    if (!ri) {
+      console.error("[fareQuote] missing resultIndex — cannot verify fare");
       isLoadingRef.current = false;
       setBookingLoadingId(null);
       if (userClickedRef.current) {
@@ -189,6 +189,9 @@ export default function FlightResults() {
         });
       }
       return;
+    }
+    if (!ti) {
+      console.warn("[fareQuote] traceId not present — proceeding with resultIndex only");
     }
 
     // TripJack fareQuote priceIds format:
@@ -236,7 +239,7 @@ export default function FlightResults() {
       fetchErr = null;
 
       try {
-        res  = await fetch(`${apiBase}/api/tripjack/fareQuote`, {
+        res  = await fetch(`${apiBase}/api/tj-farequote`, {
           method:  "POST",
           headers: { "Content-Type": "application/json" },
           body:    payload,

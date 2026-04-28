@@ -314,7 +314,7 @@ export default function FlightBooking() {
         console.info("[fareQuote] retrying with stored flight | resultIndex:", ri || "(none)", "| traceId:", ti || "(none)");
 
         if (ri) {
-          const fqRes  = await fetch(`${apiBase}/api/tripjack/fareQuote`, {
+          const fqRes  = await fetch(`${apiBase}/api/tj-farequote`, {
             method:  "POST",
             headers: { "Content-Type": "application/json" },
             body:    JSON.stringify({ traceId: ti, resultIndex: ri }),

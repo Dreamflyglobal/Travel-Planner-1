@@ -17,10 +17,8 @@ router.post("/tj-search", async (req, res): Promise<void> => {
   }
 });
 
-// POST /api/tripjack/fareQuote  (canonical path)
-// POST /api/tj-farequote        (legacy alias — kept for backward compat)
+// POST /api/tj-farequote → TripJack /fms/v1/air-fare-quote
 // Accepts: { traceId, resultIndex }
-// Sends flat: { traceId, resultIndex } to TripJack
 async function handleFareQuote(req: any, res: any): Promise<void> {
   const { traceId, resultIndex } = req.body as {
     traceId?:     string;
@@ -30,41 +28,35 @@ async function handleFareQuote(req: any, res: any): Promise<void> {
   console.log("TRACE:", traceId || "(none)");
   console.log("RESULT:", resultIndex || "(none)");
 
-  if (!traceId || !resultIndex) {
-    console.warn("[fareQuote] Missing traceId or resultIndex — rejecting");
-    res.status(400).json({
-      error: !resultIndex
-        ? "resultIndex is required for fareQuote"
-        : "traceId is required for fareQuote",
-    });
+  if (!resultIndex) {
+    console.warn("[fareQuote] Missing resultIndex — rejecting");
+    res.status(400).json({ error: "resultIndex is required for fareQuote" });
     return;
   }
 
-  const fareQuoteBody = { traceId, resultIndex };
+  // Build body — include traceId only when present
+  const fareQuoteBody: Record<string, string> = { resultIndex };
+  if (traceId) fareQuoteBody.traceId = traceId;
+
   console.log("FareQuote Body:", JSON.stringify(fareQuoteBody));
 
   try {
-    const data = await tjPostWithRetry("/fms/v1/air/farequote", fareQuoteBody, {
+    // TripJack uses hyphenated path: air-fare-quote (same convention as air-search-all)
+    const data = await tjPostWithRetry("/fms/v1/air-fare-quote", fareQuoteBody, {
       context:    "fareQuote",
       timeoutMs:  15_000,
       maxRetries: 2,
     });
 
-    // Surface application-level "could not verify fare" to the client
-    const respStr = JSON.stringify(data).toLowerCase();
-    if (respStr.includes("could not verify fare") || respStr.includes("verify fare")) {
-      console.warn("[fareQuote] TripJack returned 'could not verify fare' — forwarding to client for retry");
-    }
-
-    console.log("FareQuote Response:", JSON.stringify(data).slice(0, 500));
+    console.log("FareQuote Response:", JSON.stringify(data).slice(0, 800));
     res.json(data);
   } catch (err: any) {
     handleTjError(res, err, "fareQuote");
   }
 }
 
-router.post("/tripjack/fareQuote", handleFareQuote);
 router.post("/tj-farequote",       handleFareQuote);
+router.post("/tripjack/fareQuote", handleFareQuote);
 
 // POST /api/tj-ssr → /fms/v1/air/ssr
 router.post("/tj-ssr", async (req, res): Promise<void> => {
