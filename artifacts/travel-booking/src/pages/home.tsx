@@ -1,6 +1,6 @@
 import { APP_NAME } from "@/lib/app-config";
 import { Layout } from "@/components/layout";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useDestinationsWithFallback, useDealsWithFallback } from "@/lib/use-data-with-fallback";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -67,14 +67,29 @@ const PROMO_BANNERS = [
 ];
 
 
+const TAB_ROUTES: Record<string, string> = {
+  hotels: "/hotels",
+  buses: "/buses",
+  packages: "/packages",
+};
+
 export default function Home() {
   const { data: destinations, isLoading: destinationsLoading } = useDestinationsWithFallback();
   const { data: deals, isLoading: dealsLoading } = useDealsWithFallback();
+  const [, setLocation] = useLocation();
 
   const today    = new Date().toISOString().split("T")[0];
   const tomorrow = new Date(Date.now() + 86_400_000).toISOString().split("T")[0];
 
   const [activeTab, setActiveTab] = useState<string>("flights");
+
+  const handleTabChange = (tab: string) => {
+    if (TAB_ROUTES[tab]) {
+      setLocation(TAB_ROUTES[tab]);
+    } else {
+      setActiveTab(tab);
+    }
+  };
 
   const [promoIndex, setPromoIndex] = useState(0);
 
@@ -118,7 +133,7 @@ export default function Home() {
             </p>
           </div>
 
-          <SearchTabs onTabChange={setActiveTab} />
+          <SearchTabs onTabChange={handleTabChange} />
         </div>
       </section>
 

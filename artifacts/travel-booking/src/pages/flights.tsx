@@ -1,10 +1,17 @@
 import { Layout } from "@/components/layout";
-import { Link, useSearch } from "wouter";
+import { Link, useSearch, useLocation } from "wouter";
 import { SearchTabs } from "@/components/search-tabs";
 import { Plane } from "lucide-react";
 
+const TAB_ROUTES: Record<string, string> = {
+  hotels: "/hotels",
+  buses: "/buses",
+  packages: "/packages",
+};
+
 export default function Flights() {
   const searchString = useSearch();
+  const [, setLocation] = useLocation();
 
   const initParams = new URLSearchParams(searchString);
   const initialFrom = initParams.get("from") || "";
@@ -51,6 +58,9 @@ export default function Flights() {
             initialFrom={initialFrom}
             initialTo={initialTo}
             initialDate={initialDate}
+            onTabChange={(tab) => {
+              if (TAB_ROUTES[tab]) setLocation(TAB_ROUTES[tab]);
+            }}
           />
         </div>
       </section>
