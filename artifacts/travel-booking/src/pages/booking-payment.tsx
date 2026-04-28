@@ -937,6 +937,8 @@ export default function BookingPayment() {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 paymentId,
+                orderId,
+                signature,
                 amount:   totalAfterCoupon,
                 fareData: { bookingId: tjBookingId, traceId, resultIndex, fare: totalAfterCoupon },
                 passengers: fs.passengers.map((p, idx) => ({

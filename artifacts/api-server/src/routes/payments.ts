@@ -44,35 +44,24 @@ router.post("/create-order", async (req, res) => {
     const KEY_SEC = cfg.paymentKeySecret;
     const mode    = resolveKeyMode(KEY_ID, KEY_SEC);
 
-    const amountPaise = Math.round(Number(amount) * 100);
-
-    if (mode === "test" || mode === "live") {
-      const rzp   = buildRazorpayClient(KEY_ID, KEY_SEC)!;
-      const order = await rzp.orders.create({
-        amount:   amountPaise,
-        currency,
-        receipt:  receipt || `rcpt_${Date.now()}`,
-        notes:    notes   || {},
+    if (mode !== "test" && mode !== "live") {
+      console.error("[payments] RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET not configured");
+      return res.status(503).json({
+        success: false,
+        error:   "Payment gateway is not configured. Please contact support.",
       });
-      console.log(`[payments] Order created (${mode}) — ID: ${order.id}  Amount: ₹${amount}`);
-      return res.json({ success: true, order, key: KEY_ID, keyMode: mode });
     }
 
-    const mockOrder = {
-      id:           `order_DEMO${Date.now()}`,
-      entity:       "order",
-      amount:       amountPaise,
-      amount_paid:  0,
-      amount_due:   amountPaise,
+    const amountPaise = Math.round(Number(amount) * 100);
+    const rzp   = buildRazorpayClient(KEY_ID, KEY_SEC)!;
+    const order = await rzp.orders.create({
+      amount:   amountPaise,
       currency,
-      receipt:      receipt || `rcpt_${Date.now()}`,
-      status:       "created",
-      attempts:     0,
-      notes:        notes || {},
-      created_at:   Math.floor(Date.now() / 1000),
-    };
-    console.log(`[payments] Demo order created (no keys) — Amount: ₹${amount}`);
-    return res.json({ success: true, order: mockOrder, key: "", keyMode: "demo", demoMode: true });
+      receipt:  receipt || `rcpt_${Date.now()}`,
+      notes:    notes   || {},
+    });
+    console.log(`[payments] Order created (${mode}) — ID: ${order.id}  Amount: ₹${amount}`);
+    return res.json({ success: true, order, key: KEY_ID, keyMode: mode });
 
   } catch (err: any) {
     console.error("[payments] create-order error:", err?.error?.description || err?.message || err);
@@ -97,23 +86,20 @@ router.post("/verify", async (req, res) => {
       return res.status(400).json({ success: false, error: "Missing required fields" });
     }
 
-    let verified = false;
+    const cfg     = await getProviderConfig();
+    const KEY_SEC = cfg.paymentKeySecret;
 
-    if (razorpay_order_id.startsWith("order_DEMO") || razorpay_payment_id.startsWith("pay_DEMO")) {
-      console.log(`[payments] Demo payment accepted — ${razorpay_payment_id}`);
-      verified = true;
-    } else {
-      const cfg        = await getProviderConfig();
-      const KEY_SEC    = cfg.paymentKeySecret;
-      const sign       = `${razorpay_order_id}|${razorpay_payment_id}`;
-      const expectedSign = crypto
-        .createHmac("sha256", KEY_SEC)
-        .update(sign)
-        .digest("hex");
-      verified = expectedSign === razorpay_signature;
-      if (!verified) {
-        console.warn(`[payments] Signature mismatch — order: ${razorpay_order_id}  payment: ${razorpay_payment_id}`);
-      }
+    if (!KEY_SEC) {
+      console.error("[payments] RAZORPAY_KEY_SECRET not configured — cannot verify");
+      return res.status(503).json({ success: false, error: "Payment gateway not configured" });
+    }
+
+    const sign         = `${razorpay_order_id}|${razorpay_payment_id}`;
+    const expectedSign = crypto.createHmac("sha256", KEY_SEC).update(sign).digest("hex");
+    const verified     = expectedSign === razorpay_signature;
+
+    if (!verified) {
+      console.warn(`[payments] Signature mismatch — order: ${razorpay_order_id}  payment: ${razorpay_payment_id}`);
     }
 
     if (!verified) {

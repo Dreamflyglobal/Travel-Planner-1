@@ -4,6 +4,7 @@ import { db, bookingsTable, bookingRefundsTable } from "@workspace/db";
 import { extractTripJackError } from "../lib/tripjack-auth.js";
 import { tjPostWithRetry } from "../lib/tj-retry.js";
 import { logger } from "../lib/logger.js";
+import { verifyRazorpaySignature } from "./verify-payment.js";
 
 const router = Router();
 
@@ -167,6 +168,8 @@ router.post("/refund", async (req, res): Promise<void> => {
 // ── POST /api/book-flight ──────────────────────────────────────────────────
 // Body: {
 //   paymentId:   string                          — Razorpay payment ID
+//   orderId:     string                          — Razorpay order ID (for server-side signature verification)
+//   signature:   string                          — Razorpay signature (HMAC-SHA256)
 //   amount:      number                          — total charged (INR)
 //   fareData: {
 //     bookingId:   string                        — TripJack booking ID from fareQuote step
@@ -185,7 +188,7 @@ router.post("/refund", async (req, res): Promise<void> => {
 //   }
 // }
 router.post("/book-flight", async (req, res): Promise<void> => {
-  const { paymentId, amount, fareData, passengers, bookingMeta } = req.body ?? {};
+  const { paymentId, orderId, signature, amount, fareData, passengers, bookingMeta } = req.body ?? {};
 
   // ── Validate required fields ─────────────────────────────────────────────
   if (!paymentId || typeof paymentId !== "string") {
@@ -196,6 +199,25 @@ router.post("/book-flight", async (req, res): Promise<void> => {
     res.status(400).json({ success: false, error: "passengers array is required" });
     return;
   }
+
+  // ── STEP 0: Verify Razorpay payment signature ────────────────────────────
+  // orderId + signature must be present for all Razorpay payments.
+  // This prevents booking without a verified payment.
+  logger.info({ paymentId, orderId: orderId ?? "(missing)" }, "[book-flight] STEP 0: verifying payment signature");
+  if (!orderId || !signature) {
+    logger.warn({ paymentId }, "[book-flight] missing orderId or signature — rejecting");
+    res.status(400).json({ success: false, error: "Payment details incomplete. Please retry payment." });
+    return;
+  }
+
+  const verifyResult = await verifyRazorpaySignature(paymentId, orderId, signature);
+  if (!verifyResult.success) {
+    logger.warn({ paymentId, orderId, error: verifyResult.error }, "[book-flight] payment verification failed");
+    res.status(400).json({ success: false, error: verifyResult.error ?? "Payment verification failed" });
+    return;
+  }
+  logger.info({ paymentId, orderId }, "[book-flight] payment verified ✓ — proceeding to booking");
+
   // fareData.bookingId is optional — empty means a non-TripJack fare (synthetic / Booking.com).
   // In that case we skip the TripJack AirBook call and save the booking as confirmed
   // (Razorpay payment was already verified by the frontend).

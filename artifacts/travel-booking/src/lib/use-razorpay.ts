@@ -1,10 +1,12 @@
 /**
  * Razorpay checkout integration
  *
- * Key modes (returned by backend):
+ * Modes (returned by backend /api/payments/create-order):
  *   "test"  — rzp_test_* keys → real Razorpay test checkout (use test cards)
  *   "live"  — rzp_live_* keys → real Razorpay live checkout (real money)
- *   "demo"  — no keys configured → payment simulated instantly
+ *
+ * There is NO demo/mock mode. A valid RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET
+ * must be configured in the backend environment for payments to work.
  */
 
 import { APP_NAME } from "@/lib/app-config";
@@ -19,7 +21,7 @@ declare global {
 // In production the backend serves /api/* directly
 const API_BASE = "";
 
-type KeyMode = "test" | "live" | "demo";
+type KeyMode = "test" | "live";
 
 function loadRazorpayScript(): Promise<boolean> {
   return new Promise((resolve) => {
@@ -50,9 +52,8 @@ export interface RazorpayPaymentOptions {
 
 export async function openRazorpayCheckout(opts: RazorpayPaymentOptions) {
   // ── 1. Create order on backend ─────────────────────────────────────────────
-  let order:   any;
-  let key:     string;
-  let keyMode: KeyMode = "demo";
+  let order: any;
+  let key:   string;
 
   try {
     const res = await fetch(`${API_BASE}/api/payments/create-order`, {
@@ -73,32 +74,21 @@ export async function openRazorpayCheckout(opts: RazorpayPaymentOptions) {
       return;
     }
 
-    order   = data.order;
-    key     = data.key     ?? "";
-    keyMode = (data.keyMode as KeyMode) ?? "demo";
+    order = data.order;
+    key   = data.key ?? "";
   } catch {
     opts.onFailure("Network error while creating order. Please check your connection.");
     return;
   }
 
-  // ── 2. Demo mode — instantly simulate successful payment ───────────────────
-  if (keyMode === "demo") {
-    console.info("[razorpay] Demo mode — simulating payment success (no real keys configured)");
-    const fakePayId = `pay_DEMO${Date.now()}`;
-    const fakeSig   = "demo_signature";
-    setTimeout(() => opts.onSuccess(fakePayId, order.id, fakeSig), 800);
-    return;
-  }
-
-  // ── 3. Load Razorpay.js SDK ────────────────────────────────────────────────
+  // ── 2. Load Razorpay.js SDK ────────────────────────────────────────────────
   const loaded = await loadRazorpayScript();
   if (!loaded || !window.Razorpay) {
     opts.onFailure("Failed to load Razorpay checkout. Please check your internet connection.");
     return;
   }
 
-  // ── 4. Open Razorpay checkout modal ───────────────────────────────────────
-  // `order.amount` is already in paise — returned directly from Razorpay Orders API
+  // ── 3. Open Razorpay checkout modal ───────────────────────────────────────
   const rzpOptions = {
     key,
     amount:      order.amount,           // paise (from Razorpay API)
@@ -119,6 +109,10 @@ export async function openRazorpayCheckout(opts: RazorpayPaymentOptions) {
       razorpay_order_id:   string;
       razorpay_signature:  string;
     }) {
+      console.info(
+        "[razorpay] Payment success — paymentId:", response.razorpay_payment_id,
+        "| orderId:", response.razorpay_order_id,
+      );
       opts.onSuccess(
         response.razorpay_payment_id,
         response.razorpay_order_id,
@@ -137,7 +131,7 @@ export async function openRazorpayCheckout(opts: RazorpayPaymentOptions) {
     },
   };
 
-  console.info(`[razorpay] Opening checkout (${keyMode}) — order: ${order.id}  ₹${opts.amount}`);
+  console.info(`[razorpay] Opening checkout — order: ${order.id}  ₹${opts.amount}`);
 
   const rzp = new window.Razorpay(rzpOptions);
 
@@ -167,7 +161,8 @@ export interface BookingContext {
 
 /**
  * Verify the Razorpay payment signature on the backend.
- * Always call this after the Razorpay handler fires onSuccess.
+ * The backend computes HMAC-SHA256(orderId|paymentId, KEY_SECRET) and
+ * compares it to the signature returned by Razorpay.
  */
 export async function verifyRazorpayPayment(
   razorpay_payment_id: string,
@@ -176,7 +171,7 @@ export async function verifyRazorpayPayment(
   bookingContext?: BookingContext,
 ): Promise<{ success: boolean; paymentId?: string; whatsappSent?: boolean; error?: string }> {
   try {
-    const res = await fetch(`${API_BASE}/api/payments/verify`, {
+    const res = await fetch(`${API_BASE}/api/verify-payment`, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({
