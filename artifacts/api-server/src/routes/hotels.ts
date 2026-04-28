@@ -317,6 +317,101 @@ router.get("/hotels", async (_req, res): Promise<void> => {
   res.json(ListHotelsResponse.parse(mapped));
 });
 
+// ── GET /api/hotels/rooms — must be before /hotels/:id ───────────────────────
+function toTitleCase(str: string): string {
+  return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+router.get("/hotels/rooms", async (req, res): Promise<void> => {
+  const hotelCode = parseInt((req.query.hotelCode as string) || "0");
+  const checkin   = (req.query.checkin  as string) || "";
+  const checkout  = (req.query.checkout as string) || "";
+  const adults    = parseInt((req.query.adults as string) || "2") || 2;
+
+  if (!hotelCode || !checkin || !checkout) {
+    res.status(400).json({ error: "hotelCode, checkin and checkout are required." });
+    return;
+  }
+
+  const keysRows = await db.select().from(apiKeysTable).limit(1);
+  const keysRow  = keysRows[0] ?? {};
+  const hbApiKey = (keysRow as any).hotelApiKey    || process.env.HOTELBEDS_API_KEY || "";
+  const hbSecret = (keysRow as any).hotelApiSecret || process.env.HOTELBEDS_SECRET  || "";
+
+  if (!hbApiKey || !hbSecret) {
+    res.json({ rooms: [], message: "HotelBeds credentials not configured." });
+    return;
+  }
+
+  const requestBody = {
+    stay: { checkIn: checkin, checkOut: checkout },
+    occupancies: [{ rooms: 1, adults, children: 0 }],
+    hotels: { hotel: [hotelCode] },
+  };
+
+  console.log(`[hotels/rooms] hotel=${hotelCode} ${checkin}→${checkout} adults=${adults}`);
+
+  try {
+    const hbRes = await fetch("https://api.test.hotelbeds.com/hotel-api/1.0/hotels", {
+      method: "POST",
+      headers: {
+        "Api-key":      hbApiKey,
+        "X-Signature":  hotelbedsSignature(hbApiKey, hbSecret),
+        "Content-Type": "application/json",
+        "Accept":       "application/json",
+      },
+      body: JSON.stringify(requestBody),
+      signal: AbortSignal.timeout(15_000),
+    });
+
+    const data = await hbRes.json().catch(() => null);
+
+    if (!hbRes.ok) {
+      console.log("[hotels/rooms] HotelBeds error:", hbRes.status, JSON.stringify(data).slice(0, 400));
+      res.json({ rooms: [], message: `HotelBeds error ${hbRes.status}` });
+      return;
+    }
+
+    const rawHotel = data?.hotels?.hotels?.[0];
+    if (!rawHotel) {
+      console.log(`[hotels/rooms] No availability for hotel ${hotelCode}`);
+      res.json({ rooms: [], message: "Hotel not available for the selected dates." });
+      return;
+    }
+
+    const rooms: any[] = [];
+    for (const room of rawHotel.rooms ?? []) {
+      for (const rate of room.rates ?? []) {
+        const netUSD   = parseFloat(rate.net || "0");
+        const priceINR = netUSD > 0 ? Math.round(netUSD * 84) : 0;
+        const hasFreeCancellation =
+          rate.rateType !== "NRF" && (rate.cancellationPolicies?.length ?? 0) > 0;
+        const cancellationDeadline =
+          ([...(rate.cancellationPolicies ?? [])] as any[])
+            .sort((a, b) => new Date(a.from).getTime() - new Date(b.from).getTime())
+            [0]?.from ?? "";
+
+        rooms.push({
+          code:                 room.code,
+          name:                 toTitleCase(room.name || room.code),
+          rateKey:              rate.rateKey,
+          boardName:            toTitleCase(rate.boardName || rate.boardCode || "Room Only"),
+          priceINR,
+          refundable:           hasFreeCancellation,
+          cancellationDeadline,
+        });
+      }
+    }
+
+    rooms.sort((a, b) => a.priceINR - b.priceINR);
+    console.log(`[hotels/rooms] ${rooms.length} room options for hotel ${hotelCode}`);
+    res.json({ rooms, hotelName: rawHotel.name });
+  } catch (err: any) {
+    console.log("[hotels/rooms] Error:", err?.message ?? err);
+    res.json({ rooms: [], message: `Failed to fetch rooms: ${err?.message}` });
+  }
+});
+
 router.get("/hotels/:id", async (req, res): Promise<void> => {
   const params = GetHotelParams.safeParse(req.params);
   if (!params.success) {
@@ -348,7 +443,7 @@ router.get("/hotels/:id", async (req, res): Promise<void> => {
 
 // ── POST /api/hotels/book ────────────────────────────────────────────────────
 router.post("/hotels/book", async (req, res): Promise<void> => {
-  const { rateKey, hotelId, hotelName } = req.body ?? {};
+  const { rateKey, hotelId, hotelName, holder, paxes } = req.body ?? {};
 
   if (!rateKey) {
     res.status(400).json({ error: "rateKey is required to book a hotel." });
@@ -365,11 +460,14 @@ router.post("/hotels/book", async (req, res): Promise<void> => {
     return;
   }
 
+  const resolvedHolder = holder ?? { name: "Test", surname: "User" };
+  const resolvedPaxes  = paxes  ?? [{ roomId: 1, type: "AD", name: resolvedHolder.name, surname: resolvedHolder.surname }];
+
   const bookingPayload = {
-    holder: { name: "Test", surname: "User" },
-    rooms: [{ rateKey }],
+    holder: resolvedHolder,
+    rooms: [{ rateKey, paxes: resolvedPaxes }],
     clientReference: `DFG-${Date.now()}`,
-    remark: "Dream Fly Global test booking",
+    remark: "Dream Fly Global booking",
     tolerance: 2,
   };
 
