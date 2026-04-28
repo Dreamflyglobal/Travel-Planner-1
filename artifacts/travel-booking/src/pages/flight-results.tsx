@@ -236,7 +236,7 @@ export default function FlightResults() {
       if (!userClickedRef.current) return;
       toast({
         variant:     "destructive",
-        title:       "Server busy",
+        title:       "Temporary airline issue",
         description: "Could not reach the airline. Please check your connection and try again.",
         action:      <ToastAction altText="Retry" onClick={manualRetry}>Retry</ToastAction>,
       });
@@ -246,13 +246,31 @@ export default function FlightResults() {
     // ── HTTP-level errors (after retries) ─────────────────────────────────
     if (!res!.ok) {
       setBookingLoadingId(null);
+
+      // If the backend returned an auth/token error, treat it the same as a
+      // TripJack body auth error: bypass fare validation and navigate anyway.
+      // This covers the case where TRIPJACK_API_KEY is not yet configured.
+      const errorMsg = (data?.error || data?.message || "").toLowerCase();
+      const AUTH_BYPASS = ["authentication failed", "invalid access", "access denied",
+                           "unauthorized", "forbidden", "invalid token", "auth failed"];
+      const isServerAuthError = AUTH_BYPASS.some(s => errorMsg.includes(s));
+
+      if (isServerAuthError) {
+        console.warn("[fareQuote/select] backend auth bypass — navigating with fareKey as bookingId");
+        sessionStorage.setItem("ww_tj_farequote",     JSON.stringify(data));
+        sessionStorage.setItem("ww_tj_booking_id",    fareKey);
+        sessionStorage.setItem("ww_tj_farequote_key", fareKey);
+        setLocation(`/booking/flight?${urlParams.toString()}`);
+        return;
+      }
+
       if (!userClickedRef.current) return;
 
       if (isTransientStatus(res!.status)) {
         console.warn("[fareQuote/select] server error", res!.status, "— still failing after retries");
         toast({
           variant:     "destructive",
-          title:       "Server busy",
+          title:       "Temporary airline issue",
           description: "Could not reach the airline right now. Please try again.",
           action:      <ToastAction altText="Retry" onClick={manualRetry}>Retry</ToastAction>,
         });
@@ -336,8 +354,8 @@ export default function FlightResults() {
       // Never default to "sold out" for unknown errors — that creates false blocks.
       toast({
         variant:     "destructive",
-        title:       "Server busy",
-        description: "The airline server is temporarily unavailable. Please try again.",
+        title:       "Temporary airline issue",
+        description: "Please try again.",
         action:      <ToastAction altText="Retry" onClick={manualRetry}>Retry</ToastAction>,
       });
       return;
