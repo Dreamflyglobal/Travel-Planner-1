@@ -13,7 +13,7 @@ import { useState, useEffect } from "react";
 const TAB_META: Record<string, { image: string; headline: string; sub: string }> = {
   flights: {
     image: "/images/hero-flights.webp",
-    headline: "Take off to your next adventure.",
+    headline: "Fly to your Dream Destinations ✈️",
     sub: "Search hundreds of airlines. Find the best fares in seconds.",
   },
   hotels: {

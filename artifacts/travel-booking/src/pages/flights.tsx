@@ -38,7 +38,7 @@ export default function Flights() {
           <div className="max-w-3xl mb-6 sm:mb-8 text-white">
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight mb-3 leading-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]"
               style={{ textShadow: "0 2px 12px rgba(0,0,0,0.5)" }}>
-              Take off to your next adventure.
+              Fly to your Dream Destinations ✈️
             </h1>
             <p className="text-base sm:text-lg text-white/90 font-medium max-w-2xl"
               style={{ textShadow: "0 1px 6px rgba(0,0,0,0.5)" }}>
