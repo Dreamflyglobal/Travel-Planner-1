@@ -144,9 +144,16 @@ export default function FlightResults() {
     sessionStorage.removeItem("ww_tj_farequote");
     sessionStorage.removeItem("ww_tj_booking_id");
     sessionStorage.removeItem("ww_tj_farequote_key");
+    // Mark whether this is a TripJack fare (read at payment to decide validation)
+    sessionStorage.setItem("ww_is_tj_fare", isTjFare ? "1" : "0");
 
-    // No valid TripJack bookingId → skip fareQuote, navigate directly
+    // Non-TJ fare (synthetic / Booking.com) → skip fareQuote, navigate directly.
+    // Store a placeholder so the passenger page's cache check passes and the
+    // backend knows to skip the TripJack AirBook step (empty bookingId = non-TJ).
     if (!isTjFare) {
+      sessionStorage.setItem("ww_tj_farequote",     JSON.stringify({ nonTj: true }));
+      sessionStorage.setItem("ww_tj_booking_id",    "");  // intentionally empty
+      sessionStorage.setItem("ww_tj_farequote_key", fareKey);
       isLoadingRef.current = false;
       setBookingLoadingId(null);
       setLocation(`/booking/flight?${urlParams.toString()}`);

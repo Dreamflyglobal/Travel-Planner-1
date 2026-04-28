@@ -206,14 +206,17 @@ export default function FlightBooking() {
 
     const prefetchedKey = sessionStorage.getItem("ww_tj_farequote_key");
     const prefetchedStr = sessionStorage.getItem("ww_tj_farequote");
-    const prefetchedId  = sessionStorage.getItem("ww_tj_booking_id");
-    const hasPrefetch   = prefetchedKey === fareKey && !!prefetchedStr && !!prefetchedId;
+    const prefetchedId  = sessionStorage.getItem("ww_tj_booking_id");  // "" for non-TJ fares
+    const isTjFare      = sessionStorage.getItem("ww_is_tj_fare") !== "0";
+    // prefetchedId may be empty for non-TJ fares — that's intentional; don't require it
+    const hasPrefetch   = prefetchedKey === fareKey && !!prefetchedStr;
 
     if (hasPrefetch) {
       // ── Use data already fetched at flight selection ──────────────────────
-      resolvedBookingId = prefetchedId!;
+      // For non-TJ fares, prefetchedId is "" (empty) — resolvedBookingId stays ""
+      resolvedBookingId = prefetchedId ?? "";
       const fqCached: any = JSON.parse(prefetchedStr!);
-      console.info("[fareQuote] using pre-fetched data | bookingId:", resolvedBookingId);
+      console.info("[fareQuote] using pre-fetched data | bookingId:", resolvedBookingId || "(non-TJ fare)", "| isTjFare:", isTjFare);
 
       // Still check whether the cached data shows a different price
       const tf: number = fqCached?.data?.totalPriceInfo?.totalFareDetail?.fC?.TF ?? 0;

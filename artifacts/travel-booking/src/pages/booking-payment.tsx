@@ -910,7 +910,26 @@ export default function BookingPayment() {
             }
           } catch { /* use undefined */ }
 
-          const tjBookingId = sessionStorage.getItem("ww_tj_booking_id") ?? "";
+          // bookingId from sessionStorage → fallback to session object → "" for non-TJ fares
+          const tjBookingId = sessionStorage.getItem("ww_tj_booking_id")
+                           ?? fs.tjBookingId
+                           ?? "";
+          const isTjFare = sessionStorage.getItem("ww_is_tj_fare") !== "0";
+
+          console.info(
+            "[book-flight] bookingId:", tjBookingId || "(non-TJ fare)",
+            "| traceId:", traceId ?? "(none)",
+            "| resultIndex:", resultIndex ?? "(none)",
+            "| isTjFare:", isTjFare,
+          );
+
+          // Guard: TJ fare bookingId must be present (session may have expired)
+          if (isTjFare && !tjBookingId) {
+            setProcessing(false);
+            setPaymentError("Session expired. Please select your flight again to continue.");
+            toast({ variant: "destructive", title: "Session Expired", description: "Please go back and select your flight again." });
+            return;
+          }
 
           try {
             const apiRes = await fetch("/api/book-flight", {

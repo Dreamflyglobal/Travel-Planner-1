@@ -123,14 +123,18 @@ router.post("/book-flight", async (req, res): Promise<void> => {
     res.status(400).json({ success: false, error: "paymentId is required" });
     return;
   }
-  if (!fareData?.bookingId) {
-    res.status(400).json({ success: false, error: "fareData.bookingId is required" });
-    return;
-  }
   if (!Array.isArray(passengers) || passengers.length === 0) {
     res.status(400).json({ success: false, error: "passengers array is required" });
     return;
   }
+  // fareData.bookingId is optional — empty means a non-TripJack fare (synthetic / Booking.com).
+  // In that case we skip the TripJack AirBook call and save the booking as confirmed
+  // (Razorpay payment was already verified by the frontend).
+  const isTjBooking = !!(fareData?.bookingId);
+  logger.info(
+    { paymentId, bookingId: fareData?.bookingId || "(non-TJ)", isTjBooking },
+    "[book-flight] fareData received",
+  );
 
   const totalPrice     = Number(amount) || Number(bookingMeta?.totalPrice) || 0;
   const bookingRef     = String(bookingMeta?.bookingRef     ?? `BK-${Date.now().toString(36).toUpperCase()}`);
@@ -159,7 +163,39 @@ router.post("/book-flight", async (req, res): Promise<void> => {
     return;
   }
 
-  // ── STEP 2 + 3: Call TripJack AirBook (with retry + fresh token) ──────────
+  // ── STEP 2 + 3: Call TripJack AirBook (skipped for non-TJ fares) ──────────
+  // Non-TJ fare (synthetic / Booking.com): payment verified by Razorpay → confirm directly.
+  if (!isTjBooking) {
+    logger.info({ paymentId, bookingRef }, "[book-flight] non-TJ fare — skipping TripJack, saving as confirmed");
+    const [savedBooking] = await db
+      .insert(bookingsTable)
+      .values({
+        bookingRef,
+        bookingType:    "flight",
+        passengerName,
+        passengerEmail,
+        passengerPhone,
+        travelDate,
+        totalPrice:    String(totalPrice),
+        passengers:    passengers.length,
+        status:        "confirmed",
+        paymentStatus: "paid",
+        paymentId,
+        details:       {
+          ...(typeof bookingMeta?.details === "object" && bookingMeta?.details !== null
+            ? (bookingMeta.details as Record<string, unknown>)
+            : {}),
+          paymentId,
+          bookingRef,
+          nonTjFare: true,
+        },
+      })
+      .returning();
+    logger.info({ paymentId, bookingRef, bookingId: savedBooking.id }, "[book-flight] non-TJ booking CONFIRMED");
+    res.json({ success: true, bookingRef, bookingId: savedBooking.id });
+    return;
+  }
+
   const tjPayload = {
     bookingId: fareData.bookingId,
     ...(fareData.traceId     && { traceId:     fareData.traceId }),
