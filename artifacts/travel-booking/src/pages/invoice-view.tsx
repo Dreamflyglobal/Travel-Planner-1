@@ -86,7 +86,7 @@ const COMPANY = {
 };
 
 function invNum(id: string) {
-  return `WW-INV-${id.replace(/[^A-Z0-9]/gi, "").toUpperCase().slice(-8)}`;
+  return `DFG-INV-${id.replace(/[^A-Z0-9]/gi, "").toUpperCase().slice(-8)}`;
 }
 
 // ── Type accent colours ───────────────────────────────────────────────────────
