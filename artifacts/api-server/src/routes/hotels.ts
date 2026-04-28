@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { ilike, eq } from "drizzle-orm";
 import { createHash } from "crypto";
-import { db, hotelsTable } from "@workspace/db";
+import { db, hotelsTable, apiKeysTable } from "@workspace/db";
 import {
   SearchHotelsQueryParams,
   SearchHotelsResponse,
@@ -149,9 +149,11 @@ router.get("/hotels/live-search", async (req, res): Promise<void> => {
     return;
   }
 
-  const hbApiKey = process.env.HOTELBEDS_API_KEY;
-  const hbSecret = process.env.HOTELBEDS_SECRET;
-  const apiKey   = process.env.RAPIDAPI_KEY;
+  const keysRows  = await db.select().from(apiKeysTable).limit(1);
+  const keysRow   = keysRows[0] ?? {};
+  const hbApiKey  = (keysRow as any).hotelApiKey  || process.env.HOTELBEDS_API_KEY  || "";
+  const hbSecret  = (keysRow as any).hotelApiSecret|| process.env.HOTELBEDS_SECRET   || "";
+  const apiKey    = process.env.RAPIDAPI_KEY;
 
   console.log(`[hotels/live-search] city="${city}" checkin="${checkin}" checkout="${checkout}" hotelbeds=${hbApiKey ? "set" : "not set"}`);
 

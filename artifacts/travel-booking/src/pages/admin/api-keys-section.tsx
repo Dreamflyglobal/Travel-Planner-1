@@ -40,18 +40,19 @@ type KeyMeta = { masked: string; set: boolean; source: "db" | "env" | "none" };
 type KeysResponse = {
   success: boolean;
   keys: {
-    flightApiKey:    KeyMeta;
-    busApiKey:       KeyMeta;
-    hotelApiKey:     KeyMeta;
-    tboApiKey:       KeyMeta;
-    paymentApiKey:   KeyMeta;
+    flightApiKey:     KeyMeta;
+    busApiKey:        KeyMeta;
+    hotelApiKey:      KeyMeta;
+    hotelApiSecret:   KeyMeta;
+    tboApiKey:        KeyMeta;
+    paymentApiKey:    KeyMeta;
     paymentApiSecret: KeyMeta;
   };
   flightProvider: string;
   updatedAt: string | null;
 };
 
-type FieldKey = "flightApiKey" | "busApiKey" | "hotelApiKey" | "tboApiKey" | "paymentApiKey" | "paymentApiSecret";
+type FieldKey = "flightApiKey" | "busApiKey" | "hotelApiKey" | "hotelApiSecret" | "tboApiKey" | "paymentApiKey" | "paymentApiSecret";
 
 const FIELDS: Array<{
   key: FieldKey;
@@ -84,10 +85,18 @@ const FIELDS: Array<{
   },
   {
     key:         "hotelApiKey",
-    label:       "Hotel API Key",
-    description: "Hotelbeds or other hotel provider key.",
+    label:       "HotelBeds API Key",
+    description: "HotelBeds API key — required for live hotel search.",
     Icon:        Building2,
     group:       "hotel",
+  },
+  {
+    key:         "hotelApiSecret",
+    label:       "HotelBeds API Secret",
+    description: "HotelBeds API secret — used to compute X-Signature for every request.",
+    Icon:        Lock,
+    group:       "hotel",
+    sensitive:   true,
   },
   {
     key:         "paymentApiKey",
@@ -123,10 +132,10 @@ export function ApiKeysSection() {
   const [error,        setError]        = useState<string | null>(null);
   const [data,         setData]         = useState<KeysResponse | null>(null);
   const [drafts,       setDrafts]       = useState<Record<FieldKey, string>>({
-    flightApiKey: "", busApiKey: "", hotelApiKey: "", tboApiKey: "", paymentApiKey: "", paymentApiSecret: "",
+    flightApiKey: "", busApiKey: "", hotelApiKey: "", hotelApiSecret: "", tboApiKey: "", paymentApiKey: "", paymentApiSecret: "",
   });
   const [reveal,       setReveal]       = useState<Record<FieldKey, boolean>>({
-    flightApiKey: false, busApiKey: false, hotelApiKey: false, tboApiKey: false, paymentApiKey: false, paymentApiSecret: false,
+    flightApiKey: false, busApiKey: false, hotelApiKey: false, hotelApiSecret: false, tboApiKey: false, paymentApiKey: false, paymentApiSecret: false,
   });
   const [providerDraft, setProviderDraft] = useState<string>("");
   const [savedFlash,   setSavedFlash]   = useState(false);
@@ -194,7 +203,7 @@ export function ApiKeysSection() {
       const json = (await res.json()) as KeysResponse;
       setData(json);
       setProviderDraft(json.flightProvider ?? "tripjack");
-      setDrafts({ flightApiKey: "", busApiKey: "", hotelApiKey: "", tboApiKey: "", paymentApiKey: "", paymentApiSecret: "" });
+      setDrafts({ flightApiKey: "", busApiKey: "", hotelApiKey: "", hotelApiSecret: "", tboApiKey: "", paymentApiKey: "", paymentApiSecret: "" });
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 3000);
       toast({ title: "Settings saved", description: "API keys and provider stored securely on the server." });
@@ -210,7 +219,7 @@ export function ApiKeysSection() {
   }
 
   function handleDiscard() {
-    setDrafts({ flightApiKey: "", busApiKey: "", hotelApiKey: "", tboApiKey: "", paymentApiKey: "", paymentApiSecret: "" });
+    setDrafts({ flightApiKey: "", busApiKey: "", hotelApiKey: "", hotelApiSecret: "", tboApiKey: "", paymentApiKey: "", paymentApiSecret: "" });
     setProviderDraft(data?.flightProvider ?? "tripjack");
   }
 

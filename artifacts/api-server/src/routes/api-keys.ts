@@ -13,6 +13,7 @@ const KEY_FIELDS = [
   "flightApiKey",
   "busApiKey",
   "hotelApiKey",
+  "hotelApiSecret",
   "paymentApiKey",
   "paymentApiSecret",
   "tboApiKey",
@@ -25,6 +26,7 @@ type KeysRow = {
   flightApiKey: string | null;
   busApiKey: string | null;
   hotelApiKey: string | null;
+  hotelApiSecret: string | null;
   paymentApiKey: string | null;
   paymentApiSecret: string | null;
   flightProvider: string | null;
@@ -40,32 +42,36 @@ function maskKey(value: string | null | undefined): string {
 }
 
 function buildMaskedResponse(row: KeysRow | null) {
-  const envFlight  = process.env["TRIPJACK_API_KEY"] ?? "";
-  const envHotel   = process.env["HOTELBEDS_API_KEY"] ?? "";
-  const envBus     = process.env["RAPIDAPI_KEY"] ?? "";
-  const envTboKey  = process.env["TBO_API_KEY"] ?? "";
+  const envFlight      = process.env["TRIPJACK_API_KEY"]    ?? "";
+  const envHotel       = process.env["HOTELBEDS_API_KEY"]   ?? "";
+  const envHotelSecret = process.env["HOTELBEDS_SECRET"]    ?? "";
+  const envBus         = process.env["RAPIDAPI_KEY"]        ?? "";
+  const envTboKey      = process.env["TBO_API_KEY"]         ?? "";
 
-  const flightDb      = row?.flightApiKey      ?? "";
-  const busDb         = row?.busApiKey         ?? "";
-  const hotelDb       = row?.hotelApiKey       ?? "";
-  const payKeyDb      = row?.paymentApiKey     ?? "";
-  const paySecretDb   = row?.paymentApiSecret  ?? "";
-  const tboApiKeyDb   = row?.tboApiKey         ?? "";
+  const flightDb       = row?.flightApiKey     ?? "";
+  const busDb          = row?.busApiKey        ?? "";
+  const hotelDb        = row?.hotelApiKey      ?? "";
+  const hotelSecretDb  = row?.hotelApiSecret   ?? "";
+  const payKeyDb       = row?.paymentApiKey    ?? "";
+  const paySecretDb    = row?.paymentApiSecret ?? "";
+  const tboApiKeyDb    = row?.tboApiKey        ?? "";
   const flightProvider = row?.flightProvider   ?? "tripjack";
 
-  const flight    = flightDb    || envFlight;
-  const bus       = busDb       || envBus;
-  const hotel     = hotelDb     || envHotel;
-  const tboKey    = tboApiKeyDb || envTboKey;
+  const flight       = flightDb      || envFlight;
+  const bus          = busDb         || envBus;
+  const hotel        = hotelDb       || envHotel;
+  const hotelSecret  = hotelSecretDb || envHotelSecret;
+  const tboKey       = tboApiKeyDb   || envTboKey;
 
   return {
     keys: {
-      flightApiKey:     { masked: maskKey(flight),    set: !!flight,    source: flightDb    ? "db" : envFlight  ? "env" : "none" },
-      busApiKey:        { masked: maskKey(bus),        set: !!bus,        source: busDb       ? "db" : envBus     ? "env" : "none" },
-      hotelApiKey:      { masked: maskKey(hotel),      set: !!hotel,      source: hotelDb     ? "db" : envHotel   ? "env" : "none" },
-      paymentApiKey:    { masked: maskKey(payKeyDb || process.env["RAZORPAY_KEY_ID"] || ""),    set: !!(payKeyDb || process.env["RAZORPAY_KEY_ID"]),    source: payKeyDb    ? "db" : process.env["RAZORPAY_KEY_ID"]    ? "env" : "none" },
+      flightApiKey:     { masked: maskKey(flight),       set: !!flight,       source: flightDb      ? "db" : envFlight      ? "env" : "none" },
+      busApiKey:        { masked: maskKey(bus),           set: !!bus,           source: busDb         ? "db" : envBus         ? "env" : "none" },
+      hotelApiKey:      { masked: maskKey(hotel),         set: !!hotel,         source: hotelDb       ? "db" : envHotel       ? "env" : "none" },
+      hotelApiSecret:   { masked: maskKey(hotelSecret),   set: !!hotelSecret,   source: hotelSecretDb ? "db" : envHotelSecret ? "env" : "none" },
+      paymentApiKey:    { masked: maskKey(payKeyDb    || process.env["RAZORPAY_KEY_ID"]     || ""), set: !!(payKeyDb    || process.env["RAZORPAY_KEY_ID"]),     source: payKeyDb    ? "db" : process.env["RAZORPAY_KEY_ID"]     ? "env" : "none" },
       paymentApiSecret: { masked: maskKey(paySecretDb || process.env["RAZORPAY_KEY_SECRET"] || ""), set: !!(paySecretDb || process.env["RAZORPAY_KEY_SECRET"]), source: paySecretDb ? "db" : process.env["RAZORPAY_KEY_SECRET"] ? "env" : "none" },
-      tboApiKey:        { masked: maskKey(tboKey),     set: !!tboKey,     source: tboApiKeyDb ? "db" : envTboKey  ? "env" : "none" },
+      tboApiKey:        { masked: maskKey(tboKey),        set: !!tboKey,        source: tboApiKeyDb   ? "db" : envTboKey       ? "env" : "none" },
     },
     flightProvider,
     updatedAt: row?.updatedAt?.toISOString() ?? null,
@@ -158,14 +164,15 @@ router.post("/admin/api-keys/test", requireAdmin, async (req, res) => {
   try {
     const row = await getOrCreateRow();
     const map: Record<string, string> = {
-      flight:  row.flightApiKey     || process.env["TRIPJACK_API_KEY"]  || "",
-      bus:     row.busApiKey        || process.env["RAPIDAPI_KEY"]      || "",
-      hotel:   row.hotelApiKey      || process.env["HOTELBEDS_API_KEY"] || "",
-      payment: row.paymentApiKey    || process.env["RAZORPAY_KEY_ID"]   || "",
-      tbo:     row.tboApiKey        || process.env["TBO_API_KEY"]       || "",
+      flight:  row.flightApiKey    || process.env["TRIPJACK_API_KEY"]  || "",
+      bus:     row.busApiKey       || process.env["RAPIDAPI_KEY"]      || "",
+      hotel:   row.hotelApiKey     || process.env["HOTELBEDS_API_KEY"] || "",
+      payment: row.paymentApiKey   || process.env["RAZORPAY_KEY_ID"]   || "",
+      tbo:     row.tboApiKey       || process.env["TBO_API_KEY"]       || "",
     };
     const secretMap: Record<string, string> = {
       payment: row.paymentApiSecret || process.env["RAZORPAY_KEY_SECRET"] || "",
+      hotel:   row.hotelApiSecret   || process.env["HOTELBEDS_SECRET"]    || "",
     };
 
     const key = map[which] ?? "";
@@ -246,7 +253,35 @@ router.post("/admin/api-keys/test", requireAdmin, async (req, res) => {
       }
     }
 
-    // ── TBO / Bus / Hotel — format check only (no public test endpoint) ────
+    // ── HotelBeds live probe (X-Signature auth) ───────────────────────────
+    if (which === "hotel") {
+      const secret = secretMap.hotel;
+      if (!secret) {
+        return res.json({ success: true, ok: false, message: "HotelBeds API Secret is not configured. Save both API Key and API Secret before testing." });
+      }
+      try {
+        const ts  = Math.floor(Date.now() / 1000).toString();
+        const sig = (await import("crypto")).default.createHash("sha256").update(key.trim() + secret.trim() + ts).digest("hex");
+        const r   = await fetch("https://api.test.hotelbeds.com/hotel-content-api/1.0/status", {
+          headers: { "Api-key": key.trim(), "X-Signature": sig, "Accept": "application/json" },
+          signal: AbortSignal.timeout(10_000),
+        });
+        const body: any = await r.json().catch(() => ({}));
+        console.log("[api-keys] HotelBeds response:", JSON.stringify(body));
+        if (r.status === 200) {
+          return res.json({ success: true, ok: true, message: "HotelBeds credentials verified." });
+        }
+        const msg = body?.error?.message || body?.message || `HTTP ${r.status}`;
+        return res.json({ success: true, ok: false, message: `HotelBeds error: ${msg}` });
+      } catch (err: any) {
+        if (err.name === "TimeoutError" || err.code === "ABORT_ERR") {
+          return res.json({ success: true, ok: false, message: "HotelBeds did not respond within 10 seconds." });
+        }
+        return res.json({ success: true, ok: false, message: `Could not reach HotelBeds: ${err.message}` });
+      }
+    }
+
+    // ── TBO / Bus — format check only (no public test endpoint) ────────────
     const looksValid = key.trim().length >= 8;
     const providerLabels: Record<string, string> = {
       tbo:   "TBO",
