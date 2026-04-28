@@ -385,8 +385,21 @@ export default function InvoiceView() {
   useEffect(() => {
     window.scrollTo(0, 0);
     if (!bookingId) { setNotFound(true); return; }
-    const data = findInvoice(bookingId);
-    data ? setInvoice(data) : setNotFound(true);
+
+    // 1. Try all localStorage sources first (instant, offline-capable)
+    const cached = findInvoice(bookingId);
+    if (cached) { setInvoice(cached); return; }
+
+    // 2. Fall back to the database via API — works cross-device / after cache clear
+    const apiBase = (import.meta.env.VITE_API_BASE_URL as string) ?? "";
+    fetch(`${apiBase}/api/invoice/${encodeURIComponent(bookingId.toUpperCase())}`)
+      .then(async (r) => {
+        if (!r.ok) { setNotFound(true); return; }
+        const data = await r.json() as BookingInvoice;
+        if (!data || !data.bookingId) { setNotFound(true); return; }
+        setInvoice(data);
+      })
+      .catch(() => setNotFound(true));
   }, [bookingId]);
 
   const handlePrint    = () => window.print();

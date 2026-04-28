@@ -225,6 +225,82 @@ router.post("/bookings", async (req, res): Promise<void> => {
   }
 });
 
+// ── GET /api/invoice/:bookingRef ──────────────────────────────────────────────
+// Fetches a booking from the DB by its human-readable bookingRef (e.g. BK-1A2B3C4D)
+// and returns data shaped as BookingInvoice so the frontend can render the invoice
+// even when localStorage is empty (cross-device, cache-cleared, etc.)
+router.get("/invoice/:bookingRef", async (req, res): Promise<void> => {
+  const ref = req.params.bookingRef?.trim().toUpperCase();
+  if (!ref) {
+    res.status(400).json({ error: "bookingRef is required" });
+    return;
+  }
+
+  const [booking] = await db
+    .select()
+    .from(bookingsTable)
+    .where(eq(bookingsTable.bookingRef, ref))
+    .limit(1);
+
+  if (!booking) {
+    res.status(404).json({ error: "Invoice not found" });
+    return;
+  }
+
+  const d  = (booking.details as Record<string, any>) || {};
+  const fi = (d.flightInfo  as Record<string, any>) || {};
+  const bi = (d.busInfo     as Record<string, any>) || {};
+  const hi = (d.hotelInfo   as Record<string, any>) || {};
+
+  res.json({
+    bookingId:      booking.bookingRef || String(booking.id),
+    bookingType:    booking.bookingType,
+    passengerName:  booking.passengerName,
+    passengerEmail: booking.passengerEmail,
+    passengerPhone: booking.passengerPhone ?? undefined,
+    passengers:     booking.passengers,
+    travelDate:     booking.travelDate,
+    checkoutDate:   hi.checkout ?? undefined,
+    totalAmount:    Number(booking.totalPrice),
+    paymentId:      booking.paymentId || "—",
+    paymentStatus:  booking.paymentStatus,
+    timestamp:      booking.createdAt.toISOString(),
+    title:          booking.title || "",
+    selectedSeats:  d.selectedSeats || bi.seats || undefined,
+    discount:       d.discountAmount || undefined,
+    roomType:       hi.room_type || undefined,
+    // Flight
+    flightAirline:    fi.airline    || undefined,
+    flightNumber:     fi.flightNum  || undefined,
+    flightFrom:       fi.from       || undefined,
+    flightTo:         fi.to         || undefined,
+    flightDeparture:  fi.departure  || undefined,
+    flightArrival:    fi.arrival    || undefined,
+    flightDuration:   fi.duration   || undefined,
+    flightBaseFare:   d.baseAmount  || undefined,
+    flightConvFee:    d.convenienceFee || undefined,
+    flightBaggageKg:  d.extraBaggageKg   || undefined,
+    flightBaggageCost:d.extraBaggageCost  || undefined,
+    // Bus
+    busOperator:      bi.operator        || undefined,
+    busType:          bi.busType         || undefined,
+    busFrom:          bi.from            || undefined,
+    busTo:            bi.to              || undefined,
+    busDeparture:     bi.departure       || undefined,
+    busArrival:       bi.arrival         || undefined,
+    busBoardingPoint: bi.boarding_point  || undefined,
+    busDroppingPoint: bi.dropping_point  || undefined,
+    busBaseFare:      d.baseAmount       || undefined,
+    busConvFee:       d.convenience_fee  || undefined,
+    // Hotel
+    hotelName:   hi.hotel_name || undefined,
+    hotelCity:   hi.city       || undefined,
+    hotelNights: hi.nights     || undefined,
+    hotelRooms:  hi.rooms      || undefined,
+    hotelAdults: hi.guests     || undefined,
+  });
+});
+
 router.get("/bookings/:id", async (req, res): Promise<void> => {
   const params = GetBookingParams.safeParse(req.params);
   if (!params.success) {
