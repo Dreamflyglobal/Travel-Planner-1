@@ -3,6 +3,7 @@ import { logger } from "./lib/logger";
 import { recoverPendingFollowUps } from "./lib/followup-scheduler.js";
 import { seedPackagesIfEmpty } from "./routes/holiday-packages.js";
 import { startDailyOfferCron } from "./lib/marketing-scheduler.js";
+import { connectMongoDB } from "./config/db.js";
 
 // Use environment variable if available, otherwise default to 3000
 const rawPort = process.env["PORT"] || "3000";
@@ -12,6 +13,9 @@ const port = Number(rawPort);
 if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
+
+// Connect to MongoDB (non-blocking — server starts even if Mongo is unavailable)
+connectMongoDB();
 
 app.listen(port, (err) => {
   if (err) {
