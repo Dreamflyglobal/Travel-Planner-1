@@ -1,5 +1,20 @@
 import { useQuery } from "@tanstack/react-query";
 
+export interface FlightSegment {
+  from:          string;
+  fromCity:      string;
+  fromTerminal:  string;
+  to:            string;
+  toCity:        string;
+  toTerminal:    string;
+  departure:     string;  // ISO datetime
+  arrival:       string;  // ISO datetime
+  departureTime: string;  // HH:MM
+  arrivalTime:   string;  // HH:MM
+  airline:       string;
+  flightNumber:  string;
+}
+
 export interface FareOption {
   fareId:      string;
   cabinClass:  string;
@@ -27,6 +42,7 @@ export interface LiveFlight {
   stopsLabel?: string;
   status?: string;
   fareOptions?: FareOption[];
+  segments?:    FlightSegment[];  // per-leg details for stop/layover display
   resultIndex?: string;  // TripJack result identifier — required for fareQuote/SSR/book
 }
 

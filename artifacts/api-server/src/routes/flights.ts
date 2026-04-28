@@ -243,6 +243,28 @@ function mapTripJackFlight(item: any, idx: number, fromIata: string, toIata: str
     String(item.sI?.[0]?.rI ?? "")  ||
     String(idx);
 
+  // Map each TripJack segment to a normalized segment object
+  const segments = (item.sI || []).map((seg: any) => {
+    const depDt = seg.dt || "";
+    const arrDt = seg.at || "";
+    const fromCode = seg.da?.code || seg.da?.cityCode || "";
+    const toCode   = seg.aa?.code || seg.aa?.cityCode || "";
+    return {
+      from:          fromCode,
+      fromCity:      seg.da?.cityName || seg.da?.name || CANONICAL[fromCode] || fromCode,
+      fromTerminal:  seg.da?.terminal || "",
+      to:            toCode,
+      toCity:        seg.aa?.cityName || seg.aa?.name || CANONICAL[toCode]   || toCode,
+      toTerminal:    seg.aa?.terminal || "",
+      departure:     depDt,
+      arrival:       arrDt,
+      departureTime: depDt ? depDt.slice(11, 16) : "",
+      arrivalTime:   arrDt ? arrDt.slice(11, 16) : "",
+      airline:       seg.fD?.aI?.name || airline,
+      flightNumber:  seg.fD?.aI?.code && seg.fD?.fN ? `${seg.fD.aI.code}${seg.fD.fN}` : flightNum,
+    };
+  });
+
   return {
     id: idx + 1,
     airline,
@@ -261,6 +283,7 @@ function mapTripJackFlight(item: any, idx: number, fromIata: string, toIata: str
     stops,
     stopsLabel,
     status: "scheduled",
+    segments,      // ← per-segment details for stop/layover display
     fareOptions,   // ← all cabin classes with their prices
     resultIndex,   // ← required by TripJack fareQuote/SSR/book
     traceId,       // ← search session ID — embedded per-flight for reliable access

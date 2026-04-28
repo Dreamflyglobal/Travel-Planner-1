@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { useAbandonedLeadTracker } from "@/hooks/use-abandoned-lead-tracker";
 import { useMarketing } from "@/hooks/use-marketing";
 import { getHiddenMarkupAmount } from "@/lib/pricing";
-import { useFlightSearch, type FlightSearchOptions, type FareOption, type LiveFlight } from "@/lib/use-flight-search";
+import { useFlightSearch, type FlightSearchOptions, type FareOption, type LiveFlight, type FlightSegment } from "@/lib/use-flight-search";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
@@ -127,6 +127,7 @@ export default function FlightResults() {
     searchBasePrice: number;
   };
   const [fareModal, setFareModal] = useState<FareModalState | null>(null);
+  const [expandedStops, setExpandedStops] = useState<Set<number>>(new Set());
 
   const { user, isAgent } = useAuth();
   const { toast } = useToast();
@@ -986,15 +987,35 @@ export default function FlightResults() {
                                   {(() => {
                                     const raw = flight.stopsLabel ?? (flight.stops === 0 ? "Non-stop" : flight.stops === 1 ? "1 Stop" : "2+ Stops");
                                     const label = raw === "Multi-stop" ? "2+ Stops" : raw;
+                                    const hasStops = (flight.segments?.length ?? 0) > 1;
+                                    const isStopsExpanded = expandedStops.has(flight.id);
                                     return (
-                                      <p className={cn(
-                                        "text-[10px] font-bold mt-1 uppercase tracking-wide",
-                                        label === "Non-stop" ? "text-green-600" :
-                                        label === "1 Stop"   ? "text-amber-600" :
-                                                               "text-slate-500"
-                                      )}>
-                                        {label}
-                                      </p>
+                                      <div className="flex flex-col items-center gap-0.5">
+                                        <p className={cn(
+                                          "text-[10px] font-bold mt-1 uppercase tracking-wide",
+                                          label === "Non-stop" ? "text-green-600" :
+                                          label === "1 Stop"   ? "text-amber-600" :
+                                                                 "text-slate-500"
+                                        )}>
+                                          {label}
+                                        </p>
+                                        {hasStops && (
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setExpandedStops((prev) => {
+                                                const next = new Set(prev);
+                                                if (next.has(flight.id)) next.delete(flight.id);
+                                                else next.add(flight.id);
+                                                return next;
+                                              });
+                                            }}
+                                            className="text-[10px] text-blue-600 hover:text-blue-800 underline underline-offset-2 font-medium leading-none mt-0.5 whitespace-nowrap"
+                                          >
+                                            {isStopsExpanded ? "Hide details" : "View details"}
+                                          </button>
+                                        )}
+                                      </div>
                                     );
                                   })()}
                                 </div>
@@ -1007,6 +1028,78 @@ export default function FlightResults() {
                                   <p className="text-sm font-semibold text-slate-600 mt-0.5">{flight.destination}</p>
                                 </div>
                               </div>
+
+                              {/* ── Stop details panel (shown when "View details" clicked) ── */}
+                              {expandedStops.has(flight.id) && flight.segments && flight.segments.length > 1 && (
+                                <div className="mt-3 rounded-xl border border-blue-100 bg-blue-50/40 overflow-hidden">
+                                  {flight.segments.map((seg: FlightSegment, si: number) => {
+                                    // Calculate layover before this segment (except the first)
+                                    let layoverLabel: string | null = null;
+                                    if (si > 0) {
+                                      const prevSeg = flight.segments![si - 1];
+                                      if (prevSeg.arrival && seg.departure) {
+                                        const layMs = new Date(seg.departure).getTime() - new Date(prevSeg.arrival).getTime();
+                                        if (layMs > 0) {
+                                          const lH = Math.floor(layMs / 3_600_000);
+                                          const lM = Math.floor((layMs % 3_600_000) / 60_000);
+                                          layoverLabel = lH > 0 ? `${lH}h ${lM.toString().padStart(2, "0")}m` : `${lM}m`;
+                                        }
+                                      }
+                                    }
+                                    return (
+                                      <div key={si}>
+                                        {/* Layover badge between segments */}
+                                        {layoverLabel && (
+                                          <div className="flex items-center gap-2 px-4 py-1.5 bg-amber-50 border-y border-amber-100">
+                                            <div className="flex-1 h-px border-t border-dashed border-amber-300" />
+                                            <span className="text-[11px] font-bold text-amber-700 whitespace-nowrap flex items-center gap-1">
+                                              <Clock className="w-3 h-3" />
+                                              Layover at {seg.fromCity || seg.from}: {layoverLabel}
+                                            </span>
+                                            <div className="flex-1 h-px border-t border-dashed border-amber-300" />
+                                          </div>
+                                        )}
+                                        {/* Segment row */}
+                                        <div className="px-4 py-3 flex items-center gap-3">
+                                          <div className="flex flex-col items-center shrink-0 w-4">
+                                            <div className="w-2 h-2 rounded-full bg-blue-400" />
+                                            {si < flight.segments!.length - 1 && <div className="w-px flex-1 bg-blue-200 mt-1 min-h-[24px]" />}
+                                          </div>
+                                          <div className="flex-1 min-w-0">
+                                            <div className="flex items-baseline gap-2 flex-wrap">
+                                              <span className="text-xs font-bold text-blue-700">{seg.flightNumber}</span>
+                                              <span className="text-[11px] text-slate-500 truncate">{seg.airline}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2 mt-1.5">
+                                              <div className="text-center shrink-0">
+                                                <p className="text-base font-extrabold text-slate-800 tabular-nums leading-none">{seg.departureTime}</p>
+                                                <p className="text-[11px] font-semibold text-slate-600 leading-none mt-0.5">
+                                                  {seg.from}
+                                                  {seg.fromTerminal && <span className="text-slate-400 font-normal"> T{seg.fromTerminal}</span>}
+                                                </p>
+                                                <p className="text-[10px] text-slate-400 leading-none mt-0.5 max-w-[70px] truncate">{seg.fromCity}</p>
+                                              </div>
+                                              <div className="flex-1 flex items-center gap-1 px-1">
+                                                <div className="flex-1 h-px bg-slate-200" />
+                                                <Plane className="w-3 h-3 text-slate-300 shrink-0" />
+                                                <div className="flex-1 h-px bg-slate-200" />
+                                              </div>
+                                              <div className="text-center shrink-0">
+                                                <p className="text-base font-extrabold text-slate-800 tabular-nums leading-none">{seg.arrivalTime}</p>
+                                                <p className="text-[11px] font-semibold text-slate-600 leading-none mt-0.5">
+                                                  {seg.to}
+                                                  {seg.toTerminal && <span className="text-slate-400 font-normal"> T{seg.toTerminal}</span>}
+                                                </p>
+                                                <p className="text-[10px] text-slate-400 leading-none mt-0.5 max-w-[70px] truncate">{seg.toCity}</p>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
 
                               {/* Row 3: Tags */}
                               <div className="flex items-center gap-2 mt-4 pt-4 border-t border-slate-100 flex-wrap">
