@@ -114,7 +114,7 @@ function resolveIata(raw: string): string | undefined {
 }
 
 // ── TripJack flight mapper ─────────────────────────────────────────────────
-function mapTripJackFlight(item: any, idx: number, fromIata: string, toIata: string): any {
+function mapTripJackFlight(item: any, idx: number, fromIata: string, toIata: string, traceId = ""): any {
   const firstSeg = item.sI?.[0];
   const lastSeg  = item.sI?.[item.sI.length - 1];
 
@@ -131,20 +131,24 @@ function mapTripJackFlight(item: any, idx: number, fromIata: string, toIata: str
   const depTime = depIso ? depIso.slice(11, 16) || "N/A" : "N/A";
   const arrTime = arrIso ? arrIso.slice(11, 16) || "N/A" : "N/A";
 
-  // Use TripJack's pre-computed duration (minutes) if available, else calculate
-  const durMinsRaw = firstSeg?.duration as number | undefined;
+  // Duration: always calculate from first-departure → last-arrival ISO timestamps.
+  // Using firstSeg.duration alone is wrong for multi-stop flights (it's only leg 1).
   let duration = "N/A";
-  if (durMinsRaw && durMinsRaw > 0) {
-    const durH = Math.floor(durMinsRaw / 60);
-    const durM = durMinsRaw % 60;
-    duration = `${durH}h ${durM.toString().padStart(2, "0")}m`;
-  } else if (depIso && arrIso) {
+  if (depIso && arrIso) {
     const depMs  = new Date(depIso).getTime();
     const arrMs  = new Date(arrIso).getTime();
     const diffMs = arrMs - depMs;
     if (diffMs > 0) {
       const durH = Math.floor(diffMs / 3_600_000);
       const durM = Math.floor((diffMs % 3_600_000) / 60_000);
+      duration = `${durH}h ${durM.toString().padStart(2, "0")}m`;
+    }
+  } else {
+    // Fallback: TripJack pre-computed segment duration (first segment only)
+    const durMinsRaw = firstSeg?.duration as number | undefined;
+    if (durMinsRaw && durMinsRaw > 0) {
+      const durH = Math.floor(durMinsRaw / 60);
+      const durM = durMinsRaw % 60;
       duration = `${durH}h ${durM.toString().padStart(2, "0")}m`;
     }
   }
@@ -237,8 +241,10 @@ function mapTripJackFlight(item: any, idx: number, fromIata: string, toIata: str
     flightNumber: flightNum,
     origin:      CANONICAL[fromIata] || fromIata,
     destination: CANONICAL[toIata]   || toIata,
-    departureTime: depTime,
-    arrivalTime:   arrTime,
+    departureTime:  depTime,
+    arrivalTime:    arrTime,
+    departureDatetime: depIso || "",   // full ISO — for client-side calculations
+    arrivalDatetime:   arrIso || "",   // full ISO — for client-side calculations
     duration,
     price,
     class: cabinClass,
@@ -248,6 +254,7 @@ function mapTripJackFlight(item: any, idx: number, fromIata: string, toIata: str
     status: "scheduled",
     fareOptions,   // ← all cabin classes with their prices
     resultIndex,   // ← required by TripJack fareQuote/SSR/book
+    traceId,       // ← search session ID — embedded per-flight for reliable access
   };
 }
 
@@ -382,15 +389,17 @@ router.post("/flights", async (req, res): Promise<void> => {
     const onward: any[] = data?.searchResult?.tripInfos?.ONWARD
       || data?.tripInfos?.ONWARD
       || [];
-    const flights = onward.map((item, idx) => mapTripJackFlight(item, idx, f0, t0));
 
-    // traceId — check every known location TripJack may return it.
+    // Extract traceId BEFORE mapping so it is embedded in every flight object.
+    // Check every known location TripJack may return it.
     const traceId: string =
       data?.searchResult?.traceId ||
       data?.traceId               ||
       data?.data?.traceId         ||
       onward?.[0]?.traceId        ||
       "";
+
+    const flights = onward.map((item, idx) => mapTripJackFlight(item, idx, f0, t0, traceId));
 
     if (!traceId) {
       // Log top-level keys so we can identify where traceId lives on the sandbox.

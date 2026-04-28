@@ -1162,8 +1162,13 @@ export default function FlightResults() {
                                           if (bookingLoadingId) return;
                                           userClickedRef.current = true;
                                           const ri = flight.resultIndex || fare.resultIndex;
-                                          console.log("[fareSelect] fareId:", fare.fareId, "| cabinClass:", fare.cabinClass, "| resultIndex:", ri, "| traceId:", traceId || "(none)");
-                                          handleSelectFlight(fare.fareId, bookParams, true, ri, traceId);
+                                          // Prefer traceId embedded in the flight object (set at search time);
+                                          // fall back to the hook-level traceId as a safety net.
+                                          const ti = (flight as any).traceId || traceId || "";
+                                          console.log("TRACE:", ti || "(none)");
+                                          console.log("RESULT:", ri || "(none)");
+                                          console.log("[fareSelect] fareId:", fare.fareId, "| cabinClass:", fare.cabinClass, "| resultIndex:", ri, "| traceId:", ti || "(none)");
+                                          handleSelectFlight(fare.fareId, bookParams, true, ri, ti);
                                         }}
                                         className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs h-8 gap-1"
                                       >
