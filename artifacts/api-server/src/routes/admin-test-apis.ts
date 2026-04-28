@@ -1,8 +1,10 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
 import crypto from "crypto";
+import axios from "axios";
 import { db, apiKeysTable } from "@workspace/db";
 import { verifyToken } from "../lib/jwt.js";
 import { logger } from "../lib/logger.js";
+import { bustTripJackToken, TRIPJACK_BASE } from "../lib/tripjack-auth.js";
 
 const router = Router();
 
@@ -34,7 +36,10 @@ async function getKeys() {
   };
 }
 
-// ── shared TripJack search payload ────────────────────────────────────────
+// ── TripJack two-step auth helper ─────────────────────────────────────────
+// Step 1: POST /auth/token { apiKey } → get Bearer token
+// Step 2: use Authorization: Bearer <token> on all subsequent calls
+
 const TRIPJACK_TEST_PAYLOAD = {
   searchQuery: {
     cabinClass: "ECONOMY",
@@ -50,7 +55,33 @@ const TRIPJACK_TEST_PAYLOAD = {
   },
 };
 
-function parseTripJackResult(body: any): { ok: boolean; message: string } {
+async function fetchTripJackToken(apiKey: string): Promise<string> {
+  console.log("[tripjack-test] Step 1: POST /auth/v1/token");
+  const { data } = await axios.post(
+    `${TRIPJACK_BASE}/auth/v1/token`,
+    { apiKey },
+    { headers: { "Content-Type": "application/json" }, timeout: 10_000 }
+  );
+  console.log("[tripjack-test] Token response:", JSON.stringify(data));
+
+  const token: string =
+    data?.token?.value
+    ?? data?.token
+    ?? data?.access_token
+    ?? data?.data?.token
+    ?? "";
+
+  if (!token) {
+    const desc =
+      data?.status?.messages?.[0]?.description
+      ?? data?.message
+      ?? "No token returned";
+    throw new Error(`TripJack token error: ${desc}`);
+  }
+  return token;
+}
+
+function parseTripJackSearchResult(body: any): { ok: boolean; message: string } {
   const statusBlock = body?.status;
   if (statusBlock?.success === false) {
     const desc = statusBlock?.messages?.[0]?.description
@@ -74,30 +105,33 @@ router.post("/admin/test-tripjack", requireAdmin, async (_req, res) => {
       return res.json({ success: true, ok: false, message: "TripJack API key is not configured. Set it in Admin → API Keys and save first." });
     }
 
-    const r = await fetch("https://apitest.tripjack.com/fms/v1/air/search", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", apikey: tripjackKey.trim() },
-      body: JSON.stringify(TRIPJACK_TEST_PAYLOAD),
-      signal: AbortSignal.timeout(15_000),
-    });
+    const token = await fetchTripJackToken(tripjackKey.trim());
 
-    const body: any = await r.json().catch(() => ({}));
-    console.log("[test-tripjack] HTTP", r.status, JSON.stringify(body));
+    const { data: body } = await axios.post(
+      `${TRIPJACK_BASE}/fms/v1/air/search`,
+      TRIPJACK_TEST_PAYLOAD,
+      {
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        timeout: 15_000,
+      }
+    );
+    console.log("[test-tripjack] response:", JSON.stringify(body));
 
-    const { ok, message } = parseTripJackResult(body);
+    const { ok, message } = parseTripJackSearchResult(body);
     return res.json({ success: true, ok, message });
   } catch (err: any) {
-    if (err.name === "TimeoutError" || err.code === "ABORT_ERR") {
-      return res.json({ success: true, ok: false, message: "TripJack did not respond within 15 seconds." });
-    }
+    bustTripJackToken();
+    const msg = err.response?.data?.status?.messages?.[0]?.description
+      || err.response?.data?.message
+      || err.message;
     logger.error({ err }, "[test-tripjack] failed");
-    return res.json({ success: true, ok: false, message: `Could not reach TripJack: ${err.message}` });
+    return res.json({ success: true, ok: false, message: `TripJack error: ${msg}` });
   }
 });
 
 // ── POST /api/test-tripjack-real ───────────────────────────────────────────
-// Dedicated route: correct endpoint, valid payload, stored key, apikey header,
-// full response logged and returned to frontend.
+// Two-step: (1) get token from /auth/token, (2) call /fms/v1/air/search
+// Full response logged and returned to frontend.
 router.post("/test-tripjack-real", requireAdmin, async (_req, res) => {
   try {
     const { tripjackKey } = await getKeys();
@@ -105,31 +139,45 @@ router.post("/test-tripjack-real", requireAdmin, async (_req, res) => {
       return res.json({ success: false, ok: false, message: "TripJack API key is not configured. Set it in Admin → API Keys and save first." });
     }
 
-    const endpoint = "https://apitest.tripjack.com/fms/v1/air/search";
-    console.log("[test-tripjack-real] Calling", endpoint);
+    // Step 1 — get token
+    let token: string;
+    try {
+      token = await fetchTripJackToken(tripjackKey.trim());
+    } catch (tokenErr: any) {
+      const msg = tokenErr.response?.data?.status?.messages?.[0]?.description
+        || tokenErr.response?.data?.message
+        || tokenErr.message;
+      console.error("[test-tripjack-real] Token fetch failed:", msg);
+      return res.json({ success: false, ok: false, message: `TripJack token error: ${msg}` });
+    }
+
+    // Step 2 — call search API
+    console.log("[test-tripjack-real] Step 2: POST /fms/v1/air/search");
     console.log("[test-tripjack-real] Payload:", JSON.stringify(TRIPJACK_TEST_PAYLOAD));
 
-    const r = await fetch(endpoint, {
-      method:  "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: tripjackKey.trim(),
-      },
-      body: JSON.stringify(TRIPJACK_TEST_PAYLOAD),
-      signal: AbortSignal.timeout(15_000),
-    });
+    const { data } = await axios.post(
+      `${TRIPJACK_BASE}/fms/v1/air/search`,
+      TRIPJACK_TEST_PAYLOAD,
+      {
+        headers: {
+          "Content-Type":  "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        timeout: 15_000,
+      }
+    );
 
-    const data: any = await r.json().catch(() => ({}));
     console.log("[test-tripjack-real] response.data:", JSON.stringify(data));
 
-    const { ok, message } = parseTripJackResult(data);
+    const { ok, message } = parseTripJackSearchResult(data);
     return res.json({ success: true, ok, message, data });
   } catch (err: any) {
-    if (err.name === "TimeoutError" || err.code === "ABORT_ERR") {
-      return res.json({ success: false, ok: false, message: "TripJack did not respond within 15 seconds." });
-    }
+    bustTripJackToken();
+    const msg = err.response?.data?.status?.messages?.[0]?.description
+      || err.response?.data?.message
+      || err.message;
     logger.error({ err }, "[test-tripjack-real] failed");
-    return res.json({ success: false, ok: false, message: `Could not reach TripJack: ${err.message}` });
+    return res.json({ success: false, ok: false, message: `TripJack error: ${msg}` });
   }
 });
 

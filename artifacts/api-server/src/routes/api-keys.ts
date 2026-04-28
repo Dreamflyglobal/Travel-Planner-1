@@ -180,7 +180,7 @@ router.post("/admin/api-keys/test", requireAdmin, async (req, res) => {
       return res.json({ success: true, ok: false, message: "No API key configured for this provider. Set one above and save first." });
     }
 
-    // ── TripJack live probe ────────────────────────────────────────────────
+    // ── TripJack live probe — two-step: get token, then call search ────────
     if (which === "flight") {
       const payload = {
         searchQuery: {
@@ -198,17 +198,42 @@ router.post("/admin/api-keys/test", requireAdmin, async (req, res) => {
       };
 
       try {
+        // Step 1 — fetch Bearer token from TripJack auth endpoint
+        const tokenRes = await fetch("https://apitest.tripjack.com/auth/v1/token", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ apiKey: key.trim() }),
+          signal:  AbortSignal.timeout(10_000),
+        });
+        const tokenBody: any = await tokenRes.json().catch(() => ({}));
+        console.log("[api-keys] TripJack token response:", JSON.stringify(tokenBody));
+
+        const token: string =
+          tokenBody?.token?.value
+          ?? tokenBody?.token
+          ?? tokenBody?.access_token
+          ?? tokenBody?.data?.token
+          ?? "";
+
+        if (!token) {
+          const desc =
+            tokenBody?.status?.messages?.[0]?.description
+            ?? tokenBody?.message
+            ?? "No token returned";
+          return res.json({ success: true, ok: false, message: `TripJack token error: ${desc}` });
+        }
+
+        // Step 2 — call search with Bearer token
         const r = await fetch("https://apitest.tripjack.com/fms/v1/air/search", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", apikey: key.trim() },
-          body: JSON.stringify(payload),
-          signal: AbortSignal.timeout(15_000),
+          method:  "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+          body:    JSON.stringify(payload),
+          signal:  AbortSignal.timeout(15_000),
         });
 
         const body: any = await r.json().catch(() => ({}));
-        console.log("[api-keys] TripJack HTTP", r.status, JSON.stringify(body));
+        console.log("[api-keys] TripJack search response:", JSON.stringify(body));
 
-        // TripJack returns HTTP 200 even for auth failures — must inspect the body
         const statusBlock = body?.status;
         if (statusBlock?.success === false) {
           const desc = statusBlock?.messages?.[0]?.description
