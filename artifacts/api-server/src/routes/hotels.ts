@@ -154,6 +154,7 @@ router.get("/hotels/live-search", async (req, res): Promise<void> => {
   const hbApiKey  = (keysRow as any).hotelApiKey  || process.env.HOTELBEDS_API_KEY  || "";
   const hbSecret  = (keysRow as any).hotelApiSecret|| process.env.HOTELBEDS_SECRET   || "";
 
+  console.log("API KEY:", hbApiKey ? `${hbApiKey.slice(0, 6)}...${hbApiKey.slice(-4)} (length ${hbApiKey.length})` : "NOT SET");
   console.log(`[hotels/live-search] city="${city}" checkin="${checkin}" checkout="${checkout}" hotelbeds=${hbApiKey ? "set" : "not set"}`);
 
   // ── HotelBeds: always call when credentials are present ──────────────────
