@@ -294,6 +294,10 @@ export default function BookingPayment() {
 
   const totalBase = useMemo(() => {
     if (!session) return 0;
+    // Use lockedTotalPrice when set (flight review confirmed price)
+    if (session.type === "flight" && (session as any).lockedTotalPrice) {
+      return (session as any).lockedTotalPrice as number;
+    }
     return session.totalBase;
   }, [session]);
 
@@ -1182,7 +1186,14 @@ export default function BookingPayment() {
               <div className="sticky top-4 space-y-4">
                 <Card className="shadow-sm border">
                   <CardHeader className="pb-3 pt-5 px-5">
-                    <CardTitle className="text-base">Order Summary</CardTitle>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-base">Order Summary</CardTitle>
+                      {session?.type === "flight" && (session as any).lockedTotalPrice && (
+                        <span className="flex items-center gap-1 text-[10px] font-semibold text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">
+                          <ShieldCheck className="w-3 h-3" /> Price Confirmed
+                        </span>
+                      )}
+                    </div>
                   </CardHeader>
                   <CardContent className="px-5 pb-5 space-y-4">
 
@@ -1198,6 +1209,8 @@ export default function BookingPayment() {
                           : 1;
                         const baseFareTotal = session.baseFare * (session.type === "hotel" ? 1 : pax);
                         const convFeeTotal  = session.convFee  * (session.type === "hotel" ? 1 : pax);
+                        const seatAddOn     = session.type === "flight" ? ((session as any).seatAddOnPrice    ?? 0) : 0;
+                        const baggageAddOn  = session.type === "flight" ? ((session as any).baggageAddOnPrice ?? 0) : 0;
                         return (
                           <>
                             <div className="flex justify-between text-slate-600">
@@ -1211,6 +1224,18 @@ export default function BookingPayment() {
                               <div className="flex justify-between text-slate-600">
                                 <span>Convenience fee</span>
                                 <span className="font-medium tabular-nums">+₹{convFeeTotal.toLocaleString("en-IN")}</span>
+                              </div>
+                            )}
+                            {seatAddOn > 0 && (
+                              <div className="flex justify-between text-slate-600">
+                                <span>Seat charges</span>
+                                <span className="font-medium tabular-nums">+₹{seatAddOn.toLocaleString("en-IN")}</span>
+                              </div>
+                            )}
+                            {baggageAddOn > 0 && (
+                              <div className="flex justify-between text-slate-600">
+                                <span>Baggage charges</span>
+                                <span className="font-medium tabular-nums">+₹{baggageAddOn.toLocaleString("en-IN")}</span>
                               </div>
                             )}
                           </>

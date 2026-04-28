@@ -36,6 +36,9 @@ export type FlightBookingSession = {
   baseFare: number;
   convFee: number;
   totalBase: number;
+  seatAddOnPrice?: number;
+  baggageAddOnPrice?: number;
+  lockedTotalPrice?: number;
   isAgent: boolean;
   agentSavings: number;
   normalMarkup: number;

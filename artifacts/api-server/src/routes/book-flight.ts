@@ -204,7 +204,14 @@ router.post("/book-flight", async (req, res): Promise<void> => {
   };
 
   logger.info(
-    { paymentId, tjBookingId: fareData.bookingId },
+    {
+      paymentId,
+      tjBookingId:  fareData.bookingId,
+      finalPrice:   totalPrice,
+      passengers:   passengers.length,
+      seats:        passengers.map((p: any) => p.seatCode).filter(Boolean),
+      baggage:      passengers.map((p: any) => p.baggageCode).filter(Boolean),
+    },
     "[book-flight] STEP 3: calling TripJack /fms/v1/air/book",
   );
 

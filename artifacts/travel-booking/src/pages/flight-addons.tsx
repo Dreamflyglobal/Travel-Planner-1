@@ -109,13 +109,15 @@ export default function FlightAddons() {
     const updated: FlightBookingSession = {
       ...session,
       selectedSeats,
-      extraBaggageKg:   selectedBaggage?.kg     ?? 0,
-      extraBaggageCost: selectedBaggage?.amount  ?? 0,
-      extraBaggageCode: selectedBaggage?.code    ?? "",
-      totalBase: totalWithAddons,
+      extraBaggageKg:    selectedBaggage?.kg     ?? 0,
+      extraBaggageCost:  selectedBaggage?.amount  ?? 0,
+      extraBaggageCode:  selectedBaggage?.code    ?? "",
+      seatAddOnPrice:    seatAddOn,
+      baggageAddOnPrice: baggageAddOn,
+      totalBase:         totalWithAddons,
     };
     saveBookingSession(updated);
-    setLocation("/booking/payment");
+    setLocation("/booking/flight-review");
   }
 
   const rows: Record<number, SeatInfo[]> = {};
@@ -140,7 +142,7 @@ export default function FlightAddons() {
           </button>
 
           <div className="flex items-center gap-2 text-sm mb-5">
-            {["Flight Selection", "Passenger Details", "Add-ons", "Payment"].map((step, i) => (
+            {["Flight", "Passengers", "Add-ons", "Review", "Payment"].map((step, i) => (
               <div key={step} className="flex items-center gap-2">
                 <div className={cn(
                   "w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border-2",
@@ -151,7 +153,7 @@ export default function FlightAddons() {
                   {i < 2 ? <CheckCircle2 className="w-3.5 h-3.5" /> : i + 1}
                 </div>
                 <span className={cn("hidden sm:inline", i === 2 ? "font-bold" : i < 2 ? "text-blue-200" : "text-blue-400")}>{step}</span>
-                {i < 3 && <ChevronRight className="w-4 h-4 text-blue-400" />}
+                {i < 4 && <ChevronRight className="w-4 h-4 text-blue-400" />}
               </div>
             ))}
           </div>
@@ -378,7 +380,7 @@ export default function FlightAddons() {
                       )}
                       {baggageAddOn > 0 && (
                         <div className="flex justify-between text-sm text-slate-600">
-                          <span>Extra baggage ({selectedBaggage.kg}kg)</span>
+                          <span>Extra baggage ({selectedBaggage?.kg ?? 0}kg)</span>
                           <span className="font-medium">+₹{baggageAddOn.toLocaleString("en-IN")}</span>
                         </div>
                       )}
@@ -394,7 +396,7 @@ export default function FlightAddons() {
                       onClick={handleConfirm}
                       className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold h-12 text-base gap-2 shadow-md mt-2"
                     >
-                      Continue to Payment <ChevronRight className="w-4 h-4" />
+                      Review & Confirm <ChevronRight className="w-4 h-4" />
                     </Button>
 
                     <div className="space-y-1.5 pt-2 border-t">
