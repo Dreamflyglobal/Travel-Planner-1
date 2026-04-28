@@ -1,15 +1,16 @@
 /**
  * Shared TripJack API client with:
- *  - Fresh token on every retry (bust cache between attempts)
  *  - 2 automatic retries on transient / busy failures
  *  - 15-second per-attempt timeout
  *  - "Server busy" detection inside a 200-OK body
- *  - Structured logging: traceId, resultIndex, attempt, status
+ *  - Structured logging: context, attempt, status
+ *
+ * Authentication: direct "apikey" header — no Bearer token exchange.
  */
 import axios from "axios";
 import {
   getTripJackHeaders,
-  bustTripJackToken,
+  bustTripJackToken,       // no-op — kept for compatibility
   extractTripJackError,
   TRIPJACK_BASE,
 } from "./tripjack-auth.js";
@@ -50,17 +51,20 @@ export interface TjPostOptions {
  *
  * Retry policy
  * ─────────────
- *  Attempt 1 → uses cached token
- *  Attempt 2 → busts token, gets fresh one, waits 1 s
- *  Attempt 3 → busts token, gets fresh one, waits 2 s
+ *  Attempt 1 → sends request
+ *  Attempt 2 → waits 1 s, retries
+ *  Attempt 3 → waits 2 s, retries
  *
  * Retried automatically on:
  *  · HTTP 5xx / network error / ECONNABORTED / ETIMEDOUT
- *  · HTTP 401 (stale token)
  *  · 200-OK body that contains a "busy / timeout / airline-error" message
  *
- * Throws with `isAuthError = true` if we can't even get a token.
- * Throws with `isTransient = true` after all retries are exhausted on a busy-type error.
+ * NOT retried on:
+ *  · HTTP 401 / 403 (invalid API key — fix the key, retrying won't help)
+ *  · HTTP 400 (bad request — fix the payload)
+ *
+ * Throws with `isAuthError = true` if the API key is missing or invalid (401/403).
+ * Throws with `isTransient = true` after all retries exhausted on a busy-type error.
  */
 export async function tjPostWithRetry(
   path: string,
@@ -70,24 +74,24 @@ export async function tjPostWithRetry(
   const { maxRetries = 2, timeoutMs = 15_000, context = path } = options;
   const totalAttempts = maxRetries + 1;
 
+  // ── Resolve headers once (API key doesn't change between retries) ─────────
+  let headers: Record<string, string>;
+  try {
+    headers = await getTripJackHeaders();
+  } catch (authErr: any) {
+    logger.error({ context, err: authErr.message }, "[tj-retry] API key missing");
+    const e = new Error(authErr.message) as any;
+    e.isAuthError = true;
+    throw e;
+  }
+
+  console.log("[tj-retry] Calling Booking API:", path);
+
   for (let attempt = 1; attempt <= totalAttempts; attempt++) {
-    // ── On retry: force a fresh token and wait ───────────────────────────
     if (attempt > 1) {
-      bustTripJackToken();
       const delay = (attempt - 1) * 1000;
       logger.info({ context, attempt, delay }, `[tj-retry] retrying after ${delay}ms`);
       await sleep(delay);
-    }
-
-    // ── Fetch auth headers ───────────────────────────────────────────────
-    let headers: Record<string, string>;
-    try {
-      headers = await getTripJackHeaders();
-    } catch (authErr: any) {
-      logger.error({ context, attempt, err: authErr.message }, "[tj-retry] token fetch failed");
-      const e = new Error(authErr.message) as any;
-      e.isAuthError = true;
-      throw e;
     }
 
     const url = `${TRIPJACK_BASE}${path}`;
@@ -101,12 +105,21 @@ export async function tjPostWithRetry(
     } catch (err: any) {
       const httpStatus = err.response?.status;
       const errCode    = err.code ?? "?";
+      const errBody    = err.response?.data;
 
-      // 401 → stale token → bust and retry
-      if (httpStatus === 401) {
-        bustTripJackToken();
-        logger.warn({ context, attempt }, "[tj-retry] 401 stale token — busting and retrying");
-        if (attempt < totalAttempts) continue;
+      // 401 / 403 → invalid API key — non-retryable
+      if (httpStatus === 401 || httpStatus === 403) {
+        const reason = errBody ? extractTripJackError(errBody, "Invalid API key") : "Invalid API key";
+        logger.error(
+          { context, attempt, status: httpStatus, reason },
+          "[tj-retry] auth rejected — check TRIPJACK_API_KEY and IP whitelist",
+        );
+        const e = new Error(
+          `TripJack authentication failed: ${reason}. ` +
+          `Check that your API key is active and this server's IP is whitelisted in the TripJack portal.`
+        ) as any;
+        e.isAuthError = true;
+        throw e;
       }
 
       // 5xx / network timeout / connection reset → retry
@@ -125,7 +138,6 @@ export async function tjPostWithRetry(
         continue;
       }
 
-      // Exhausted / non-retryable — surface a clean message
       logger.error(
         { context, attempt, code: errCode, status: httpStatus, err: err.message },
         "[tj-retry] request failed",
@@ -149,9 +161,8 @@ export async function tjPostWithRetry(
       const msg = extractTripJackError(data, "Server busy");
       logger.warn({ context, attempt, msg }, "[tj-retry] busy body response");
 
-      if (attempt < totalAttempts) continue; // retry
+      if (attempt < totalAttempts) continue;
 
-      // All retries exhausted on a busy response
       const e = new Error("Temporary airline issue. Please try again.") as any;
       e.isTransient  = true;
       e.tripjackMsg  = msg;
@@ -161,13 +172,11 @@ export async function tjPostWithRetry(
     return data;
   }
 
-  // Should never reach here
   throw new Error("Unexpected retry loop exit");
 }
 
 /**
  * Build a standardised error response for Express routes.
- * Maps auth / transient errors to user-friendly messages.
  */
 export function handleTjError(res: any, err: any, context: string): void {
   if (err.isAuthError) {
