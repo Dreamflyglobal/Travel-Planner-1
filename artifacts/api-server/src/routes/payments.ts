@@ -5,28 +5,24 @@ import { sendWhatsAppNotification }   from "../lib/whatsapp-service.js";
 import { sendGeneralBookingEmail }     from "../lib/email-service.js";
 import type { GeneralBookingEmailData } from "../lib/email-service.js";
 import { scheduleBookingFollowUp }    from "../lib/marketing-scheduler.js";
+import { getProviderConfig }          from "../lib/provider-config.js";
 
 const router = Router();
 
-const KEY_ID     = (process.env.RAZORPAY_KEY_ID     ?? "").trim();
-const KEY_SECRET = (process.env.RAZORPAY_KEY_SECRET ?? "").trim();
-
 type KeyMode = "test" | "live" | "demo";
 
-function getKeyMode(): KeyMode {
-  if (KEY_ID.startsWith("rzp_test_") && KEY_SECRET) return "test";
-  if (KEY_ID.startsWith("rzp_live_") && KEY_SECRET) return "live";
+function resolveKeyMode(keyId: string, keySecret: string): KeyMode {
+  if (keyId.startsWith("rzp_test_") && keySecret) return "test";
+  if (keyId.startsWith("rzp_live_") && keySecret) return "live";
   return "demo";
 }
 
-let rzpClient: Razorpay | null = null;
-function getRazorpay(): Razorpay | null {
-  if (rzpClient) return rzpClient;
-  const mode = getKeyMode();
+function buildRazorpayClient(keyId: string, keySecret: string): Razorpay | null {
+  const mode = resolveKeyMode(keyId, keySecret);
   if (mode === "test" || mode === "live") {
-    rzpClient = new Razorpay({ key_id: KEY_ID, key_secret: KEY_SECRET });
+    return new Razorpay({ key_id: keyId, key_secret: keySecret });
   }
-  return rzpClient;
+  return null;
 }
 
 /**
@@ -43,12 +39,15 @@ router.post("/create-order", async (req, res) => {
       return res.status(400).json({ success: false, error: "Invalid amount" });
     }
 
-    // Frontend sends rupees → we convert to paise for Razorpay
+    const cfg     = await getProviderConfig();
+    const KEY_ID  = cfg.paymentKeyId;
+    const KEY_SEC = cfg.paymentKeySecret;
+    const mode    = resolveKeyMode(KEY_ID, KEY_SEC);
+
     const amountPaise = Math.round(Number(amount) * 100);
-    const mode        = getKeyMode();
 
     if (mode === "test" || mode === "live") {
-      const rzp   = getRazorpay()!;
+      const rzp   = buildRazorpayClient(KEY_ID, KEY_SEC)!;
       const order = await rzp.orders.create({
         amount:   amountPaise,
         currency,
@@ -59,7 +58,6 @@ router.post("/create-order", async (req, res) => {
       return res.json({ success: true, order, key: KEY_ID, keyMode: mode });
     }
 
-    // Demo mode — no keys configured
     const mockOrder = {
       id:           `order_DEMO${Date.now()}`,
       entity:       "order",
@@ -101,15 +99,15 @@ router.post("/verify", async (req, res) => {
 
     let verified = false;
 
-    // Demo orders bypass signature check
     if (razorpay_order_id.startsWith("order_DEMO") || razorpay_payment_id.startsWith("pay_DEMO")) {
       console.log(`[payments] Demo payment accepted — ${razorpay_payment_id}`);
       verified = true;
     } else {
-      // Real HMAC-SHA256 signature verification
-      const sign         = `${razorpay_order_id}|${razorpay_payment_id}`;
+      const cfg        = await getProviderConfig();
+      const KEY_SEC    = cfg.paymentKeySecret;
+      const sign       = `${razorpay_order_id}|${razorpay_payment_id}`;
       const expectedSign = crypto
-        .createHmac("sha256", KEY_SECRET)
+        .createHmac("sha256", KEY_SEC)
         .update(sign)
         .digest("hex");
       verified = expectedSign === razorpay_signature;
@@ -201,20 +199,17 @@ router.post("/notify", async (req, res) => {
         date:           travelDateStr,
         amount:         bookingContext.totalAmount || 0,
         invoiceUrl,
-        // Flight
         airline:        bookingContext.flightAirline,
         flightNum:      bookingContext.flightNumber,
         flightDeparture: bookingContext.flightDeparture,
         flightArrival:  bookingContext.flightArrival,
         flightDuration: bookingContext.flightDuration,
-        // Bus
         busOperator:    bookingContext.busOperator,
         busType:        bookingContext.busType,
         boardingPoint:  bookingContext.busBoardingPoint,
         droppingPoint:  bookingContext.busDroppingPoint,
         busDeparture:   bookingContext.busDeparture,
         busArrival:     bookingContext.busArrival,
-        // Hotel
         hotelName:      bookingContext.hotelName,
         hotelCity:      bookingContext.hotelCity,
         hotelNights:    bookingContext.hotelNights,
@@ -231,7 +226,6 @@ router.post("/notify", async (req, res) => {
     console.warn("[notify] No phone — skipping WhatsApp");
   }
 
-  // Schedule 6-hour booking follow-up marketing message (fire and forget)
   if (bookingContext.phone) {
     const userId = bookingContext.userId || `guest_${Date.now()}`;
     scheduleBookingFollowUp({
@@ -263,8 +257,11 @@ router.post("/webhook", async (req, res) => {
     const sig  = req.headers["x-razorpay-signature"] as string;
     const body = JSON.stringify(req.body);
 
-    if (KEY_SECRET) {
-      const expected = crypto.createHmac("sha256", KEY_SECRET).update(body).digest("hex");
+    const cfg     = await getProviderConfig();
+    const KEY_SEC = cfg.paymentKeySecret;
+
+    if (KEY_SEC) {
+      const expected = crypto.createHmac("sha256", KEY_SEC).update(body).digest("hex");
       if (sig !== expected) {
         return res.status(400).json({ error: "Invalid webhook signature" });
       }

@@ -26,6 +26,8 @@ import {
   Plane,
   Bus,
   Building2,
+  CreditCard,
+  Lock,
   CheckCircle2,
   AlertCircle,
   ShieldCheck,
@@ -38,23 +40,26 @@ type KeyMeta = { masked: string; set: boolean; source: "db" | "env" | "none" };
 type KeysResponse = {
   success: boolean;
   keys: {
-    flightApiKey:  KeyMeta;
-    busApiKey:     KeyMeta;
-    hotelApiKey:   KeyMeta;
-    tboApiKey:     KeyMeta;
+    flightApiKey:    KeyMeta;
+    busApiKey:       KeyMeta;
+    hotelApiKey:     KeyMeta;
+    tboApiKey:       KeyMeta;
+    paymentApiKey:   KeyMeta;
+    paymentApiSecret: KeyMeta;
   };
   flightProvider: string;
   updatedAt: string | null;
 };
 
-type FieldKey = "flightApiKey" | "busApiKey" | "hotelApiKey" | "tboApiKey";
+type FieldKey = "flightApiKey" | "busApiKey" | "hotelApiKey" | "tboApiKey" | "paymentApiKey" | "paymentApiSecret";
 
 const FIELDS: Array<{
   key: FieldKey;
   label: string;
   description: string;
   Icon: typeof Plane;
-  group: "flight" | "bus" | "hotel" | "tbo";
+  group: "flight" | "bus" | "hotel" | "tbo" | "payment";
+  sensitive?: boolean;
 }> = [
   {
     key:         "flightApiKey",
@@ -84,6 +89,21 @@ const FIELDS: Array<{
     Icon:        Building2,
     group:       "hotel",
   },
+  {
+    key:         "paymentApiKey",
+    label:       "Razorpay Key ID",
+    description: "Razorpay publishable key — starts with rzp_test_ or rzp_live_.",
+    Icon:        CreditCard,
+    group:       "payment",
+  },
+  {
+    key:         "paymentApiSecret",
+    label:       "Razorpay Key Secret",
+    description: "Razorpay secret key. Never shared with the browser — stored server-side only.",
+    Icon:        Lock,
+    group:       "payment",
+    sensitive:   true,
+  },
 ];
 
 function getAuthHeader(): Record<string, string> {
@@ -103,10 +123,10 @@ export function ApiKeysSection() {
   const [error,        setError]        = useState<string | null>(null);
   const [data,         setData]         = useState<KeysResponse | null>(null);
   const [drafts,       setDrafts]       = useState<Record<FieldKey, string>>({
-    flightApiKey: "", busApiKey: "", hotelApiKey: "", tboApiKey: "",
+    flightApiKey: "", busApiKey: "", hotelApiKey: "", tboApiKey: "", paymentApiKey: "", paymentApiSecret: "",
   });
   const [reveal,       setReveal]       = useState<Record<FieldKey, boolean>>({
-    flightApiKey: false, busApiKey: false, hotelApiKey: false, tboApiKey: false,
+    flightApiKey: false, busApiKey: false, hotelApiKey: false, tboApiKey: false, paymentApiKey: false, paymentApiSecret: false,
   });
   const [providerDraft, setProviderDraft] = useState<string>("");
   const [savedFlash,   setSavedFlash]   = useState(false);
@@ -174,7 +194,7 @@ export function ApiKeysSection() {
       const json = (await res.json()) as KeysResponse;
       setData(json);
       setProviderDraft(json.flightProvider ?? "tripjack");
-      setDrafts({ flightApiKey: "", busApiKey: "", hotelApiKey: "", tboApiKey: "" });
+      setDrafts({ flightApiKey: "", busApiKey: "", hotelApiKey: "", tboApiKey: "", paymentApiKey: "", paymentApiSecret: "" });
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 3000);
       toast({ title: "Settings saved", description: "API keys and provider stored securely on the server." });
@@ -190,7 +210,7 @@ export function ApiKeysSection() {
   }
 
   function handleDiscard() {
-    setDrafts({ flightApiKey: "", busApiKey: "", hotelApiKey: "", tboApiKey: "" });
+    setDrafts({ flightApiKey: "", busApiKey: "", hotelApiKey: "", tboApiKey: "", paymentApiKey: "", paymentApiSecret: "" });
     setProviderDraft(data?.flightProvider ?? "tripjack");
   }
 

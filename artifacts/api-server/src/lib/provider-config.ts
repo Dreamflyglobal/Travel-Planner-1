@@ -4,6 +4,8 @@ type ProviderConfig = {
   flightProvider: "tripjack" | "tbo";
   flightApiKey: string;
   tboApiKey: string;
+  paymentKeyId: string;
+  paymentKeySecret: string;
   cachedAt: number;
 };
 
@@ -20,16 +22,20 @@ async function loadFromDb(): Promise<ProviderConfig> {
 
     return {
       flightProvider,
-      flightApiKey: row?.flightApiKey || process.env["TRIPJACK_API_KEY"] || "",
-      tboApiKey:    row?.tboApiKey    || process.env["TBO_API_KEY"]      || "",
-      cachedAt:     Date.now(),
+      flightApiKey:    row?.flightApiKey    || process.env["TRIPJACK_API_KEY"]    || "",
+      tboApiKey:       row?.tboApiKey       || process.env["TBO_API_KEY"]         || "",
+      paymentKeyId:    row?.paymentApiKey   || process.env["RAZORPAY_KEY_ID"]     || "",
+      paymentKeySecret: row?.paymentApiSecret || process.env["RAZORPAY_KEY_SECRET"] || "",
+      cachedAt:        Date.now(),
     };
   } catch {
     return {
-      flightProvider: "tripjack",
-      flightApiKey:   process.env["TRIPJACK_API_KEY"] || "",
-      tboApiKey:      process.env["TBO_API_KEY"]      || "",
-      cachedAt:       Date.now(),
+      flightProvider:  "tripjack",
+      flightApiKey:    process.env["TRIPJACK_API_KEY"]    || "",
+      tboApiKey:       process.env["TBO_API_KEY"]         || "",
+      paymentKeyId:    process.env["RAZORPAY_KEY_ID"]     || "",
+      paymentKeySecret: process.env["RAZORPAY_KEY_SECRET"] || "",
+      cachedAt:        Date.now(),
     };
   }
 }

@@ -5,8 +5,6 @@ export type Currency = "INR" | "USD" | "EUR" | "GBP" | "AED";
 export type SiteSettings = {
   contactEmail: string;
   contactPhone: string;
-  razorpayKeyId: string;
-  razorpaySecret: string;
   paymentsEnabled: boolean;
   currency: Currency;
   bookingFee: number;
@@ -18,8 +16,6 @@ const STORAGE_KEY = "site_settings_v1";
 export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   contactEmail: "",
   contactPhone: "",
-  razorpayKeyId: "",
-  razorpaySecret: "",
   paymentsEnabled: true,
   currency: "INR",
   bookingFee: 0,
@@ -31,17 +27,20 @@ function loadSiteSettings(): SiteSettings {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_SITE_SETTINGS;
-    const parsed = JSON.parse(raw) as Partial<SiteSettings>;
-    return {
-      contactEmail: typeof parsed.contactEmail === "string" ? parsed.contactEmail : DEFAULT_SITE_SETTINGS.contactEmail,
-      contactPhone: typeof parsed.contactPhone === "string" ? parsed.contactPhone : DEFAULT_SITE_SETTINGS.contactPhone,
-      razorpayKeyId: typeof parsed.razorpayKeyId === "string" ? parsed.razorpayKeyId : DEFAULT_SITE_SETTINGS.razorpayKeyId,
-      razorpaySecret: typeof parsed.razorpaySecret === "string" ? parsed.razorpaySecret : DEFAULT_SITE_SETTINGS.razorpaySecret,
-      paymentsEnabled: typeof parsed.paymentsEnabled === "boolean" ? parsed.paymentsEnabled : DEFAULT_SITE_SETTINGS.paymentsEnabled,
-      currency: (parsed.currency as Currency) || DEFAULT_SITE_SETTINGS.currency,
-      bookingFee: typeof parsed.bookingFee === "number" && Number.isFinite(parsed.bookingFee) ? parsed.bookingFee : DEFAULT_SITE_SETTINGS.bookingFee,
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const settings: SiteSettings = {
+      contactEmail:       typeof parsed.contactEmail === "string"  ? parsed.contactEmail       : DEFAULT_SITE_SETTINGS.contactEmail,
+      contactPhone:       typeof parsed.contactPhone === "string"  ? parsed.contactPhone       : DEFAULT_SITE_SETTINGS.contactPhone,
+      paymentsEnabled:    typeof parsed.paymentsEnabled === "boolean" ? parsed.paymentsEnabled : DEFAULT_SITE_SETTINGS.paymentsEnabled,
+      currency:           (parsed.currency as Currency)            || DEFAULT_SITE_SETTINGS.currency,
+      bookingFee:         typeof parsed.bookingFee === "number" && Number.isFinite(parsed.bookingFee) ? parsed.bookingFee : DEFAULT_SITE_SETTINGS.bookingFee,
       cancellationPolicy: typeof parsed.cancellationPolicy === "string" ? parsed.cancellationPolicy : DEFAULT_SITE_SETTINGS.cancellationPolicy,
     };
+    // Scrub any previously stored API credentials from localStorage
+    if ("razorpayKeyId" in parsed || "razorpaySecret" in parsed) {
+      try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)); } catch { /* noop */ }
+    }
+    return settings;
   } catch {
     return DEFAULT_SITE_SETTINGS;
   }

@@ -55,6 +55,7 @@ import {
   CheckCircle2,
   ToggleLeft,
   RefreshCcw,
+  ShieldCheck,
 } from "lucide-react";
 
 const MAX_LOGO_BYTES = 1_500_000;
@@ -85,7 +86,6 @@ export default function AdminSettings() {
   const [brandingDraft, setBrandingDraft] = useState<BrandingSettings>(branding);
   const [siteDraft, setSiteDraft] = useState<SiteSettings>(settings);
   const [dirty, setDirty] = useState(false);
-  const [showSecret, setShowSecret] = useState(false);
 
   // Keep drafts in sync if context changes elsewhere (e.g. cross-tab updates)
   useEffect(() => {
@@ -422,7 +422,7 @@ export default function AdminSettings() {
         <SectionHeader
           icon={<CreditCard className="w-5 h-5 text-amber-600" />}
           title="Payment Settings"
-          description="Razorpay credentials and global payment toggle."
+          description="Global payment toggle. Razorpay credentials are managed securely in the API Keys section."
         />
 
         <Card className="mb-8">
@@ -441,48 +441,12 @@ export default function AdminSettings() {
               />
             </div>
 
-            <div className="grid md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="razorpay-key">Razorpay Key ID</Label>
-                <Input
-                  id="razorpay-key"
-                  value={siteDraft.razorpayKeyId}
-                  onChange={(e) => patchSite({ razorpayKeyId: e.target.value })}
-                  placeholder="rzp_live_xxxxxxxxxxxx"
-                  autoComplete="off"
-                  data-testid="input-razorpay-key"
-                />
-              </div>
-              <div>
-                <Label htmlFor="razorpay-secret">Razorpay Key Secret</Label>
-                <div className="relative">
-                  <Input
-                    id="razorpay-secret"
-                    type={showSecret ? "text" : "password"}
-                    value={siteDraft.razorpaySecret}
-                    onChange={(e) => patchSite({ razorpaySecret: e.target.value })}
-                    placeholder="••••••••••••••••"
-                    autoComplete="new-password"
-                    className="pr-10"
-                    data-testid="input-razorpay-secret"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowSecret((v) => !v)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-700"
-                    aria-label={showSecret ? "Hide secret" : "Show secret"}
-                    data-testid="button-toggle-secret"
-                  >
-                    {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="text-xs text-slate-500 bg-amber-50 border border-amber-200 rounded-md p-3">
-              <strong className="text-amber-800">Note:</strong> Credentials entered here are stored in
-              your browser&apos;s local storage for now. For production, move secrets to a server-side
-              configuration before going live.
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-sm">
+              <ShieldCheck className="w-4 h-4 mt-0.5 text-emerald-600 shrink-0" />
+              <p className="text-emerald-800">
+                <strong>Razorpay Key ID and Secret</strong> are stored securely on the server — never in your browser.
+                Manage them in the <strong>API Keys &amp; Provider Settings</strong> section below.
+              </p>
             </div>
           </CardContent>
         </Card>
