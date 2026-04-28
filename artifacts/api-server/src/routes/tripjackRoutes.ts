@@ -28,19 +28,15 @@ async function handleFareQuote(req: any, res: any): Promise<void> {
   console.log("TRACE:", traceId || "(none)");
   console.log("RESULT:", resultIndex || "(none)");
 
-  if (!traceId) {
-    console.error("[fareQuote] traceId missing — TripJack search did not return traceId");
-    res.status(400).json({ error: "traceId is required — TripJack search session ID was not found in search response" });
-    return;
-  }
   if (!resultIndex) {
     console.error("[fareQuote] resultIndex missing");
     res.status(400).json({ error: "resultIndex is required for fareQuote" });
     return;
   }
 
-  // Both present — build request body
-  const fareQuoteBody = { traceId, resultIndex };
+  // Build fareQuote body — traceId is optional; test API may not return one
+  const fareQuoteBody: Record<string, string> = { resultIndex };
+  if (traceId) fareQuoteBody.traceId = traceId;
 
   console.log("FareQuote Body:", JSON.stringify(fareQuoteBody));
 

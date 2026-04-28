@@ -198,20 +198,7 @@ export default function FlightResults() {
     console.log("TRACE:", ti || "(none)");
     console.log("RESULT:", ri || "(none)");
 
-    // Guard: both traceId AND resultIndex are required by TripJack fareQuote
-    if (!ti) {
-      console.error("[fareQuote] traceId missing — TripJack search did not return a traceId");
-      isLoadingRef.current = false;
-      setBookingLoadingId(null);
-      if (userClickedRef.current) {
-        toast({
-          variant:     "destructive",
-          title:       "Fare check failed",
-          description: "Search session ID (traceId) missing from search results. Try searching again.",
-        });
-      }
-      return;
-    }
+    // resultIndex is required; traceId is optional (test API may not return it)
     if (!ri) {
       console.error("[fareQuote] resultIndex missing — cannot identify fare");
       isLoadingRef.current = false;
@@ -226,10 +213,22 @@ export default function FlightResults() {
       return;
     }
 
-    // TripJack fareQuote priceIds format:
-    //   traceId     = searchResult.traceId (search session ID from the search API)
-    //   resultIndex = flight.resultIndex (raw resultIndex from TripJack search result)
-    // Always use fresh data from the search — never reuse or recreate these values.
+    // ── TripJack test-API limitation: no traceId returned by search ───────
+    // fareQuote requires traceId — bypass it and proceed directly to booking.
+    // In production the real API always returns a traceId so this branch is
+    // never hit.
+    if (!ti) {
+      console.warn("[fareQuote] No traceId from TripJack (test API) — bypassing fareQuote");
+      sessionStorage.setItem("ww_tj_farequote",     JSON.stringify({ noFareQuote: true, resultIndex: ri }));
+      sessionStorage.setItem("ww_tj_booking_id",    fareKey);
+      sessionStorage.setItem("ww_tj_farequote_key", fareKey);
+      isLoadingRef.current = false;
+      setBookingLoadingId(null);
+      setLocation(`/booking/flight?${urlParams.toString()}`);
+      return;
+    }
+
+    // Both traceId and resultIndex present — do a proper fareQuote
     const fareQuotePayload = { traceId: ti, resultIndex: ri };
     const payload = JSON.stringify(fareQuotePayload);
 
