@@ -57,7 +57,6 @@
     "framer-motion": "catalog:",
     "input-otp": "^1.4.2",
     "lucide-react": "catalog:",
-    "msw": "^2.6.8",
     "next-themes": "^0.4.6",
     "react": "catalog:",
     "react-day-picker": "^9.11.1",
@@ -74,11 +73,6 @@
     "vite": "catalog:",
     "wouter": "^3.3.5",
     "zod": "catalog:"
-  },
-  "msw": {
-    "workerDirectory": [
-      "public"
-    ]
   },
   "dependencies": {
     "axios": "^1.15.2",
