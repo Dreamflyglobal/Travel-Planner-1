@@ -154,7 +154,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (portal === "admin") {
       const token = localStorage.getItem(ADMIN_TOKEN_KEY);
       if (token && isAdminJwt(token)) {
-        const adminEmail = process.env.ADMIN_EMAIL || "admin@dreamflyglobal.com";
+        let adminEmail = "admin@dreamflyglobal.com";
+        try { adminEmail = JSON.parse(atob(token.split(".")[1])).email || adminEmail; } catch {}
         setUser({ id: 0, name: "Admin", email: adminEmail, role: "admin" });
       } else {
         if (token) localStorage.removeItem(ADMIN_TOKEN_KEY); // stale

@@ -16,13 +16,17 @@ export interface FlightSegment {
 }
 
 export interface FareOption {
-  fareId:      string;
-  cabinClass:  string;
-  cabinLabel:  string;
-  totalFare:   number;
-  seatsLeft:   number;
-  resultIndex?: string;  // per-fare TripJack result identifier for fareQuote/SSR/book
-  meal?:        string | null;  // "FREE" | "PAID" | null — from API mI field
+  fareId:          string;
+  cabinClass:      string;
+  cabinLabel:      string;
+  fareLabel?:      string;      // "Saver" | "Flex" | "Business Flex" | API-provided name
+  totalFare:       number;
+  seatsLeft:       number;
+  refundable?:     boolean;     // from API rT / nRF fields
+  checkedBaggage?: string;      // e.g. "15 kg" from API bI.iB
+  cabinBaggage?:   string;      // e.g. "7 kg" from API bI.cB
+  resultIndex?:    string;      // per-fare TripJack result identifier for fareQuote/SSR/book
+  meal?:           string | null; // "FREE" | "PAID" | null — from API mI field
 }
 
 export interface LiveFlight {

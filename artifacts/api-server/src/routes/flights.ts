@@ -171,16 +171,16 @@ function mapTripJackFlight(item: any, idx: number, fromIata: string, toIata: str
     String(idx);
 
   // Map every totalPriceList entry to a fare option object.
-  const allFareOptions = (item.totalPriceList || [])
+  // Keep ALL fares per cabin — the UI groups them and lets the user choose.
+  const fareOptions = (item.totalPriceList || [])
     .map((pl: any) => {
       const adultFd = pl?.fd?.ADULT;
       if (!adultFd) return null;
       const rawFare = adultFd?.fC?.TF || adultFd?.fC?.BF || 0;
       if (!rawFare) return null;
-      const cc = (adultFd?.cc || "ECONOMY").toUpperCase();
+      const cc = (String(adultFd?.cc || "ECONOMY")).toUpperCase();
 
-      // resultIndex: prefer sI[0].id (segment ID) used as fareQuote priceIds.resultIndex.
-      // The per-fare tai.tbi keys may carry the segment id; fall back to flight-level.
+      // resultIndex: prefer tbi key (segment id used by fareQuote) then fall back to flight-level.
       const tbiKeys = pl?.tai?.tbi ? Object.keys(pl.tai.tbi) : [];
       const fareResultIndex: string =
         (tbiKeys.length > 0 ? tbiKeys[0] : "")  ||
@@ -188,39 +188,66 @@ function mapTripJackFlight(item: any, idx: number, fromIata: string, toIata: str
         String(pl.rI         ?? "")             ||
         flightResultIndex;
 
-      // Normalize TripJack meal indicator: "F" → "FREE", "P" → "PAID", else null
+      // Normalize meal indicator: "F" → "FREE", "P" → "PAID", else null
       const rawMeal = adultFd?.mI ?? adultFd?.meal ?? null;
       const meal: string | null =
         rawMeal === "F" || rawMeal === "FREE" ? "FREE" :
         rawMeal === "P" || rawMeal === "PAID" ? "PAID" :
         null;
 
+      // Refundability — TripJack uses rT (refundType) or nRF (non-refundable bool)
+      const rT: string  = (String(adultFd?.rT || "")).toUpperCase();
+      const nRF: boolean = adultFd?.nRF === true || adultFd?.nRF === 1;
+      const refundable: boolean =
+        rT === "FULL_REFUNDABLE" || rT === "PARTIAL_REFUNDABLE" || rT === "REFUNDABLE"
+          ? true
+          : rT === "NON_REFUNDABLE" || nRF
+          ? false
+          : cc === "BUSINESS" || cc === "FIRST" || cc === "PREMIUM_ECONOMY";
+
+      // Fare label — prefer API-provided name, derive from refundability otherwise
+      const apiLabel: string =
+        (pl.fareIdentifier || pl.fn || adultFd.fareIdentifier || "").trim();
+      const fareLabel: string = apiLabel ||
+        (cc === "BUSINESS" || cc === "FIRST" ? (refundable ? "Business Flex" : "Business Saver") :
+         cc === "PREMIUM_ECONOMY" ? "Premium Economy" :
+         refundable ? "Flex" : "Saver");
+
+      // Baggage — TripJack bI object carries iB (check-in) and cB (cabin)
+      const bI = adultFd?.bI ?? {};
+      const checkedBaggage: string =
+        bI.iB  ? String(bI.iB) :
+        bI.checkIn ? String(bI.checkIn) :
+        cc === "BUSINESS" || cc === "FIRST" ? "30 kg" :
+        cc === "PREMIUM_ECONOMY" ? "20 kg" : "15 kg";
+      const cabinBaggage: string =
+        bI.cB  ? String(bI.cB) :
+        bI.cabin ? String(bI.cabin) :
+        cc === "BUSINESS" || cc === "FIRST" ? "10 kg" : "7 kg";
+
       return {
-        fareId:      pl.id || pl.fareIdentifier || cc,
-        cabinClass:  cc,
-        cabinLabel:  CABIN_LABEL[cc] || cc,
-        totalFare:   rawFare,
-        seatsLeft:   adultFd?.sR ?? 9,
-        resultIndex: fareResultIndex,   // ← per-fare TripJack result identifier
-        meal,                           // "FREE" | "PAID" | null
+        fareId:         pl.id || pl.fareIdentifier || `${cc}_${rawFare}`,
+        cabinClass:     cc,
+        cabinLabel:     CABIN_LABEL[cc] || cc,
+        fareLabel,
+        totalFare:      rawFare,
+        seatsLeft:      adultFd?.sR ?? 9,
+        resultIndex:    fareResultIndex,
+        meal,
+        refundable,
+        checkedBaggage,
+        cabinBaggage,
       };
     })
     .filter(Boolean) as Array<{
-      fareId: string; cabinClass: string; cabinLabel: string;
+      fareId: string; cabinClass: string; cabinLabel: string; fareLabel: string;
       totalFare: number; seatsLeft: number; resultIndex: string;
-      meal: string | null;
+      meal: string | null; refundable: boolean;
+      checkedBaggage: string; cabinBaggage: string;
     }>;
 
-  // TripJack often returns multiple sub-types per cabin class (SAVER, FLEXI, PLUS …).
-  // Deduplicate: sort cheapest-first then keep the first (cheapest) per cabin class.
-  // This ensures one card per cabin class in the UI, with a 1-to-1 fare ↔ API mapping.
-  allFareOptions.sort((a, b) => a.totalFare - b.totalFare);
-  const seenCabins = new Set<string>();
-  const fareOptions = allFareOptions.filter((f) => {
-    if (seenCabins.has(f.cabinClass)) return false;
-    seenCabins.add(f.cabinClass);
-    return true;
-  });
+  // Sort cheapest-first within each cabin so the best price leads
+  fareOptions.sort((a, b) => a.totalFare - b.totalFare);
 
   // Primary price = cheapest available fare (for sort/filter compatibility)
   const priceInfo  = item.totalPriceList?.[0]?.fd?.ADULT;
@@ -228,7 +255,7 @@ function mapTripJackFlight(item: any, idx: number, fromIata: string, toIata: str
     ? Math.min(...fareOptions.map((f: any) => f.totalFare))
     : (priceInfo?.fC?.TF || priceInfo?.fC?.BF || 0);
   const seatsLeft  = priceInfo?.sR ?? 9;
-  const cabinClass = CABIN_LABEL[(priceInfo?.cc || "ECONOMY").toUpperCase()] ?? "Economy";
+  const cabinClass = CABIN_LABEL[(String(priceInfo?.cc || "ECONOMY")).toUpperCase()] ?? "Economy";
 
   const segCount = item.sI?.length ?? 1;
   const stops = Math.max(0, segCount - 1);
