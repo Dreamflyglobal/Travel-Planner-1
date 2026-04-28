@@ -1,9 +1,9 @@
-import { Router, type Request, type Response, type NextFunction } from "express";
+import { Router } from "express";
 import crypto from "crypto";
 import axios from "axios";
 import { db, apiKeysTable } from "@workspace/db";
-import { verifyToken } from "../lib/jwt.js";
 import { logger } from "../lib/logger.js";
+import { requireAdmin } from "../lib/admin-auth.js";
 import {
   getTripJackToken,
   bustTripJackToken,
@@ -12,22 +12,6 @@ import {
 } from "../lib/tripjack-auth.js";
 
 const router = Router();
-
-function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  const header = req.headers.authorization;
-  if (!header?.startsWith("Bearer ")) {
-    return res.status(401).json({ success: false, error: "Authentication required" });
-  }
-  try {
-    const payload = verifyToken(header.slice(7));
-    if (payload.role !== "admin") {
-      return res.status(403).json({ success: false, error: "Admin access required" });
-    }
-    next();
-  } catch {
-    return res.status(401).json({ success: false, error: "Invalid or expired session — please log in again." });
-  }
-}
 
 async function getKeys() {
   const rows = await db.select().from(apiKeysTable).limit(1);

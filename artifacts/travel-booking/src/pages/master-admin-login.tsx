@@ -38,9 +38,10 @@ export default function MasterAdminLogin() {
 
     try {
       const res = await fetch(`${API}/api/admin/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+        method:      "POST",
+        credentials: "include",
+        headers:     { "Content-Type": "application/json" },
+        body:        JSON.stringify({ email: email.trim().toLowerCase(), password }),
       });
       const data = await res.json();
 

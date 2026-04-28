@@ -11,13 +11,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Key,
   Save,
   RotateCcw,
@@ -48,19 +41,19 @@ type KeysResponse = {
     paymentApiKey:    KeyMeta;
     paymentApiSecret: KeyMeta;
   };
-  flightProvider: string;
   updatedAt: string | null;
 };
 
 type FieldKey = "flightApiKey" | "busApiKey" | "hotelApiKey" | "hotelApiSecret" | "tboApiKey" | "paymentApiKey" | "paymentApiSecret";
 
 const FIELDS: Array<{
-  key: FieldKey;
-  label: string;
+  key:         FieldKey;
+  label:       string;
   description: string;
-  Icon: typeof Plane;
-  group: "flight" | "bus" | "hotel" | "tbo" | "payment";
-  sensitive?: boolean;
+  Icon:        typeof Plane;
+  group:       "flight" | "bus" | "hotel" | "tbo" | "payment";
+  sensitive?:  boolean;
+  hideTest?:   boolean;
 }> = [
   {
     key:         "flightApiKey",
@@ -97,6 +90,7 @@ const FIELDS: Array<{
     Icon:        Lock,
     group:       "hotel",
     sensitive:   true,
+    hideTest:    true,
   },
   {
     key:         "paymentApiKey",
@@ -108,55 +102,51 @@ const FIELDS: Array<{
   {
     key:         "paymentApiSecret",
     label:       "Razorpay Key Secret",
-    description: "Razorpay secret key. Never shared with the browser — stored server-side only.",
+    description: "Razorpay secret key — stored server-side only, never sent to the browser.",
     Icon:        Lock,
     group:       "payment",
     sensitive:   true,
+    hideTest:    true,
   },
 ];
 
-function getAuthHeader(): Record<string, string> {
-  if (typeof window === "undefined") return {};
-  try {
-    const token = window.localStorage.getItem("jwt_token");
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  } catch {
-    return {};
-  }
-}
+const EMPTY_DRAFTS: Record<FieldKey, string> = {
+  flightApiKey: "", busApiKey: "", hotelApiKey: "", hotelApiSecret: "",
+  tboApiKey: "", paymentApiKey: "", paymentApiSecret: "",
+};
+
+const EMPTY_REVEAL: Record<FieldKey, boolean> = {
+  flightApiKey: false, busApiKey: false, hotelApiKey: false, hotelApiSecret: false,
+  tboApiKey: false, paymentApiKey: false, paymentApiSecret: false,
+};
 
 export function ApiKeysSection() {
   const { toast } = useToast();
-  const [loading,      setLoading]      = useState(true);
-  const [saving,       setSaving]       = useState(false);
-  const [error,        setError]        = useState<string | null>(null);
-  const [data,         setData]         = useState<KeysResponse | null>(null);
-  const [drafts,       setDrafts]       = useState<Record<FieldKey, string>>({
-    flightApiKey: "", busApiKey: "", hotelApiKey: "", hotelApiSecret: "", tboApiKey: "", paymentApiKey: "", paymentApiSecret: "",
-  });
-  const [reveal,       setReveal]       = useState<Record<FieldKey, boolean>>({
-    flightApiKey: false, busApiKey: false, hotelApiKey: false, hotelApiSecret: false, tboApiKey: false, paymentApiKey: false, paymentApiSecret: false,
-  });
-  const [providerDraft, setProviderDraft] = useState<string>("");
-  const [savedFlash,   setSavedFlash]   = useState(false);
-  const [testing,      setTesting]      = useState<string | null>(null);
+  const [loading,    setLoading]    = useState(true);
+  const [saving,     setSaving]     = useState(false);
+  const [error,      setError]      = useState<string | null>(null);
+  const [data,       setData]       = useState<KeysResponse | null>(null);
+  const [drafts,     setDrafts]     = useState<Record<FieldKey, string>>(EMPTY_DRAFTS);
+  const [reveal,     setReveal]     = useState<Record<FieldKey, boolean>>(EMPTY_REVEAL);
+  const [savedFlash, setSavedFlash] = useState(false);
+  const [testing,    setTesting]    = useState<string | null>(null);
 
   async function fetchKeys() {
     setLoading(true);
     setError(null);
     try {
       const res = await fetch("/api/admin/api-keys", {
-        headers: { ...getAuthHeader() },
+        credentials: "include",
       });
       if (!res.ok) {
         if (res.status === 401 || res.status === 403) {
-          throw new Error("You must be logged in as an admin to view API keys.");
+          setError("Admin login required — please log in to the admin panel first.");
+          return;
         }
         throw new Error("Failed to load API keys");
       }
       const json = (await res.json()) as KeysResponse;
       setData(json);
-      setProviderDraft(json.flightProvider ?? "tripjack");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load API keys");
     } finally {
@@ -176,9 +166,7 @@ export function ApiKeysSection() {
     setReveal((prev) => ({ ...prev, [key]: !prev[key] }));
   }
 
-  const keysDirty    = FIELDS.some((f) => drafts[f.key].trim().length > 0);
-  const providerDirty = providerDraft !== (data?.flightProvider ?? "tripjack");
-  const dirty        = keysDirty || providerDirty;
+  const dirty = FIELDS.some((f) => drafts[f.key].trim().length > 0);
 
   async function handleSave() {
     if (!dirty) return;
@@ -189,12 +177,12 @@ export function ApiKeysSection() {
         const v = drafts[f.key];
         if (v.trim().length > 0) payload[f.key] = v.trim();
       }
-      if (providerDirty) payload.flightProvider = providerDraft;
 
       const res = await fetch("/api/admin/api-keys", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json", ...getAuthHeader() },
-        body:    JSON.stringify(payload),
+        method:      "POST",
+        credentials: "include",
+        headers:     { "Content-Type": "application/json" },
+        body:        JSON.stringify(payload),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
@@ -202,11 +190,10 @@ export function ApiKeysSection() {
       }
       const json = (await res.json()) as KeysResponse;
       setData(json);
-      setProviderDraft(json.flightProvider ?? "tripjack");
-      setDrafts({ flightApiKey: "", busApiKey: "", hotelApiKey: "", hotelApiSecret: "", tboApiKey: "", paymentApiKey: "", paymentApiSecret: "" });
+      setDrafts(EMPTY_DRAFTS);
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 3000);
-      toast({ title: "Settings saved", description: "API keys and provider stored securely on the server." });
+      toast({ title: "Settings saved", description: "API keys stored securely on the server." });
     } catch (e) {
       toast({
         title:       "Save failed",
@@ -219,36 +206,45 @@ export function ApiKeysSection() {
   }
 
   function handleDiscard() {
-    setDrafts({ flightApiKey: "", busApiKey: "", hotelApiKey: "", hotelApiSecret: "", tboApiKey: "", paymentApiKey: "", paymentApiSecret: "" });
-    setProviderDraft(data?.flightProvider ?? "tripjack");
+    setDrafts(EMPTY_DRAFTS);
   }
 
   async function handleTest(group: string) {
     setTesting(group);
     try {
-      // Flight (TripJack) uses the dedicated real-test route that checks body status
-      const url = group === "flight"
-        ? "/api/test-tripjack-real"
-        : "/api/admin/api-keys/test";
+      const url  = group === "flight" ? "/api/test-tripjack-real" : "/api/admin/api-keys/test";
       const body = group === "flight" ? {} : { which: group };
 
-      const res = await fetch(url, {
-        method:  "POST",
-        headers: { "Content-Type": "application/json", ...getAuthHeader() },
-        body:    JSON.stringify(body),
+      const res  = await fetch(url, {
+        method:      "POST",
+        credentials: "include",
+        headers:     { "Content-Type": "application/json" },
+        body:        JSON.stringify(body),
       });
-      const json = await res.json();
-      if (!res.ok || json.success === false) {
-        toast({ title: "Test failed", description: json.error || json.message || "Could not test the key.", variant: "destructive" });
+      const json = await res.json().catch(() => ({}));
+
+      if (res.status === 401 || res.status === 403) {
+        toast({
+          title:       "Login required",
+          description: "Please log in to the admin panel before testing API keys.",
+          variant:     "destructive",
+        });
         return;
       }
-      if (json.ok) {
-        toast({ title: "API working", description: json.message });
-      } else {
-        toast({ title: "Test failed", description: json.message || "Key did not pass validation.", variant: "destructive" });
+
+      if (json.ok === true) {
+        toast({ title: "API working", description: json.message || "Connection successful." });
+        return;
       }
+
+      const errMsg = json.message || json.error || "Could not verify the API key.";
+      toast({ title: "Test failed", description: errMsg, variant: "destructive" });
     } catch (e) {
-      toast({ title: "Test failed", description: e instanceof Error ? e.message : "Could not reach the server.", variant: "destructive" });
+      toast({
+        title:       "Test failed",
+        description: e instanceof Error ? e.message : "Could not reach the server.",
+        variant:     "destructive",
+      });
     } finally {
       setTesting(null);
     }
@@ -259,7 +255,7 @@ export function ApiKeysSection() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <Key className="w-4 h-4 text-indigo-600" />
-          API Keys &amp; Provider Settings
+          API Keys
         </CardTitle>
         <CardDescription className="flex items-center gap-1.5">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
@@ -276,8 +272,8 @@ export function ApiKeysSection() {
         )}
 
         {error && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-red-800 text-sm">
-            <AlertCircle className="w-4 h-4" />
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+            <AlertCircle className="w-4 h-4 shrink-0" />
             {error}
           </div>
         )}
@@ -289,42 +285,14 @@ export function ApiKeysSection() {
           </div>
         ) : (
           <div className="space-y-6">
-
-            {/* Flight Provider selector */}
-            <div className="space-y-2" data-testid="flight-provider-row">
-              <Label className="flex items-center gap-2 text-sm font-semibold">
-                <Plane className="w-3.5 h-3.5 text-blue-500" />
-                Active Flight Provider
-              </Label>
-              <p className="text-[11px] text-slate-500">
-                All flight search, fare-quote, SSR and booking requests will use this provider.
-              </p>
-              <Select value={providerDraft} onValueChange={setProviderDraft}>
-                <SelectTrigger className="w-48" data-testid="select-flight-provider">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="tripjack">TripJack</SelectItem>
-                  <SelectItem value="tbo">TBO (Travel Boutique Online)</SelectItem>
-                </SelectContent>
-              </Select>
-              {data?.flightProvider && (
-                <p className="text-[11px] text-slate-400">
-                  Currently active: <strong className="text-slate-600">{data.flightProvider === "tbo" ? "TBO" : "TripJack"}</strong>
-                </p>
-              )}
-            </div>
-
-            <Separator />
-
             {/* API key fields */}
             <div className="space-y-5">
-              {FIELDS.map(({ key, label, description, Icon, group }) => {
-                const meta      = (data?.keys as any)?.[key] as KeyMeta | undefined;
-                const isSet     = !!meta?.set;
-                const masked    = meta?.masked ?? "";
-                const draft     = drafts[key];
-                const showDraft = reveal[key];
+              {FIELDS.map(({ key, label, description, Icon, group, hideTest }) => {
+                const meta        = (data?.keys as any)?.[key] as KeyMeta | undefined;
+                const isSet       = !!meta?.set;
+                const masked      = meta?.masked ?? "";
+                const draft       = drafts[key];
+                const showDraft   = reveal[key];
                 const placeholder = isSet
                   ? `Current: ${masked} (leave blank to keep)`
                   : "Not set — paste a new key";
@@ -368,14 +336,13 @@ export function ApiKeysSection() {
                           {showDraft ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
                       </div>
-                      {key !== "paymentApiSecret" && (
+                      {!hideTest && (
                         <Button
                           type="button"
                           variant="outline"
                           size="sm"
                           onClick={() => handleTest(group)}
                           disabled={testing === group}
-                          title={key === "paymentApiKey" ? "Tests both Key ID and Secret together against Razorpay" : undefined}
                           data-testid={`button-test-${group}`}
                         >
                           {testing === group ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Test"}
@@ -393,7 +360,7 @@ export function ApiKeysSection() {
               <p className="text-[11px] text-slate-500">
                 {data?.updatedAt
                   ? `Last updated: ${new Date(data.updatedAt).toLocaleString()}`
-                  : "No settings saved in the database yet."}
+                  : "No settings saved yet."}
               </p>
               <div className="flex gap-2">
                 <Button
@@ -421,7 +388,6 @@ export function ApiKeysSection() {
                 </Button>
               </div>
             </div>
-
           </div>
         )}
       </CardContent>

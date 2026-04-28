@@ -1,4 +1,4 @@
-import { Router, type Request, type Response, type NextFunction } from "express";
+import { Router } from "express";
 import {
   db,
   bookingsTable,
@@ -6,28 +6,10 @@ import {
   apiKeysTable,
 } from "@workspace/db";
 import { and, desc, eq, ilike, inArray, or } from "drizzle-orm";
-import { verifyToken } from "../lib/jwt.js";
 import { logger } from "../lib/logger.js";
+import { requireAdmin } from "../lib/admin-auth.js";
 
 const router = Router();
-
-// ── Admin auth guard (mirrors the api-keys route pattern) ────────────────
-function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  const header = req.headers.authorization;
-  if (!header?.startsWith("Bearer ")) {
-    return res.status(401).json({ success: false, error: "Authentication required" });
-  }
-  try {
-    const payload = verifyToken(header.slice(7));
-    if (payload.role !== "admin") {
-      return res.status(403).json({ success: false, error: "Admin access required" });
-    }
-    (req as Request & { admin?: typeof payload }).admin = payload;
-    next();
-  } catch {
-    return res.status(401).json({ success: false, error: "Invalid or expired token" });
-  }
-}
 
 const ALLOWED_STATUSES = ["pending", "confirmed", "cancelled", "refunded"] as const;
 type AllowedStatus = (typeof ALLOWED_STATUSES)[number];

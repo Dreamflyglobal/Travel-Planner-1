@@ -1,9 +1,9 @@
-import { Router, type Request, type Response, type NextFunction } from "express";
+import { Router, type Request } from "express";
 import { db, apiKeysTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { verifyToken } from "../lib/jwt.js";
 import { logger } from "../lib/logger.js";
 import { bustProviderCache } from "../lib/provider-config.js";
+import { requireAdmin } from "../lib/admin-auth.js";
 
 const router = Router();
 
@@ -85,22 +85,6 @@ async function getOrCreateRow(): Promise<KeysRow> {
   return inserted[0] as KeysRow;
 }
 
-function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  const header = req.headers.authorization;
-  if (!header?.startsWith("Bearer ")) {
-    return res.status(401).json({ success: false, error: "Authentication required" });
-  }
-  try {
-    const payload = verifyToken(header.slice(7));
-    if (payload.role !== "admin") {
-      return res.status(403).json({ success: false, error: "Admin access required" });
-    }
-    (req as Request & { admin?: typeof payload }).admin = payload;
-    next();
-  } catch {
-    return res.status(401).json({ success: false, error: "Invalid or expired token" });
-  }
-}
 
 // ── GET /api/admin/api-keys ────────────────────────────────────────────────
 router.get("/admin/api-keys", requireAdmin, async (_req, res) => {

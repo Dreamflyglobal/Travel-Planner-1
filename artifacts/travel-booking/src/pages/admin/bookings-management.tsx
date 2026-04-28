@@ -187,7 +187,7 @@ export default function BookingsManagementPage() {
       if (statusFilter !== "all") params.set("status", statusFilter);
       if (typeFilter !== "all") params.set("type", typeFilter);
       const url = `/api/admin/bookings${params.toString() ? `?${params.toString()}` : ""}`;
-      const res = await fetch(url, { headers: { ...getAuthHeader() } });
+      const res = await fetch(url, { credentials: "include", headers: { ...getAuthHeader() } });
       if (!res.ok) {
         if (res.status === 401 || res.status === 403) {
           throw new Error("You must be signed in as an admin to view bookings.");
@@ -238,9 +238,10 @@ export default function BookingsManagementPage() {
     setActing(true);
     try {
       const res = await fetch(`/api/admin/bookings/${b.id}/status`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", ...getAuthHeader() },
-        body: JSON.stringify({ status }),
+        method:      "PUT",
+        credentials: "include",
+        headers:     { "Content-Type": "application/json", ...getAuthHeader() },
+        body:        JSON.stringify({ status }),
       });
       const json = await res.json();
       if (!res.ok || !json.success) {
@@ -286,8 +287,9 @@ export default function BookingsManagementPage() {
     setActing(true);
     try {
       const res = await fetch("/api/admin/refund", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...getAuthHeader() },
+        method:      "POST",
+        credentials: "include",
+        headers:     { "Content-Type": "application/json", ...getAuthHeader() },
         body: JSON.stringify({
           paymentId: b.paymentId,
           amount,
