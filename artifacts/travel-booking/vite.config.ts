@@ -3,41 +3,54 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 
-const port = Number(process.env.PORT || "5173");
+const rawPort = process.env.PORT || "5173";
+const port = Number(rawPort);
+
+if (Number.isNaN(port) || port <= 0) {
+  throw new Error(`Invalid PORT value: "${rawPort}"`);
+}
+
 const basePath = process.env.BASE_PATH || "/";
 
 export default defineConfig({
   base: basePath,
-
-  plugins: [react(), tailwindcss()],
-
+  plugins: [
+    react(),
+    tailwindcss(),
+  ],
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "src"),
-      "@assets": path.resolve(__dirname, "..", "..", "attached_assets"),
+      "@": path.resolve(import.meta.dirname, "src"),
+      "@assets": path.resolve(import.meta.dirname, "..", "..", "attached_assets"),
     },
+    dedupe: ["react", "react-dom", "@tanstack/react-query"],
   },
-
-  root: __dirname,
-
+  optimizeDeps: {
+    include: ["react", "react-dom", "recharts", "@tanstack/react-query"],
+  },
+  root: path.resolve(import.meta.dirname),
   build: {
-    outDir: path.resolve(__dirname, "dist/public"),
+    outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
   },
-
   server: {
     port,
     host: "0.0.0.0",
+    allowedHosts: true,
     proxy: {
       "/api": {
         target: "http://localhost:8080",
         changeOrigin: true,
       },
     },
+    fs: {
+      strict: true,
+      deny: ["**/.*"],
+    },
   },
-
   preview: {
     port,
     host: "0.0.0.0",
+    allowedHosts: true,
   },
 });
