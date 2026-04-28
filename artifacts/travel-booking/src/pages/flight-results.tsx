@@ -1232,11 +1232,19 @@ export default function FlightResults() {
 
     {/* ── Fare Selection Modal ──────────────────────────────────────────────── */}
     <Dialog open={!!fareModal} onOpenChange={(open) => { if (!open) setFareModal(null); }}>
-      <DialogContent className="max-w-2xl p-0 overflow-hidden gap-0 rounded-2xl">
+      <DialogContent className="max-w-2xl p-0 overflow-hidden gap-0 rounded-2xl [&>button:last-of-type]:hidden">
         {mf && (
           <DialogHeader className="p-0">
-            <div className={cn("bg-gradient-to-r p-5 text-white", airlineGradient(mf.airline))}>
-              <div className="flex items-center gap-3 mb-4">
+            <div className={cn("bg-gradient-to-r p-5 text-white relative", airlineGradient(mf.airline))}>
+              {/* Sticky red close button — top-right */}
+              <button
+                onClick={() => setFareModal(null)}
+                className="absolute top-3 right-3 z-10 flex items-center gap-1.5 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-md transition-colors"
+                aria-label="Close"
+              >
+                <X className="w-3.5 h-3.5" /> Close
+              </button>
+              <div className="flex items-center gap-3 mb-4 pr-20">
                 <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center shrink-0">
                   <span className="font-extrabold text-sm tracking-tight">{mf.airline.substring(0, 2).toUpperCase()}</span>
                 </div>
@@ -1463,14 +1471,8 @@ export default function FlightResults() {
           );
         })()}
 
-        <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-          <p className="text-[11px] text-slate-400">All prices include taxes &amp; fees</p>
-          <button
-            onClick={() => setFareModal(null)}
-            className="text-xs text-slate-500 hover:text-slate-800 flex items-center gap-1 font-medium"
-          >
-            <X className="w-3.5 h-3.5" /> Close
-          </button>
+        <div className="px-5 py-2.5 bg-slate-50 border-t border-slate-100">
+          <p className="text-[11px] text-slate-400 text-center">All prices include taxes &amp; fees</p>
         </div>
       </DialogContent>
     </Dialog>
