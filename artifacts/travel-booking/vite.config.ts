@@ -17,8 +17,9 @@ export default defineConfig({
     include: ["react", "react-dom", "recharts", "@tanstack/react-query"],
   },
   build: {
-    outDir: "dist",
+    outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    sourcemap: false,
   },
   server: {
     port,
