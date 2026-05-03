@@ -83,6 +83,8 @@ import InvoiceView from "@/pages/invoice-view";
 import TJAddonsBooking from "@/pages/tj-addons-booking";
 import FlightAddons from "@/pages/flight-addons";
 import FlightReview from "@/pages/flight-review";
+import Cars from "@/pages/cars";
+import Activities from "@/pages/activities";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -208,6 +210,8 @@ function Router() {
       <Route path="/master-admin/support">
         <AdminGuard><AdminSupport /></AdminGuard>
       </Route>
+      <Route path="/cars" component={Cars} />
+      <Route path="/activities" component={Activities} />
       <Route path="/invoice/:bookingId" component={InvoiceView} />
       <Route component={NotFound} />
     </Switch>

@@ -6,10 +6,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AutocompleteInput } from "@/components/autocomplete-input";
 import { citySuggestions, busCitySuggestions, hotelCitySuggestions, packageDestinations } from "@/lib/city-suggestions";
 import { loadAirports, searchAirports, type AirportEntry, type AirportSuggestion } from "@/lib/airport-search";
-import { Plane, Bus, Building2, Map, Search, ArrowLeftRight, Users, ChevronDown, Plus, Minus, X } from "lucide-react";
+import { Plane, Bus, Building2, Map, Car, Compass, Search, ArrowLeftRight, Users, ChevronDown, Plus, Minus, X } from "lucide-react";
 
 interface SearchTabsProps {
-  defaultTab?: "flights" | "hotels" | "buses" | "packages";
+  defaultTab?: "flights" | "hotels" | "buses" | "packages" | "cars" | "activities";
   onTabChange?: (tab: string) => void;
   initialFrom?: string;
   initialTo?: string;
@@ -182,7 +182,7 @@ export function SearchTabs({
     <Card className="w-full max-w-4xl shadow-2xl border-0 bg-white/95 backdrop-blur-md supports-[backdrop-filter]:bg-white/85">
       <CardContent className="p-2 sm:p-4">
         <Tabs defaultValue={defaultTab} className="w-full" onValueChange={onTabChange}>
-          <TabsList className="grid w-full grid-cols-4 h-14 bg-gray-100/80 rounded-lg p-1">
+          <TabsList className="grid w-full grid-cols-6 h-14 bg-gray-100/80 rounded-lg p-1">
             <TabsTrigger value="flights" className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary text-sm sm:text-base font-semibold">
               <Plane className="w-4 h-4 mr-2 hidden sm:inline-block" /> Flights
             </TabsTrigger>
@@ -194,6 +194,12 @@ export function SearchTabs({
             </TabsTrigger>
             <TabsTrigger value="packages" className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary text-sm sm:text-base font-semibold">
               <Map className="w-4 h-4 mr-2 hidden sm:inline-block" /> Holidays
+            </TabsTrigger>
+            <TabsTrigger value="cars" className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary text-sm sm:text-base font-semibold">
+              <Car className="w-4 h-4 mr-2 hidden sm:inline-block" /> Cars
+            </TabsTrigger>
+            <TabsTrigger value="activities" className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary text-sm sm:text-base font-semibold">
+              <Compass className="w-4 h-4 mr-2 hidden sm:inline-block" /> Activities
             </TabsTrigger>
           </TabsList>
 
@@ -443,6 +449,24 @@ export function SearchTabs({
                 </Button>
                 {busError && <p className="text-red-600 text-xs mt-2 font-medium">⚠️ Please fill all fields</p>}
               </div>
+            </div>
+          </TabsContent>
+
+          {/* ── Cars ── */}
+          <TabsContent value="cars" className="pt-6 pb-2 px-2">
+            <div className="flex flex-col items-center justify-center py-8 text-center gap-3">
+              <Car className="w-10 h-10 text-primary/40" />
+              <p className="text-lg font-semibold text-muted-foreground">Car Rentals coming soon</p>
+              <p className="text-sm text-muted-foreground">We're working on bringing you the best car rental deals.</p>
+            </div>
+          </TabsContent>
+
+          {/* ── Activities ── */}
+          <TabsContent value="activities" className="pt-6 pb-2 px-2">
+            <div className="flex flex-col items-center justify-center py-8 text-center gap-3">
+              <Compass className="w-10 h-10 text-primary/40" />
+              <p className="text-lg font-semibold text-muted-foreground">Activities coming soon</p>
+              <p className="text-sm text-muted-foreground">Exciting experiences and local activities are on their way.</p>
             </div>
           </TabsContent>
 
