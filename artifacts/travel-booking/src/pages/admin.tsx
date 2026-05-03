@@ -290,6 +290,7 @@ export default function AdminDashboard() {
     service_type?: "flight" | "bus" | "hotel" | "holiday";
     flight_type?: "domestic" | "international";
     airline?: string;
+    description?: string;
   }>>([]);
   const [newCoupon, setNewCoupon] = useState({
     code: "",
@@ -304,6 +305,7 @@ export default function AdminDashboard() {
     service_type: "" as "" | "flight" | "bus" | "hotel" | "holiday",
     flight_type: "" as "" | "domestic" | "international",
     airline: "",
+    description: "",
   });
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [couponToDelete, setCouponToDelete] = useState<string | null>(null);
@@ -435,6 +437,7 @@ export default function AdminDashboard() {
         service_type: newCoupon.service_type || undefined,
         flight_type: newCoupon.service_type === "flight" && newCoupon.flight_type ? newCoupon.flight_type : undefined,
         airline: newCoupon.service_type === "flight" && newCoupon.airline.trim() ? newCoupon.airline.trim() : undefined,
+        description: newCoupon.description.trim() || undefined,
       }
     ];
 
@@ -458,6 +461,7 @@ export default function AdminDashboard() {
       firstTimeOnly: false,
       usageLimit: "",
       minBookingAmount: "",
+      description: "",
     });
   };
 
@@ -2253,6 +2257,16 @@ export default function AdminDashboard() {
                         />
                       </div>
 
+                      <div className="space-y-2">
+                        <Label htmlFor="coupon-description">Coupon Description</Label>
+                        <Input
+                          id="coupon-description"
+                          placeholder="Optional description"
+                          value={newCoupon.description}
+                          onChange={(e) => setNewCoupon({ ...newCoupon, description: e.target.value })}
+                        />
+                      </div>
+
                       <div className="flex items-end col-span-1 md:col-span-2 lg:col-span-1">
                         <div className={cn(
                           "w-full rounded-md px-3 py-2 text-xs leading-relaxed border",
@@ -2415,6 +2429,11 @@ export default function AdminDashboard() {
                                 {(coupon.minBookingAmount ?? 0) > 0 && (
                                   <div className="text-xs text-muted-foreground">
                                     Min booking ₹{(coupon.minBookingAmount ?? 0).toLocaleString("en-IN")}
+                                  </div>
+                                )}
+                                {coupon.description && (
+                                  <div className="text-xs text-muted-foreground italic">
+                                    {coupon.description}
                                   </div>
                                 )}
                                 {expired && (

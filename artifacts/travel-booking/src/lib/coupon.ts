@@ -15,6 +15,7 @@ export interface Coupon {
   service_type?: "flight" | "bus" | "hotel" | "holiday"; // undefined = all services
   flight_type?: "domestic" | "international";             // only for flight coupons
   airline?: string;                                       // optional, only for flights
+  description?: string;                                   // optional human-readable description
 }
 
 export interface CouponUsageRecord {
