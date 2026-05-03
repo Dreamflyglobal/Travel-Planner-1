@@ -72,6 +72,14 @@ localPort = 8083
 externalPort = 6000
 
 [[ports]]
+localPort = 9876
+externalPort = 8080
+
+[[ports]]
+localPort = 9999
+externalPort = 8008
+
+[[ports]]
 localPort = 21224
 externalPort = 3000
 
@@ -96,3 +104,8 @@ ADMIN_PASSWORD = "123456"
 [nix]
 channel = "stable-25_05"
 packages = ["tuxguitar"]
+
+[deployment]
+deploymentTarget = "autoscale"
+run = ["node", "artifacts/api-server/dist/index.mjs"]
+build = ["pnpm", "build"]

@@ -192,6 +192,16 @@ pnpm --filter @workspace/api-server run start
 | `NODE_ENV` | Set to `production` | `development` |
 | `LOG_LEVEL` | Pino log level | `info` |
 
+### Deployment
+
+- **Type**: Autoscale (configured)
+- **Build command**: `pnpm build` (builds both frontend + backend)
+- **Run command**: `node artifacts/api-server/dist/index.mjs`
+- **Environment variables required**: `DATABASE_URL`, `NODE_ENV=production`
+- **MongoDB** (`MONGO_URI`): Optional. Server starts without it and logs a clear warning.
+- **Production behaviour**: Express serves the Vite-built frontend from `artifacts/travel-booking/dist/public` under `NODE_ENV=production`. All non-`/api` routes return `index.html` for SPA routing.
+- **Frontend features using localStorage**: Activities, Coupons, B2B Agents, Bookings — all client-side state, no backend dependency.
+
 ### Logging
 All backend logging uses structured pino JSON logs (no console.log). In production (`NODE_ENV=production`), logs are emitted as JSON — pipe through `pino-pretty` for human-readable output if needed.
 
