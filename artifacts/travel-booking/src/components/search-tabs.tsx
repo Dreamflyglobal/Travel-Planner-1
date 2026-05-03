@@ -181,7 +181,16 @@ export function SearchTabs({
   return (
     <Card className="w-full max-w-4xl shadow-2xl border-0 bg-white/95 backdrop-blur-md supports-[backdrop-filter]:bg-white/85">
       <CardContent className="p-2 sm:p-4">
-        <Tabs defaultValue={defaultTab} className="w-full" onValueChange={onTabChange}>
+        <Tabs
+          defaultValue={defaultTab}
+          className="w-full"
+          onValueChange={(val) => {
+            if (val === "cars")       { setLocation("/cars");       return; }
+            if (val === "trains")     { setLocation("/trains");     return; }
+            if (val === "activities") { setLocation("/activities"); return; }
+            onTabChange?.(val);
+          }}
+        >
           <TabsList className="grid w-full grid-cols-7 h-14 bg-gray-100/80 rounded-lg p-1">
             <TabsTrigger value="flights" className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary text-sm sm:text-base font-semibold">
               <Plane className="w-4 h-4 mr-2 hidden sm:inline-block" /> Flights
@@ -452,47 +461,6 @@ export function SearchTabs({
                 </Button>
                 {busError && <p className="text-red-600 text-xs mt-2 font-medium">⚠️ Please fill all fields</p>}
               </div>
-            </div>
-          </TabsContent>
-
-          {/* ── Trains ── */}
-          <TabsContent value="trains" className="pt-6 pb-2 px-2">
-            <div className="flex flex-col items-center justify-center py-8 text-center gap-3">
-              <Train className="w-10 h-10 text-blue-500" />
-              <p className="text-base font-semibold">Train Booking</p>
-              <p className="text-sm text-muted-foreground max-w-xs">
-                IRCTC-powered train booking is coming soon. Search trains and book tickets in one place.
-              </p>
-              <Link href="/trains">
-                <button className="mt-1 px-5 py-2.5 rounded-full bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors">
-                  Learn More
-                </button>
-              </Link>
-            </div>
-          </TabsContent>
-
-          {/* ── Cars ── */}
-          <TabsContent value="cars" className="pt-6 pb-2 px-2">
-            <div className="flex flex-col items-center justify-center py-8 text-center gap-3">
-              <Car className="w-10 h-10 text-primary/40" />
-              <p className="text-lg font-semibold text-muted-foreground">Car Rentals coming soon</p>
-              <p className="text-sm text-muted-foreground">We're working on bringing you the best car rental deals.</p>
-            </div>
-          </TabsContent>
-
-          {/* ── Activities ── */}
-          <TabsContent value="activities" className="pt-6 pb-2 px-2">
-            <div className="flex flex-col items-center justify-center py-6 text-center gap-3">
-              <Compass className="w-10 h-10 text-teal-500" />
-              <p className="text-base font-semibold">Experiences &amp; Activities</p>
-              <p className="text-sm text-muted-foreground max-w-xs">
-                Adventures, cultural tours, food experiences and more — all in one place.
-              </p>
-              <Link href="/activities">
-                <button className="mt-1 px-5 py-2.5 rounded-full bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 transition-colors">
-                  Browse Activities
-                </button>
-              </Link>
             </div>
           </TabsContent>
 
