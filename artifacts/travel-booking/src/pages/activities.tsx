@@ -16,11 +16,28 @@ interface Activity {
   category: string;
 }
 
+const DEMO_ACTIVITIES: Activity[] = [
+  {
+    id: "demo-sky-celebration",
+    title: "Sky Celebration Private Jet Experience",
+    description:
+      "Private jet celebration experience for birthdays, anniversaries, and special occasions. Includes decoration, cake cutting, snacks, and premium service.",
+    price: 650000,
+    imageUrl: "https://images.unsplash.com/photo-1540962351504-03099e0a754b?w=800&q=80",
+    location: "Delhi / Hyderabad / Bangalore",
+    category: "Luxury",
+  },
+];
+
 function loadActivities(): Activity[] {
   try {
-    return JSON.parse(localStorage.getItem("activities") ?? "[]");
+    const stored = localStorage.getItem("activities");
+    if (stored !== null) return JSON.parse(stored);
+    // First visit — seed demo data
+    localStorage.setItem("activities", JSON.stringify(DEMO_ACTIVITIES));
+    return DEMO_ACTIVITIES;
   } catch {
-    return [];
+    return DEMO_ACTIVITIES;
   }
 }
 
