@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "build": "pnpm --filter @workspace/travel-booking run build && pnpm --filter @workspace/api-server run build",
-    "start": "NODE_ENV=production pnpm --filter @workspace/api-server run start",
+    "start": "NODE_ENV=production node artifacts/api-server/dist/index.mjs",
     "dev": "node server.js"
   }
 }

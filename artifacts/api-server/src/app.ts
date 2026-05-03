@@ -62,7 +62,7 @@ if (process.env.NODE_ENV === "production") {
     app.use(express.static(staticDir, { maxAge: "1d", index: false }));
 
     // SPA catch-all — any non-/api route gets index.html so client-side routing works
-    app.get("*", (_req, res) => {
+    app.use((_req, res) => {
       res.sendFile(join(staticDir, "index.html"));
     });
   } else {
