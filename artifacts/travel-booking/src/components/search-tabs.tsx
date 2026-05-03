@@ -193,7 +193,7 @@ export function SearchTabs({
               <Bus className="w-4 h-4 mr-2 hidden sm:inline-block" /> Buses
             </TabsTrigger>
             <TabsTrigger value="packages" className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary text-sm sm:text-base font-semibold">
-              <Map className="w-4 h-4 mr-2 hidden sm:inline-block" /> Packages
+              <Map className="w-4 h-4 mr-2 hidden sm:inline-block" /> Holidays
             </TabsTrigger>
           </TabsList>
 
