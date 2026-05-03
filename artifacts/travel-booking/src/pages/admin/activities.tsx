@@ -9,10 +9,12 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, Search, Compass, IndianRupee, MapPin, Tag, ImageOff } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Plus, Pencil, Trash2, Search, Compass, IndianRupee, MapPin, ImageOff } from "lucide-react";
 
-const CATEGORIES = ["Adventure", "Cultural", "Nature", "Water Sports", "Food & Drink", "Wellness", "Sightseeing", "Entertainment"];
+const CATEGORIES = [
+  "Adventure", "Cultural", "Nature", "Water Sports", "Food & Drink",
+  "Wellness", "Sightseeing", "Entertainment", "Luxury",
+];
 
 interface Activity {
   id: string;
@@ -22,6 +24,9 @@ interface Activity {
   imageUrl: string;
   location: string;
   category: string;
+  includes?: string[];
+  excludes?: string[];
+  highlights?: string[];
 }
 
 const EMPTY_FORM = {
@@ -31,6 +36,9 @@ const EMPTY_FORM = {
   imageUrl: "",
   location: "",
   category: "",
+  includes: "",
+  excludes: "",
+  highlights: "",
 };
 
 function loadActivities(): Activity[] {
@@ -45,6 +53,17 @@ function saveActivities(list: Activity[]) {
   localStorage.setItem("activities", JSON.stringify(list));
 }
 
+function toArray(raw: string): string[] {
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function fromArray(arr: string[] | undefined): string {
+  return (arr ?? []).join(", ");
+}
+
 export default function AdminActivities() {
   const { toast } = useToast();
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -53,14 +72,13 @@ export default function AdminActivities() {
   const [editing, setEditing] = useState<Activity | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [form, setForm] = useState({ ...EMPTY_FORM });
-  const [imgError, setImgError] = useState(false);
+  const [imgErrors, setImgErrors] = useState<Record<string, boolean>>({});
 
   useEffect(() => { setActivities(loadActivities()); }, []);
 
   function openCreate() {
     setEditing(null);
     setForm({ ...EMPTY_FORM });
-    setImgError(false);
     setShowForm(true);
   }
 
@@ -73,8 +91,10 @@ export default function AdminActivities() {
       imageUrl: a.imageUrl,
       location: a.location,
       category: a.category,
+      includes: fromArray(a.includes),
+      excludes: fromArray(a.excludes),
+      highlights: fromArray(a.highlights),
     });
-    setImgError(false);
     setShowForm(true);
   }
 
@@ -89,29 +109,26 @@ export default function AdminActivities() {
       return;
     }
 
+    const fields = {
+      title: form.title.trim(),
+      description: form.description.trim(),
+      price,
+      imageUrl: form.imageUrl.trim(),
+      location: form.location.trim(),
+      category: form.category,
+      includes: toArray(form.includes),
+      excludes: toArray(form.excludes),
+      highlights: toArray(form.highlights),
+    };
+
     const next = editing
-      ? activities.map((a) =>
-          a.id === editing.id
-            ? { ...a, title: form.title.trim(), description: form.description.trim(), price, imageUrl: form.imageUrl.trim(), location: form.location.trim(), category: form.category }
-            : a
-        )
-      : [
-          ...activities,
-          {
-            id: Date.now().toString(),
-            title: form.title.trim(),
-            description: form.description.trim(),
-            price,
-            imageUrl: form.imageUrl.trim(),
-            location: form.location.trim(),
-            category: form.category,
-          },
-        ];
+      ? activities.map((a) => a.id === editing.id ? { ...a, ...fields } : a)
+      : [...activities, { id: Date.now().toString(), ...fields }];
 
     saveActivities(next);
     setActivities(next);
     setShowForm(false);
-    toast({ title: editing ? "Activity updated!" : "Activity created!", description: form.title.trim() });
+    toast({ title: editing ? "Activity updated!" : "Activity created!", description: fields.title });
   }
 
   function confirmDelete() {
@@ -174,14 +191,13 @@ export default function AdminActivities() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {filtered.map((a) => (
               <Card key={a.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-                {/* Image */}
                 <div className="relative h-44 bg-gray-100">
-                  {a.imageUrl && !imgError ? (
+                  {a.imageUrl && !imgErrors[a.id] ? (
                     <img
                       src={a.imageUrl}
                       alt={a.title}
                       className="w-full h-full object-cover"
-                      onError={() => setImgError(true)}
+                      onError={() => setImgErrors((prev) => ({ ...prev, [a.id]: true }))}
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
@@ -226,6 +242,20 @@ export default function AdminActivities() {
                     {a.price.toLocaleString("en-IN")}
                     <span className="text-xs font-normal text-muted-foreground">/ person</span>
                   </div>
+                  {((a.includes?.length ?? 0) > 0 || (a.highlights?.length ?? 0) > 0) && (
+                    <div className="flex gap-2 flex-wrap pt-1">
+                      {(a.includes?.length ?? 0) > 0 && (
+                        <span className="text-xs bg-green-50 text-green-700 rounded px-1.5 py-0.5">
+                          {a.includes!.length} included
+                        </span>
+                      )}
+                      {(a.highlights?.length ?? 0) > 0 && (
+                        <span className="text-xs bg-amber-50 text-amber-700 rounded px-1.5 py-0.5">
+                          {a.highlights!.length} highlights
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             ))}
@@ -234,11 +264,11 @@ export default function AdminActivities() {
 
         {/* Create / Edit Dialog */}
         <Dialog open={showForm} onOpenChange={setShowForm}>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editing ? "Edit Activity" : "Add New Activity"}</DialogTitle>
               <DialogDescription>
-                Fill in the details below. Only Title is required.
+                Fill in the details below. Only Title is required. For lists, enter items separated by commas.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-2">
@@ -293,7 +323,7 @@ export default function AdminActivities() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="act-category">Category (optional)</Label>
+                <Label htmlFor="act-category">Category</Label>
                 <select
                   id="act-category"
                   value={form.category}
@@ -305,6 +335,45 @@ export default function AdminActivities() {
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
+              </div>
+
+              {/* Divider */}
+              <div className="border-t pt-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
+                  Detail Page Sections (comma-separated)
+                </p>
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="act-highlights">Highlights</Label>
+                    <textarea
+                      id="act-highlights"
+                      placeholder="e.g. Luxury interior, Up to 2 hrs flying, Professional photography"
+                      value={form.highlights}
+                      onChange={(e) => setForm({ ...form, highlights: e.target.value })}
+                      className="w-full min-h-[60px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="act-includes">What's Included</Label>
+                    <textarea
+                      id="act-includes"
+                      placeholder="e.g. Decoration, Cake cutting, Snacks, Photography"
+                      value={form.includes}
+                      onChange={(e) => setForm({ ...form, includes: e.target.value })}
+                      className="w-full min-h-[60px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="act-excludes">What's Not Included</Label>
+                    <textarea
+                      id="act-excludes"
+                      placeholder="e.g. Airport transfers, Extra food orders, Personal expenses"
+                      value={form.excludes}
+                      onChange={(e) => setForm({ ...form, excludes: e.target.value })}
+                      className="w-full min-h-[60px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
             <DialogFooter>

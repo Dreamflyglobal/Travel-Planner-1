@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
+import { Link } from "wouter";
 import { Navbar } from "@/components/navbar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { useToast } from "@/hooks/use-toast";
-import { Compass, MapPin, IndianRupee, Search, ImageOff } from "lucide-react";
+import { Compass, MapPin, IndianRupee, Search, ImageOff, ArrowRight } from "lucide-react";
 
 interface Activity {
   id: string;
@@ -14,6 +14,9 @@ interface Activity {
   imageUrl: string;
   location: string;
   category: string;
+  includes?: string[];
+  excludes?: string[];
+  highlights?: string[];
 }
 
 const DEMO_ACTIVITIES: Activity[] = [
@@ -26,6 +29,27 @@ const DEMO_ACTIVITIES: Activity[] = [
     imageUrl: "https://images.unsplash.com/photo-1540962351504-03099e0a754b?w=800&q=80",
     location: "Delhi / Hyderabad / Bangalore",
     category: "Luxury",
+    includes: [
+      "Private jet access",
+      "In-flight decoration",
+      "Cake cutting ceremony",
+      "Premium snacks & beverages",
+      "Professional photography",
+      "Personalized cabin crew service",
+    ],
+    excludes: [
+      "Airport transfers",
+      "Additional food orders",
+      "Extra guests beyond package limit",
+      "Personal expenses",
+    ],
+    highlights: [
+      "Up to 2 hours of flying time",
+      "Available in Delhi, Hyderabad & Bangalore",
+      "Ideal for birthdays, anniversaries & proposals",
+      "Luxury interior setup",
+      "Dedicated cabin crew",
+    ],
   },
 ];
 
@@ -33,7 +57,6 @@ function loadActivities(): Activity[] {
   try {
     const stored = localStorage.getItem("activities");
     if (stored !== null) return JSON.parse(stored);
-    // First visit — seed demo data
     localStorage.setItem("activities", JSON.stringify(DEMO_ACTIVITIES));
     return DEMO_ACTIVITIES;
   } catch {
@@ -42,7 +65,6 @@ function loadActivities(): Activity[] {
 }
 
 export default function Activities() {
-  const { toast } = useToast();
   const [activities, setActivities] = useState<Activity[]>([]);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
@@ -59,14 +81,6 @@ export default function Activities() {
     const matchCat = !categoryFilter || a.category === categoryFilter;
     return matchSearch && matchCat;
   });
-
-  function handleBookNow(activity: Activity) {
-    toast({
-      title: "Booking Confirmed! 🎉",
-      description: `Your booking for "${activity.title}" has been received. Our team will contact you shortly.`,
-      duration: 5000,
-    });
-  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -144,66 +158,63 @@ export default function Activities() {
         {/* Activity cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {filtered.map((activity) => (
-            <div
-              key={activity.id}
-              className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-all border border-gray-100 flex flex-col"
-            >
-              {/* Image */}
-              <div className="relative h-48 bg-gray-100">
-                {activity.imageUrl ? (
-                  <img
-                    src={activity.imageUrl}
-                    alt={activity.title}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = "none";
-                    }}
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <ImageOff className="w-8 h-8 text-muted-foreground/30" />
+            <Link key={activity.id} href={`/activities/${activity.id}`}>
+              <div className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-all border border-gray-100 flex flex-col cursor-pointer group">
+                {/* Image */}
+                <div className="relative h-48 bg-gray-100 overflow-hidden">
+                  {activity.imageUrl ? (
+                    <img
+                      src={activity.imageUrl}
+                      alt={activity.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = "none";
+                      }}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <ImageOff className="w-8 h-8 text-muted-foreground/30" />
+                    </div>
+                  )}
+                  {activity.category && (
+                    <Badge className="absolute top-3 left-3 bg-teal-600 text-white text-xs font-medium">
+                      {activity.category}
+                    </Badge>
+                  )}
+                </div>
+
+                {/* Content */}
+                <div className="flex flex-col flex-1 p-4 gap-2">
+                  <h3 className="font-bold text-base leading-snug group-hover:text-teal-700 transition-colors">
+                    {activity.title}
+                  </h3>
+
+                  {activity.location && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <MapPin className="w-3 h-3 shrink-0 text-teal-500" />
+                      {activity.location}
+                    </p>
+                  )}
+
+                  {activity.description && (
+                    <p className="text-sm text-muted-foreground line-clamp-2 flex-1">
+                      {activity.description}
+                    </p>
+                  )}
+
+                  <div className="flex items-center justify-between mt-auto pt-3 border-t border-gray-100">
+                    <div className="flex items-center gap-0.5 text-primary font-bold text-lg">
+                      <IndianRupee className="w-4 h-4" />
+                      {activity.price.toLocaleString("en-IN")}
+                      <span className="text-xs font-normal text-muted-foreground ml-1">/ person</span>
+                    </div>
+                    <span className="inline-flex items-center gap-1 text-sm font-semibold text-teal-600 group-hover:gap-2 transition-all">
+                      View Details <ArrowRight className="w-3.5 h-3.5" />
+                    </span>
                   </div>
-                )}
-                {activity.category && (
-                  <Badge className="absolute top-3 left-3 bg-teal-600 text-white text-xs font-medium">
-                    {activity.category}
-                  </Badge>
-                )}
-              </div>
-
-              {/* Content */}
-              <div className="flex flex-col flex-1 p-4 gap-2">
-                <h3 className="font-bold text-base leading-snug">{activity.title}</h3>
-
-                {activity.location && (
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <MapPin className="w-3 h-3 shrink-0 text-teal-500" />
-                    {activity.location}
-                  </p>
-                )}
-
-                {activity.description && (
-                  <p className="text-sm text-muted-foreground line-clamp-2 flex-1">
-                    {activity.description}
-                  </p>
-                )}
-
-                <div className="flex items-center justify-between mt-auto pt-3 border-t border-gray-100">
-                  <div className="flex items-center gap-0.5 text-primary font-bold text-lg">
-                    <IndianRupee className="w-4 h-4" />
-                    {activity.price.toLocaleString("en-IN")}
-                    <span className="text-xs font-normal text-muted-foreground ml-1">/ person</span>
-                  </div>
-                  <Button
-                    size="sm"
-                    className="bg-teal-600 hover:bg-teal-700 text-white"
-                    onClick={() => handleBookNow(activity)}
-                  >
-                    Book Now
-                  </Button>
                 </div>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       </div>
