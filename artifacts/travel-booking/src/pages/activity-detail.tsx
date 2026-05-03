@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import {
   MapPin, IndianRupee, ArrowLeft, CheckCircle2, XCircle,
-  Sparkles, ImageOff, Compass, Star,
+  Sparkles, ImageOff, Compass, Star, Images,
 } from "lucide-react";
 
 interface Activity {
@@ -20,11 +20,31 @@ interface Activity {
   includes?: string[];
   excludes?: string[];
   highlights?: string[];
+  gallery?: string[];
 }
+
+const DEMO_GALLERY: Record<string, string[]> = {
+  "demo-sky-celebration": [
+    "https://images.unsplash.com/photo-1566801440738-25a0d7a76c08?w=800&q=80",
+    "https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=800&q=80",
+    "https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=800&q=80",
+    "https://images.unsplash.com/photo-1464207687429-7505649dae38?w=800&q=80",
+  ],
+};
 
 function loadActivities(): Activity[] {
   try {
-    return JSON.parse(localStorage.getItem("activities") ?? "[]");
+    const raw = JSON.parse(localStorage.getItem("activities") ?? "[]") as Activity[];
+    let patched = false;
+    const updated = raw.map((a) => {
+      if (!a.gallery?.length && DEMO_GALLERY[a.id]) {
+        patched = true;
+        return { ...a, gallery: DEMO_GALLERY[a.id] };
+      }
+      return a;
+    });
+    if (patched) localStorage.setItem("activities", JSON.stringify(updated));
+    return updated;
   } catch {
     return [];
   }
@@ -34,11 +54,13 @@ export default function ActivityDetail() {
   const { toast } = useToast();
   const [, params] = useRoute("/activities/:id");
   const [activity, setActivity] = useState<Activity | null | undefined>(undefined);
+  const [selectedImage, setSelectedImage] = useState<string>("");
 
   useEffect(() => {
     const all = loadActivities();
     const found = all.find((a) => a.id === params?.id);
     setActivity(found ?? null);
+    if (found) setSelectedImage(found.imageUrl || "");
   }, [params?.id]);
 
   function handleBookNow() {
@@ -54,9 +76,7 @@ export default function ActivityDetail() {
     return (
       <div className="min-h-screen bg-gray-50">
         <Navbar />
-        <div className="flex items-center justify-center py-32 text-muted-foreground">
-          Loading…
-        </div>
+        <div className="flex items-center justify-center py-32 text-muted-foreground">Loading…</div>
       </div>
     );
   }
@@ -79,9 +99,12 @@ export default function ActivityDetail() {
     );
   }
 
-  const includes = activity.includes ?? [];
-  const excludes = activity.excludes ?? [];
+  const includes   = activity.includes   ?? [];
+  const excludes   = activity.excludes   ?? [];
   const highlights = activity.highlights ?? [];
+  const gallery    = activity.gallery    ?? [];
+
+  const allImages = [activity.imageUrl, ...gallery].filter(Boolean);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -98,12 +121,13 @@ export default function ActivityDetail() {
 
       {/* Hero image */}
       <div className="max-w-6xl mx-auto px-4 mt-4">
-        <div className="relative w-full h-64 sm:h-80 md:h-96 rounded-2xl overflow-hidden bg-gray-200 shadow">
-          {activity.imageUrl ? (
+        <div className="relative w-full h-64 sm:h-80 md:h-[420px] rounded-2xl overflow-hidden bg-gray-200 shadow-md">
+          {selectedImage ? (
             <img
-              src={activity.imageUrl}
+              key={selectedImage}
+              src={selectedImage}
               alt={activity.title}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover transition-opacity duration-300"
               onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
             />
           ) : (
@@ -116,7 +140,36 @@ export default function ActivityDetail() {
               {activity.category}
             </Badge>
           )}
+          {allImages.length > 1 && (
+            <div className="absolute bottom-3 right-4 bg-black/50 text-white text-xs font-medium rounded-full px-2.5 py-1 flex items-center gap-1">
+              <Images className="w-3 h-3" /> {allImages.length} photos
+            </div>
+          )}
         </div>
+
+        {/* Thumbnail strip */}
+        {allImages.length > 1 && (
+          <div className="flex gap-2 mt-3 overflow-x-auto pb-1 scrollbar-thin">
+            {allImages.map((img, i) => (
+              <button
+                key={i}
+                onClick={() => setSelectedImage(img)}
+                className={`shrink-0 w-20 h-14 sm:w-24 sm:h-16 rounded-lg overflow-hidden border-2 transition-all ${
+                  selectedImage === img
+                    ? "border-teal-500 ring-2 ring-teal-300 opacity-100"
+                    : "border-transparent opacity-70 hover:opacity-100"
+                }`}
+              >
+                <img
+                  src={img}
+                  alt={`Photo ${i + 1}`}
+                  className="w-full h-full object-cover"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                />
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Main content */}
@@ -128,9 +181,7 @@ export default function ActivityDetail() {
 
             {/* Title + location */}
             <div>
-              <h1 className="text-2xl sm:text-3xl font-bold leading-tight mb-2">
-                {activity.title}
-              </h1>
+              <h1 className="text-2xl sm:text-3xl font-bold leading-tight mb-2">{activity.title}</h1>
               {activity.location && (
                 <p className="flex items-center gap-1.5 text-muted-foreground">
                   <MapPin className="w-4 h-4 text-teal-500 shrink-0" />
@@ -145,10 +196,10 @@ export default function ActivityDetail() {
                 <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
                   <Star className="w-5 h-5 text-amber-500" /> Highlights
                 </h2>
-                <ul className="space-y-2">
+                <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {highlights.map((h, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
-                      <Sparkles className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <li key={i} className="flex items-start gap-2 text-sm text-gray-700 bg-amber-50 rounded-lg px-3 py-2">
+                      <Sparkles className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                       {h}
                     </li>
                   ))}
@@ -160,9 +211,7 @@ export default function ActivityDetail() {
             {activity.description && (
               <section>
                 <h2 className="text-lg font-semibold mb-2">About this Experience</h2>
-                <p className="text-gray-600 leading-relaxed whitespace-pre-line">
-                  {activity.description}
-                </p>
+                <p className="text-gray-600 leading-relaxed whitespace-pre-line">{activity.description}</p>
               </section>
             )}
 
@@ -170,8 +219,8 @@ export default function ActivityDetail() {
             {(includes.length > 0 || excludes.length > 0) && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 {includes.length > 0 && (
-                  <section>
-                    <h2 className="text-base font-semibold mb-3 flex items-center gap-2 text-green-700">
+                  <section className="bg-green-50 rounded-xl p-4">
+                    <h2 className="text-base font-semibold mb-3 flex items-center gap-2 text-green-800">
                       <CheckCircle2 className="w-5 h-5" /> What's Included
                     </h2>
                     <ul className="space-y-2">
@@ -185,9 +234,9 @@ export default function ActivityDetail() {
                   </section>
                 )}
                 {excludes.length > 0 && (
-                  <section>
-                    <h2 className="text-base font-semibold mb-3 flex items-center gap-2 text-red-700">
-                      <XCircle className="w-5 h-5" /> What's Not Included
+                  <section className="bg-red-50 rounded-xl p-4">
+                    <h2 className="text-base font-semibold mb-3 flex items-center gap-2 text-red-800">
+                      <XCircle className="w-5 h-5" /> Not Included
                     </h2>
                     <ul className="space-y-2">
                       {excludes.map((item, i) => (
@@ -201,9 +250,35 @@ export default function ActivityDetail() {
                 )}
               </div>
             )}
+
+            {/* Gallery grid */}
+            {gallery.length > 0 && (
+              <section>
+                <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                  <Images className="w-5 h-5 text-teal-600" /> Photo Gallery
+                </h2>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {gallery.map((img, i) => (
+                    <button
+                      key={i}
+                      onClick={() => { setSelectedImage(img); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                      className="aspect-video rounded-xl overflow-hidden bg-gray-100 group relative"
+                    >
+                      <img
+                        src={img}
+                        alt={`Gallery ${i + 1}`}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                      />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors rounded-xl" />
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
           </div>
 
-          {/* Right — booking card */}
+          {/* Right — sticky booking card */}
           <div className="lg:col-span-1">
             <div className="sticky top-6 bg-white rounded-2xl shadow-lg border border-gray-100 p-6 space-y-5">
               <div>

@@ -27,6 +27,7 @@ interface Activity {
   includes?: string[];
   excludes?: string[];
   highlights?: string[];
+  gallery?: string[];
 }
 
 const EMPTY_FORM = {
@@ -39,6 +40,7 @@ const EMPTY_FORM = {
   includes: "",
   excludes: "",
   highlights: "",
+  gallery: "",
 };
 
 function loadActivities(): Activity[] {
@@ -94,6 +96,7 @@ export default function AdminActivities() {
       includes: fromArray(a.includes),
       excludes: fromArray(a.excludes),
       highlights: fromArray(a.highlights),
+      gallery: fromArray(a.gallery),
     });
     setShowForm(true);
   }
@@ -119,6 +122,7 @@ export default function AdminActivities() {
       includes: toArray(form.includes),
       excludes: toArray(form.excludes),
       highlights: toArray(form.highlights),
+      gallery: toArray(form.gallery),
     };
 
     const next = editing
@@ -372,6 +376,17 @@ export default function AdminActivities() {
                       onChange={(e) => setForm({ ...form, excludes: e.target.value })}
                       className="w-full min-h-[60px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
                     />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="act-gallery">Gallery Image URLs</Label>
+                    <textarea
+                      id="act-gallery"
+                      placeholder="e.g. https://example.com/img1.jpg, https://example.com/img2.jpg"
+                      value={form.gallery}
+                      onChange={(e) => setForm({ ...form, gallery: e.target.value })}
+                      className="w-full min-h-[60px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                    />
+                    <p className="text-xs text-muted-foreground">Separate multiple URLs with commas. These appear as a photo gallery on the detail page.</p>
                   </div>
                 </div>
               </div>

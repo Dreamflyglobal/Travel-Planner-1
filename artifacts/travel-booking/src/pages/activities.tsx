@@ -17,6 +17,7 @@ interface Activity {
   includes?: string[];
   excludes?: string[];
   highlights?: string[];
+  gallery?: string[];
 }
 
 const DEMO_ACTIVITIES: Activity[] = [
@@ -50,15 +51,37 @@ const DEMO_ACTIVITIES: Activity[] = [
       "Luxury interior setup",
       "Dedicated cabin crew",
     ],
+    gallery: [
+      "https://images.unsplash.com/photo-1566801440738-25a0d7a76c08?w=800&q=80",
+      "https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=800&q=80",
+      "https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=800&q=80",
+      "https://images.unsplash.com/photo-1464207687429-7505649dae38?w=800&q=80",
+    ],
   },
 ];
 
 function loadActivities(): Activity[] {
   try {
     const stored = localStorage.getItem("activities");
-    if (stored !== null) return JSON.parse(stored);
-    localStorage.setItem("activities", JSON.stringify(DEMO_ACTIVITIES));
-    return DEMO_ACTIVITIES;
+    if (stored === null) {
+      localStorage.setItem("activities", JSON.stringify(DEMO_ACTIVITIES));
+      return DEMO_ACTIVITIES;
+    }
+    const parsed: Activity[] = JSON.parse(stored);
+    let patched = false;
+    const updated = parsed.map((a) => {
+      const demo = DEMO_ACTIVITIES.find((d) => d.id === a.id);
+      if (demo && !a.gallery?.length && demo.gallery?.length) {
+        patched = true;
+        return { ...a, gallery: demo.gallery };
+      }
+      return a;
+    });
+    if (patched) {
+      localStorage.setItem("activities", JSON.stringify(updated));
+      return updated;
+    }
+    return parsed;
   } catch {
     return DEMO_ACTIVITIES;
   }
