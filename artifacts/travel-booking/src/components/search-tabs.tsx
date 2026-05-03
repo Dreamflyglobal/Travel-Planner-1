@@ -6,10 +6,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AutocompleteInput } from "@/components/autocomplete-input";
 import { citySuggestions, busCitySuggestions, hotelCitySuggestions, packageDestinations } from "@/lib/city-suggestions";
 import { loadAirports, searchAirports, type AirportEntry, type AirportSuggestion } from "@/lib/airport-search";
-import { Plane, Bus, Building2, Map, Car, Compass, Search, ArrowLeftRight, Users, ChevronDown, Plus, Minus, X } from "lucide-react";
+import { Plane, Bus, Building2, Map, Car, Compass, Train, Search, ArrowLeftRight, Users, ChevronDown, Plus, Minus, X } from "lucide-react";
 
 interface SearchTabsProps {
-  defaultTab?: "flights" | "hotels" | "buses" | "packages" | "cars" | "activities";
+  defaultTab?: "flights" | "hotels" | "buses" | "packages" | "cars" | "trains" | "activities";
   onTabChange?: (tab: string) => void;
   initialFrom?: string;
   initialTo?: string;
@@ -182,7 +182,7 @@ export function SearchTabs({
     <Card className="w-full max-w-4xl shadow-2xl border-0 bg-white/95 backdrop-blur-md supports-[backdrop-filter]:bg-white/85">
       <CardContent className="p-2 sm:p-4">
         <Tabs defaultValue={defaultTab} className="w-full" onValueChange={onTabChange}>
-          <TabsList className="grid w-full grid-cols-6 h-14 bg-gray-100/80 rounded-lg p-1">
+          <TabsList className="grid w-full grid-cols-7 h-14 bg-gray-100/80 rounded-lg p-1">
             <TabsTrigger value="flights" className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary text-sm sm:text-base font-semibold">
               <Plane className="w-4 h-4 mr-2 hidden sm:inline-block" /> Flights
             </TabsTrigger>
@@ -197,6 +197,9 @@ export function SearchTabs({
             </TabsTrigger>
             <TabsTrigger value="cars" className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary text-sm sm:text-base font-semibold">
               <Car className="w-4 h-4 mr-2 hidden sm:inline-block" /> Cars
+            </TabsTrigger>
+            <TabsTrigger value="trains" className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary text-sm sm:text-base font-semibold">
+              <Train className="w-4 h-4 mr-2 hidden sm:inline-block" /> Trains
             </TabsTrigger>
             <TabsTrigger value="activities" className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary text-sm sm:text-base font-semibold">
               <Compass className="w-4 h-4 mr-2 hidden sm:inline-block" /> Activities
@@ -449,6 +452,22 @@ export function SearchTabs({
                 </Button>
                 {busError && <p className="text-red-600 text-xs mt-2 font-medium">⚠️ Please fill all fields</p>}
               </div>
+            </div>
+          </TabsContent>
+
+          {/* ── Trains ── */}
+          <TabsContent value="trains" className="pt-6 pb-2 px-2">
+            <div className="flex flex-col items-center justify-center py-8 text-center gap-3">
+              <Train className="w-10 h-10 text-blue-500" />
+              <p className="text-base font-semibold">Train Booking</p>
+              <p className="text-sm text-muted-foreground max-w-xs">
+                IRCTC-powered train booking is coming soon. Search trains and book tickets in one place.
+              </p>
+              <Link href="/trains">
+                <button className="mt-1 px-5 py-2.5 rounded-full bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors">
+                  Learn More
+                </button>
+              </Link>
             </div>
           </TabsContent>
 

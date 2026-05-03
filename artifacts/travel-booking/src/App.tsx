@@ -84,6 +84,7 @@ import TJAddonsBooking from "@/pages/tj-addons-booking";
 import FlightAddons from "@/pages/flight-addons";
 import FlightReview from "@/pages/flight-review";
 import Cars from "@/pages/cars";
+import Trains from "@/pages/trains";
 import Activities from "@/pages/activities";
 import AdminActivities from "@/pages/admin/activities";
 import ActivityDetail from "@/pages/activity-detail";
@@ -213,6 +214,7 @@ function Router() {
         <AdminGuard><AdminSupport /></AdminGuard>
       </Route>
       <Route path="/cars" component={Cars} />
+      <Route path="/trains" component={Trains} />
       <Route path="/activities" component={Activities} />
       <Route path="/activities/:id" component={ActivityDetail} />
       <Route path="/master-admin/activities">
