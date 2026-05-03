@@ -85,6 +85,8 @@ import FlightAddons from "@/pages/flight-addons";
 import FlightReview from "@/pages/flight-review";
 import Cars from "@/pages/cars";
 import Trains from "@/pages/trains";
+import Visa from "@/pages/visa";
+import Insurance from "@/pages/insurance";
 import Activities from "@/pages/activities";
 import AdminActivities from "@/pages/admin/activities";
 import ActivityDetail from "@/pages/activity-detail";
@@ -215,6 +217,8 @@ function Router() {
       </Route>
       <Route path="/cars" component={Cars} />
       <Route path="/trains" component={Trains} />
+      <Route path="/visa" component={Visa} />
+      <Route path="/insurance" component={Insurance} />
       <Route path="/activities" component={Activities} />
       <Route path="/activities/:id" component={ActivityDetail} />
       <Route path="/master-admin/activities">

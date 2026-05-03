@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { Plane, Bus, Building2, Palmtree, Car, Compass, Train, User, Menu, LogOut, Settings, Ticket, Sparkles, ShieldCheck, Wallet, Gift } from "lucide-react";
+import { Plane, Bus, Building2, Palmtree, Car, Compass, Train, FileText, Umbrella, User, Menu, LogOut, Settings, Ticket, Sparkles, ShieldCheck, Wallet, Gift } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -59,6 +59,8 @@ export function Navbar() {
     { href: "/packages", label: "Holidays", icon: Palmtree, color: "text-purple-600" },
     { href: "/cars", label: "Cars", icon: Car, color: "text-rose-600" },
     { href: "/trains", label: "Trains", icon: Train, color: "text-blue-600" },
+    { href: "/visa", label: "Visa", icon: FileText, color: "text-indigo-600" },
+    { href: "/insurance", label: "Insurance", icon: Umbrella, color: "text-emerald-600" },
     { href: "/activities", label: "Activities", icon: Compass, color: "text-teal-600" },
   ];
 
