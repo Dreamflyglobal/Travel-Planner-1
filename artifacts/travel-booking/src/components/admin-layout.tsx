@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { useBranding } from "@/contexts/branding-context";
 import { Button } from "@/components/ui/button";
 import {
-  LayoutDashboard, TrendingUp, Package,
+  LayoutDashboard, TrendingUp, Package, Compass,
   MessageSquare, FileText, ClipboardList, LogOut, Menu, X,
   ShieldCheck, UserCheck, ChevronRight, Receipt, Users, Award, Settings, BarChart2,
   MessageCircle, Globe,
@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { label: "All Users",        href: "/master-admin/users",            icon: Users },
   { label: "Agents",           href: "/master-admin/agents",           icon: UserCheck },
   { label: "Packages",         href: "/master-admin/packages",         icon: Package },
+  { label: "Activities",       href: "/master-admin/activities",       icon: Compass },
   { label: "Invoices",         href: "/master-admin/invoices",         icon: Receipt },
   { label: "CRM & Staff",      href: "/master-admin/crm",              icon: MessageSquare },
   { label: "Staff Incentives", href: "/master-admin/staff-incentives", icon: Award },

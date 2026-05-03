@@ -85,6 +85,7 @@ import FlightAddons from "@/pages/flight-addons";
 import FlightReview from "@/pages/flight-review";
 import Cars from "@/pages/cars";
 import Activities from "@/pages/activities";
+import AdminActivities from "@/pages/admin/activities";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -212,6 +213,9 @@ function Router() {
       </Route>
       <Route path="/cars" component={Cars} />
       <Route path="/activities" component={Activities} />
+      <Route path="/master-admin/activities">
+        <AdminGuard><AdminActivities /></AdminGuard>
+      </Route>
       <Route path="/invoice/:bookingId" component={InvoiceView} />
       <Route component={NotFound} />
     </Switch>

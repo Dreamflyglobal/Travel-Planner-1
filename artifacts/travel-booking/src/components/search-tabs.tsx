@@ -463,10 +463,17 @@ export function SearchTabs({
 
           {/* ── Activities ── */}
           <TabsContent value="activities" className="pt-6 pb-2 px-2">
-            <div className="flex flex-col items-center justify-center py-8 text-center gap-3">
-              <Compass className="w-10 h-10 text-primary/40" />
-              <p className="text-lg font-semibold text-muted-foreground">Activities coming soon</p>
-              <p className="text-sm text-muted-foreground">Exciting experiences and local activities are on their way.</p>
+            <div className="flex flex-col items-center justify-center py-6 text-center gap-3">
+              <Compass className="w-10 h-10 text-teal-500" />
+              <p className="text-base font-semibold">Experiences &amp; Activities</p>
+              <p className="text-sm text-muted-foreground max-w-xs">
+                Adventures, cultural tours, food experiences and more — all in one place.
+              </p>
+              <Link href="/activities">
+                <button className="mt-1 px-5 py-2.5 rounded-full bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 transition-colors">
+                  Browse Activities
+                </button>
+              </Link>
             </div>
           </TabsContent>
 
