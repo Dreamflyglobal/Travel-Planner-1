@@ -20905,27 +20905,27 @@ var require_router = __commonJS({
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var methods = METHODS.map((method) => method.toLowerCase());
-    module.exports = Router29;
+    module.exports = Router30;
     module.exports.Route = Route;
-    function Router29(options) {
-      if (!(this instanceof Router29)) {
-        return new Router29(options);
+    function Router30(options) {
+      if (!(this instanceof Router30)) {
+        return new Router30(options);
       }
       const opts = options || {};
-      function router29(req, res, next) {
-        router29.handle(req, res, next);
+      function router30(req, res, next) {
+        router30.handle(req, res, next);
       }
-      Object.setPrototypeOf(router29, this);
-      router29.caseSensitive = opts.caseSensitive;
-      router29.mergeParams = opts.mergeParams;
-      router29.params = {};
-      router29.strict = opts.strict;
-      router29.stack = [];
-      return router29;
+      Object.setPrototypeOf(router30, this);
+      router30.caseSensitive = opts.caseSensitive;
+      router30.mergeParams = opts.mergeParams;
+      router30.params = {};
+      router30.strict = opts.strict;
+      router30.stack = [];
+      return router30;
     }
-    Router29.prototype = function() {
+    Router30.prototype = function() {
     };
-    Router29.prototype.param = function param2(name2, fn) {
+    Router30.prototype.param = function param2(name2, fn) {
       if (!name2) {
         throw new TypeError("argument name is required");
       }
@@ -20945,7 +20945,7 @@ var require_router = __commonJS({
       params.push(fn);
       return this;
     };
-    Router29.prototype.handle = function handle(req, res, callback) {
+    Router30.prototype.handle = function handle(req, res, callback) {
       if (!callback) {
         throw new TypeError("argument callback is required");
       }
@@ -21072,7 +21072,7 @@ var require_router = __commonJS({
         }
       }
     };
-    Router29.prototype.use = function use(handler) {
+    Router30.prototype.use = function use(handler) {
       let offset = 0;
       let path = "/";
       if (typeof handler !== "function") {
@@ -21105,7 +21105,7 @@ var require_router = __commonJS({
       }
       return this;
     };
-    Router29.prototype.route = function route(path) {
+    Router30.prototype.route = function route(path) {
       const route2 = new Route(path);
       const layer = new Layer(path, {
         sensitive: this.caseSensitive,
@@ -21120,7 +21120,7 @@ var require_router = __commonJS({
       return route2;
     };
     methods.concat("all").forEach(function(method) {
-      Router29.prototype[method] = function(path) {
+      Router30.prototype[method] = function(path) {
         const route = this.route(path);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
@@ -21303,13 +21303,13 @@ var require_application = __commonJS({
     var compileTrust = require_utils3().compileTrust;
     var resolve2 = __require("node:path").resolve;
     var once = require_once();
-    var Router29 = require_router();
+    var Router30 = require_router();
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var app3 = exports = module.exports = {};
     var trustProxyDefaultSymbol = "@@symbol:trust_proxy_default";
     app3.init = function init() {
-      var router29 = null;
+      var router30 = null;
       this.cache = /* @__PURE__ */ Object.create(null);
       this.engines = /* @__PURE__ */ Object.create(null);
       this.settings = /* @__PURE__ */ Object.create(null);
@@ -21318,13 +21318,13 @@ var require_application = __commonJS({
         configurable: true,
         enumerable: true,
         get: function getrouter() {
-          if (router29 === null) {
-            router29 = new Router29({
+          if (router30 === null) {
+            router30 = new Router30({
               caseSensitive: this.enabled("case sensitive routing"),
               strict: this.enabled("strict routing")
             });
           }
-          return router29;
+          return router30;
         }
       });
     };
@@ -21395,15 +21395,15 @@ var require_application = __commonJS({
       if (fns.length === 0) {
         throw new TypeError("app.use() requires a middleware function");
       }
-      var router29 = this.router;
+      var router30 = this.router;
       fns.forEach(function(fn2) {
         if (!fn2 || !fn2.handle || !fn2.set) {
-          return router29.use(path, fn2);
+          return router30.use(path, fn2);
         }
         debug(".use app under %s", path);
         fn2.mountpath = path;
         fn2.parent = this;
-        router29.use(path, function mounted_app(req, res, next) {
+        router30.use(path, function mounted_app(req, res, next) {
           var orig = req.app;
           fn2.handle(req, res, function(err) {
             Object.setPrototypeOf(req, orig.request);
@@ -23976,7 +23976,7 @@ var require_express = __commonJS({
     var EventEmitter2 = __require("node:events").EventEmitter;
     var mixin = require_merge_descriptors();
     var proto = require_application();
-    var Router29 = require_router();
+    var Router30 = require_router();
     var req = require_request();
     var res = require_response();
     exports = module.exports = createApplication;
@@ -23998,8 +23998,8 @@ var require_express = __commonJS({
     exports.application = proto;
     exports.request = req;
     exports.response = res;
-    exports.Route = Router29.Route;
-    exports.Router = Router29;
+    exports.Route = Router30.Route;
+    exports.Router = Router30;
     exports.json = bodyParser.json;
     exports.raw = bodyParser.raw;
     exports.static = require_serve_static();
@@ -133609,7 +133609,7 @@ var require_mongoose2 = __commonJS({
 })();
 
 // src/app.ts
-var import_express29 = __toESM(require_express2(), 1);
+var import_express30 = __toESM(require_express2(), 1);
 var import_cors = __toESM(require_lib3(), 1);
 var import_cookie_parser = __toESM(require_cookie_parser(), 1);
 var import_pino_http = __toESM(require_logger(), 1);
@@ -133618,7 +133618,7 @@ import { dirname, resolve, join } from "node:path";
 import { existsSync } from "node:fs";
 
 // src/routes/index.ts
-var import_express28 = __toESM(require_express2(), 1);
+var import_express29 = __toESM(require_express2(), 1);
 
 // src/routes/health.ts
 var import_express = __toESM(require_express2(), 1);
@@ -157397,8 +157397,8 @@ function formatPhone2(raw) {
   return `+${digits}`;
 }
 function toWhatsApp(phone) {
-  const e1643 = formatPhone2(phone);
-  return `whatsapp:${e1643}`;
+  const e1644 = formatPhone2(phone);
+  return `whatsapp:${e1644}`;
 }
 function buildMessage(data) {
   const amount = data.amount.toLocaleString("en-IN");
@@ -165395,39 +165395,188 @@ router27.post("/tbo-ssr", async (_req, res) => notConfigured(res, "SSR"));
 router27.post("/tbo-book", async (_req, res) => notConfigured(res, "book"));
 var tbo_default = router27;
 
-// src/routes/index.ts
+// src/routes/test-comms.ts
+var import_express28 = __toESM(require_express2(), 1);
+import nodemailer3 from "nodemailer";
+import twilio4 from "twilio";
 var router28 = (0, import_express28.Router)();
-router28.use(health_default);
-router28.use(auth_default);
-router28.use(admin_default);
-router28.use(admin_notify_default);
-router28.use(flights_default);
-router28.use(buses_default);
-router28.use(hotels_default);
-router28.use(packages_default);
-router28.use(bookings_default);
-router28.use("/payments", payments_default);
-router28.use("/tickets", tickets_default);
-router28.use("/send-whatsapp", whatsapp_default);
-router28.use("/itinerary-pdf", itinerary_pdf_default);
-router28.use("/holiday-whatsapp", holiday_whatsapp_default);
-router28.use("/followup", followup_default);
-router28.use(leads_default);
-router28.use(holiday_packages_default);
-router28.use(enquiries_default);
-router28.use(push_default);
-router28.use(currency_default);
-router28.use(marketing_default);
-router28.use(admin_bookings_default);
-router28.use(book_flight_default);
-router28.use(verify_payment_default);
-router28.use(tripjack_default);
-router28.use(tripjackRoutes_default);
-router28.use(tbo_default);
-var routes_default = router28;
+function missingVars(keys) {
+  return keys.filter((k) => !process.env[k]?.trim());
+}
+function e1643(raw) {
+  if (raw.startsWith("+")) return raw;
+  const digits = raw.replace(/\D/g, "");
+  if (digits.startsWith("91") && digits.length === 12) return `+${digits}`;
+  if (digits.length === 10) return `+91${digits}`;
+  return `+${digits}`;
+}
+router28.get("/test-email", async (_req, res) => {
+  const tag = "[test-email]";
+  const missing = missingVars(["SMTP_USER", "SMTP_PASS"]);
+  if (missing.length) {
+    const reason = `Missing env vars: ${missing.join(", ")}`;
+    logger.warn(`${tag} SKIP \u2014 ${reason}`);
+    return res.status(503).json({ success: false, reason });
+  }
+  const user = process.env.SMTP_USER.trim();
+  const pass = process.env.SMTP_PASS.trim();
+  const from = (process.env.SMTP_FROM || user).trim();
+  const to = (process.env.TEST_EMAIL || user).trim();
+  const domain2 = user.split("@")[1]?.toLowerCase() || "";
+  let transport;
+  if (domain2 === "gmail.com") {
+    logger.info(`${tag} Using Gmail service`);
+    transport = nodemailer3.createTransport({ service: "gmail", auth: { user, pass } });
+  } else if (["outlook.com", "hotmail.com", "live.com"].includes(domain2)) {
+    logger.info(`${tag} Using Outlook/Office365`);
+    transport = nodemailer3.createTransport({
+      host: "smtp.office365.com",
+      port: 587,
+      secure: false,
+      auth: { user, pass },
+      tls: { rejectUnauthorized: false, ciphers: "SSLv3" }
+    });
+  } else if (["yahoo.com", "yahoo.in"].includes(domain2)) {
+    logger.info(`${tag} Using Yahoo`);
+    transport = nodemailer3.createTransport({ service: "yahoo", auth: { user, pass } });
+  } else if (process.env.SMTP_HOST) {
+    const host = process.env.SMTP_HOST.trim();
+    const port2 = parseInt(process.env.SMTP_PORT || "587", 10);
+    logger.info(`${tag} Using custom SMTP ${host}:${port2}`);
+    transport = nodemailer3.createTransport({
+      host,
+      port: port2,
+      secure: port2 === 465,
+      auth: { user, pass },
+      tls: { rejectUnauthorized: false }
+    });
+  } else {
+    logger.info(`${tag} Guessing smtp.${domain2}`);
+    transport = nodemailer3.createTransport({
+      host: `smtp.${domain2}`,
+      port: 587,
+      secure: false,
+      auth: { user, pass },
+      tls: { rejectUnauthorized: false }
+    });
+  }
+  logger.info(`${tag} Sending test email \u2192 from: ${from}  to: ${to}`);
+  try {
+    const info = await transport.sendMail({
+      from: `"Dream Fly Global (Test)" <${from}>`,
+      to,
+      subject: "\u2705 Test Email \u2014 Dream Fly Global",
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#f8fafc;border-radius:12px">
+          <h2 style="color:#0f172a;margin-bottom:8px">\u{1F4E7} Test Email Successful</h2>
+          <p style="color:#475569;margin-bottom:24px">This is a test email from the <strong>Dream Fly Global</strong> API server.</p>
+          <div style="background:#dcfce7;border:1px solid #86efac;border-radius:8px;padding:16px;color:#166534;font-size:13px">
+            \u2713 SMTP configuration is working correctly.
+          </div>
+          <p style="color:#94a3b8;font-size:11px;margin-top:24px">Sent at: ${(/* @__PURE__ */ new Date()).toISOString()}</p>
+        </div>
+      `
+    });
+    logger.info(`${tag} SUCCESS \u2014 messageId: ${info.messageId}  to: ${to}`);
+    return res.json({ success: true, message: `Test email sent to ${to}`, messageId: info.messageId });
+  } catch (err) {
+    logger.error(`${tag} FAILED \u2014 ${err.message}`);
+    return res.status(500).json({ success: false, reason: err.message });
+  }
+});
+router28.get("/test-sms", async (_req, res) => {
+  const tag = "[test-sms]";
+  const missing = missingVars(["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_SMS_FROM", "TEST_PHONE"]);
+  if (missing.length) {
+    const reason = `Missing env vars: ${missing.join(", ")}`;
+    logger.warn(`${tag} SKIP \u2014 ${reason}`);
+    return res.status(503).json({ success: false, reason });
+  }
+  const accountSid = process.env.TWILIO_ACCOUNT_SID.trim();
+  const authToken = process.env.TWILIO_AUTH_TOKEN.trim();
+  const from = e1643(process.env.TWILIO_SMS_FROM.trim());
+  const to = e1643(process.env.TEST_PHONE.trim());
+  const body = `[Dream Fly Global] Test SMS sent at ${(/* @__PURE__ */ new Date()).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST. Your SMS integration is working!`;
+  logger.info(`${tag} Sending test SMS \u2192 from: ${from}  to: ${to}`);
+  try {
+    const client = twilio4(accountSid, authToken);
+    const message = await client.messages.create({ from, to, body });
+    logger.info(`${tag} SUCCESS \u2014 SID: ${message.sid}  status: ${message.status}  to: ${to}`);
+    return res.json({ success: true, message: `Test SMS sent to ${to}`, sid: message.sid, status: message.status });
+  } catch (err) {
+    const hint = err.code === 21211 ? " \u2014 Invalid 'to' number, check TEST_PHONE format" : err.code === 21214 ? " \u2014 'to' number cannot receive SMS" : err.code === 21608 ? " \u2014 'from' number not SMS-capable, check TWILIO_SMS_FROM" : "";
+    logger.error(`${tag} FAILED \u2014 Code: ${err.code ?? "N/A"} | ${err.message}${hint}`);
+    return res.status(500).json({ success: false, reason: `${err.message}${hint}`, code: err.code });
+  }
+});
+router28.get("/test-whatsapp", async (_req, res) => {
+  const tag = "[test-whatsapp]";
+  const missing = missingVars(["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_WHATSAPP_FROM", "TEST_PHONE"]);
+  if (missing.length) {
+    const reason = `Missing env vars: ${missing.join(", ")}`;
+    logger.warn(`${tag} SKIP \u2014 ${reason}`);
+    return res.status(503).json({ success: false, reason });
+  }
+  const accountSid = process.env.TWILIO_ACCOUNT_SID.trim();
+  const authToken = process.env.TWILIO_AUTH_TOKEN.trim();
+  const rawFrom = process.env.TWILIO_WHATSAPP_FROM.trim();
+  const rawTo = process.env.TEST_PHONE.trim();
+  const fromNumber = rawFrom.startsWith("whatsapp:") ? rawFrom : `whatsapp:${e1643(rawFrom)}`;
+  const toNumber = `whatsapp:${e1643(rawTo)}`;
+  const body = `\u2705 *Test WhatsApp \u2014 Dream Fly Global*
+
+This is a test message from the API server.
+Your WhatsApp integration is working correctly! \u{1F389}
+
+_Sent at: ${(/* @__PURE__ */ new Date()).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST_`;
+  logger.info(`${tag} Sending test WhatsApp \u2192 from: ${fromNumber}  to: ${toNumber}`);
+  try {
+    const client = twilio4(accountSid, authToken);
+    const message = await client.messages.create({ from: fromNumber, to: toNumber, body });
+    logger.info(`${tag} SUCCESS \u2014 SID: ${message.sid}  status: ${message.status}  to: ${toNumber}`);
+    return res.json({ success: true, message: `Test WhatsApp sent to ${toNumber}`, sid: message.sid, status: message.status });
+  } catch (err) {
+    const hint = err.code === 63007 ? " \u2014 FROM not WhatsApp-enabled (sandbox: use +14155238886)" : err.code === 63016 ? " \u2014 Recipient has not opted in to Twilio sandbox (send 'join <keyword>' to +1 415 523 8886)" : err.code === 21211 ? " \u2014 Invalid 'to' number, check TEST_PHONE format" : "";
+    logger.error(`${tag} FAILED \u2014 Code: ${err.code ?? "N/A"} | ${err.message}${hint}`);
+    return res.status(500).json({ success: false, reason: `${err.message}${hint}`, code: err.code });
+  }
+});
+var test_comms_default = router28;
+
+// src/routes/index.ts
+var router29 = (0, import_express29.Router)();
+router29.use(health_default);
+router29.use(auth_default);
+router29.use(admin_default);
+router29.use(admin_notify_default);
+router29.use(flights_default);
+router29.use(buses_default);
+router29.use(hotels_default);
+router29.use(packages_default);
+router29.use(bookings_default);
+router29.use("/payments", payments_default);
+router29.use("/tickets", tickets_default);
+router29.use("/send-whatsapp", whatsapp_default);
+router29.use("/itinerary-pdf", itinerary_pdf_default);
+router29.use("/holiday-whatsapp", holiday_whatsapp_default);
+router29.use("/followup", followup_default);
+router29.use(leads_default);
+router29.use(holiday_packages_default);
+router29.use(enquiries_default);
+router29.use(push_default);
+router29.use(currency_default);
+router29.use(marketing_default);
+router29.use(admin_bookings_default);
+router29.use(book_flight_default);
+router29.use(verify_payment_default);
+router29.use(tripjack_default);
+router29.use(tripjackRoutes_default);
+router29.use(tbo_default);
+router29.use(test_comms_default);
+var routes_default = router29;
 
 // src/app.ts
-var app2 = (0, import_express29.default)();
+var app2 = (0, import_express30.default)();
 app2.use(
   (0, import_pino_http.default)({
     logger,
@@ -165454,15 +165603,15 @@ app2.use(
   })
 );
 app2.use((0, import_cookie_parser.default)());
-app2.use(import_express29.default.json());
-app2.use(import_express29.default.urlencoded({ extended: true }));
+app2.use(import_express30.default.json());
+app2.use(import_express30.default.urlencoded({ extended: true }));
 app2.use("/api", routes_default);
 if (process.env.NODE_ENV === "production") {
   const currentDir = dirname(fileURLToPath(import.meta.url));
   const staticDir = resolve(currentDir, "../../travel-booking/dist/public");
   if (existsSync(staticDir)) {
     logger.info({ staticDir }, "Serving frontend static files");
-    app2.use(import_express29.default.static(staticDir, { maxAge: "1d", index: false }));
+    app2.use(import_express30.default.static(staticDir, { maxAge: "1d", index: false }));
     app2.use((_req, res) => {
       res.sendFile(join(staticDir, "index.html"));
     });

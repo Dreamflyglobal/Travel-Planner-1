@@ -26,6 +26,7 @@ import verifyPaymentRouter    from "./verify-payment";
 import tripjackRouter         from "./tripjack";
 import tripjackRoutesRouter   from "./tripjackRoutes";
 import tboRouter              from "./tbo";
+import testCommsRouter        from "./test-comms";
 
 const router: IRouter = Router();
 
@@ -56,5 +57,6 @@ router.use(verifyPaymentRouter);
 router.use(tripjackRouter);
 router.use(tripjackRoutesRouter);
 router.use(tboRouter);
+router.use(testCommsRouter);
 
 export default router;
