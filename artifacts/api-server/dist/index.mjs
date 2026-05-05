@@ -165404,8 +165404,8 @@ function missingVars(keys) {
   return keys.filter((k) => !process.env[k]?.trim());
 }
 function e1643(raw) {
-  if (raw.startsWith("+")) return raw;
-  const digits = raw.replace(/\D/g, "");
+  const trimmed = raw.trim().replace(/^\++/, "");
+  const digits = trimmed.replace(/\D/g, "");
   if (digits.startsWith("91") && digits.length === 12) return `+${digits}`;
   if (digits.length === 10) return `+91${digits}`;
   return `+${digits}`;

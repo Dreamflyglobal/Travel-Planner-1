@@ -26,9 +26,9 @@ function missingVars(keys: string[]): string[] {
 }
 
 function e164(raw: string): string {
-  // Already in E.164 format (+XXXXXXXXXXX) — use as-is
-  if (raw.startsWith("+")) return raw;
-  const digits = raw.replace(/\D/g, "");
+  // Strip whitespace and any leading + signs, then re-prefix exactly one +
+  const trimmed = raw.trim().replace(/^\++/, "");
+  const digits = trimmed.replace(/\D/g, "");
   if (digits.startsWith("91") && digits.length === 12) return `+${digits}`;
   if (digits.length === 10) return `+91${digits}`;
   return `+${digits}`;
