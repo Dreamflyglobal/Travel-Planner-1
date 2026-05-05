@@ -3,11 +3,17 @@ import { useRoute, Link } from "wouter";
 import { Navbar } from "@/components/navbar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from "@/components/ui/dialog";
+import {
   MapPin, IndianRupee, ArrowLeft, CheckCircle2, XCircle,
-  Sparkles, ImageOff, Compass, Star, Images,
+  Sparkles, ImageOff, Compass, Star, Images, Loader2, CreditCard,
 } from "lucide-react";
+import { openRazorpayCheckout } from "@/lib/use-razorpay";
 
 interface Activity {
   id: string;
@@ -50,11 +56,17 @@ function loadActivities(): Activity[] {
   }
 }
 
+const EMPTY_FORM = { name: "", email: "", phone: "" };
+
 export default function ActivityDetail() {
   const { toast } = useToast();
   const [, params] = useRoute("/activities/:id");
   const [activity, setActivity] = useState<Activity | null | undefined>(undefined);
   const [selectedImage, setSelectedImage] = useState<string>("");
+
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [form, setForm] = useState({ ...EMPTY_FORM });
+  const [paying, setPaying] = useState(false);
 
   useEffect(() => {
     const all = loadActivities();
@@ -63,12 +75,60 @@ export default function ActivityDetail() {
     if (found) setSelectedImage(found.imageUrl || "");
   }, [params?.id]);
 
-  function handleBookNow() {
+  function openBookingDialog() {
     if (!activity) return;
-    toast({
-      title: "Booking Confirmed!",
-      description: `Your booking for "${activity.title}" has been received. Our team will contact you shortly.`,
-      duration: 5000,
+    setForm({ ...EMPTY_FORM });
+    setDialogOpen(true);
+  }
+
+  async function handlePay(e: React.FormEvent) {
+    e.preventDefault();
+    if (!activity) return;
+
+    const name  = form.name.trim();
+    const email = form.email.trim();
+    const phone = form.phone.trim();
+
+    if (!name || !phone) {
+      toast({ variant: "destructive", title: "Name and phone are required" });
+      return;
+    }
+
+    setDialogOpen(false);
+    setPaying(true);
+
+    await openRazorpayCheckout({
+      amount:      activity.price,
+      name,
+      email,
+      phone,
+      description: activity.title,
+
+      onSuccess(paymentId, orderId) {
+        setPaying(false);
+        const bookingId = `ACT-${Date.now()}`;
+        toast({
+          title: "Payment Successful! 🎉",
+          description: `Booking confirmed (${bookingId}). Payment ID: ${paymentId}`,
+          duration: 8000,
+        });
+      },
+
+      onFailure(message) {
+        setPaying(false);
+        if (message !== "Payment was cancelled.") {
+          toast({
+            variant:     "destructive",
+            title:       "Payment Failed",
+            description: message,
+            duration:    6000,
+          });
+        }
+      },
+
+      onDismiss() {
+        setPaying(false);
+      },
     });
   }
 
@@ -103,8 +163,7 @@ export default function ActivityDetail() {
   const excludes   = activity.excludes   ?? [];
   const highlights = activity.highlights ?? [];
   const gallery    = activity.gallery    ?? [];
-
-  const allImages = [activity.imageUrl, ...gallery].filter(Boolean);
+  const allImages  = [activity.imageUrl, ...gallery].filter(Boolean);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -310,19 +369,94 @@ export default function ActivityDetail() {
               )}
 
               <Button
-                className="w-full bg-teal-600 hover:bg-teal-700 text-white text-base py-5 rounded-xl"
-                onClick={handleBookNow}
+                className="w-full bg-teal-600 hover:bg-teal-700 text-white text-base py-5 rounded-xl gap-2"
+                onClick={openBookingDialog}
+                disabled={paying}
               >
-                Book Now
+                {paying ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" /> Processing…
+                  </>
+                ) : (
+                  <>
+                    <CreditCard className="w-4 h-4" /> Book Now
+                  </>
+                )}
               </Button>
 
               <p className="text-xs text-center text-muted-foreground">
-                No payment now — our team will reach out to confirm your booking.
+                Secure payment via Razorpay · Test mode
               </p>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Booking dialog */}
+      <Dialog open={dialogOpen} onOpenChange={(open) => { if (!paying) setDialogOpen(open); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CreditCard className="w-5 h-5 text-teal-600" /> Complete Your Booking
+            </DialogTitle>
+            <DialogDescription>
+              Enter your details to proceed with the payment.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handlePay} className="space-y-4 py-2">
+            <div className="bg-teal-50 rounded-lg px-4 py-3 flex items-center justify-between">
+              <span className="text-sm font-medium text-teal-800 truncate mr-2">{activity.title}</span>
+              <span className="text-sm font-bold text-teal-700 shrink-0">
+                ₹{activity.price.toLocaleString("en-IN")}
+              </span>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="bk-name">Full Name *</Label>
+              <Input
+                id="bk-name"
+                placeholder="Enter your name"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                required
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="bk-phone">Phone Number *</Label>
+              <Input
+                id="bk-phone"
+                type="tel"
+                placeholder="10-digit mobile number"
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                required
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="bk-email">Email (optional)</Label>
+              <Input
+                id="bk-email"
+                type="email"
+                placeholder="For booking confirmation"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+              />
+            </div>
+
+            <DialogFooter className="pt-2">
+              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" className="bg-teal-600 hover:bg-teal-700 gap-2">
+                <CreditCard className="w-4 h-4" /> Pay ₹{activity.price.toLocaleString("en-IN")}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
