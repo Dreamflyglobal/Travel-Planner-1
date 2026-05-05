@@ -25,7 +25,7 @@ export async function connectMongoDB(): Promise<void> {
     });
 
     isConnected = true;
-    logger.info("MongoDB connected successfully");
+    logger.info("MongoDB Connected ✅");
 
     mongoose.connection.on("error", (err) => {
       logger.error({ err }, "MongoDB connection error");

@@ -44,7 +44,7 @@ importers:
         specifier: ^9.0.3
         version: 9.0.3
       mongoose:
-        specifier: ^8.13.2
+        specifier: ^8.23.1
         version: 8.23.1
       nodemailer:
         specifier: ^8.0.4

@@ -165503,7 +165503,7 @@ async function connectMongoDB() {
       serverSelectionTimeoutMS: 5e3
     });
     isConnected = true;
-    logger.info("MongoDB connected successfully");
+    logger.info("MongoDB Connected \u2705");
     import_mongoose.default.connection.on("error", (err) => {
       logger.error({ err }, "MongoDB connection error");
     });
@@ -165522,7 +165522,7 @@ var port = Number(rawPort);
 if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
-connectMongoDB();
+await connectMongoDB();
 app_default.listen(port, (err) => {
   if (err) {
     logger.error({ err }, "Error listening on port");
