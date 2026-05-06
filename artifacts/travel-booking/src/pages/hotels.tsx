@@ -28,8 +28,15 @@ export default function Hotels() {
   const [city,     setCity]     = useState("");
   const [checkin,  setCheckin]  = useState(today);
   const [checkout, setCheckout] = useState(tomorrow);
-  const [guests,   setGuests]   = useState("1");
+  const [adults,   setAdults]   = useState("2");
+  const [rooms,    setRooms]    = useState("1");
   const [error,    setError]    = useState("");
+
+  const smartRooms = (a: number) => a <= 2 ? 1 : a <= 4 ? 2 : 3;
+  const handleAdultsChange = (val: string) => {
+    setAdults(val);
+    setRooms(String(smartRooms(parseInt(val) || 2)));
+  };
 
   function handleSearch() {
     if (!city.trim()) { setError("Please enter a city"); return; }
@@ -37,12 +44,12 @@ export default function Hotels() {
     if (!checkout)    { setError("Please select check-out date"); return; }
     if (checkout <= checkin) { setError("Check-out must be after check-in"); return; }
     setError("");
-    setLocation(`/hotels/results?city=${encodeURIComponent(city)}&checkin=${checkin}&checkout=${checkout}&guests=${guests}`);
+    setLocation(`/hotels/results?city=${encodeURIComponent(city)}&checkin=${checkin}&checkout=${checkout}&adults=${adults}&rooms=${rooms}`);
   }
 
   function quickSearch(city: string) {
     setCity(city);
-    setLocation(`/hotels/results?city=${encodeURIComponent(city)}&checkin=${checkin}&checkout=${checkout}&guests=${guests}`);
+    setLocation(`/hotels/results?city=${encodeURIComponent(city)}&checkin=${checkin}&checkout=${checkout}&adults=${adults}&rooms=${rooms}`);
   }
 
   return (
@@ -60,7 +67,7 @@ export default function Hotels() {
       >
         <Card className="max-w-4xl mx-auto shadow-2xl border-0 bg-white/95 backdrop-blur-md supports-[backdrop-filter]:bg-white/88">
           <CardContent className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                 <div className="lg:col-span-1">
                   <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1.5 block">CITY / LOCATION</Label>
                   <div className="flex items-center gap-2 border rounded-xl px-3 h-12 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 transition-all">
@@ -100,16 +107,32 @@ export default function Hotels() {
                 </div>
 
                 <div>
-                  <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1.5 block">GUESTS</Label>
+                  <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1.5 block">ADULTS</Label>
                   <div className="flex items-center gap-2 border rounded-xl px-3 h-12 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 transition-all">
                     <Users className="w-4 h-4 text-blue-600 shrink-0" />
                     <select
-                      value={guests}
-                      onChange={(e) => setGuests(e.target.value)}
+                      value={adults}
+                      onChange={(e) => handleAdultsChange(e.target.value)}
                       className="border-0 p-0 h-8 font-semibold text-slate-800 bg-transparent focus:outline-none flex-1"
                     >
                       {[1,2,3,4,5,6].map((n) => (
-                        <option key={n} value={String(n)}>{n} Guest{n > 1 ? "s" : ""}</option>
+                        <option key={n} value={String(n)}>{n} Adult{n > 1 ? "s" : ""}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1.5 block">ROOMS</Label>
+                  <div className="flex items-center gap-2 border rounded-xl px-3 h-12 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 transition-all">
+                    <Building2 className="w-4 h-4 text-blue-600 shrink-0" />
+                    <select
+                      value={rooms}
+                      onChange={(e) => setRooms(e.target.value)}
+                      className="border-0 p-0 h-8 font-semibold text-slate-800 bg-transparent focus:outline-none flex-1"
+                    >
+                      {[1,2,3,4,5].map((n) => (
+                        <option key={n} value={String(n)}>{n} Room{n > 1 ? "s" : ""}</option>
                       ))}
                     </select>
                   </div>

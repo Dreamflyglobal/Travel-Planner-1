@@ -97,7 +97,11 @@ export function SearchTabs({
   const [hotelSearchCity, setHotelSearchCity] = useState(""); // actual city for search (may differ if hotel brand selected)
   const [hotelCheckIn,    setHotelCheckIn]    = useState(today);
   const [hotelCheckOut,   setHotelCheckOut]   = useState(tomorrow);
-  const [hotelGuests,     setHotelGuests]     = useState(2);
+  const [hotelAdults,     setHotelAdults]     = useState(2);
+  const [hotelRooms,      setHotelRooms]      = useState(1);
+
+  const hotelSmartRooms = (a: number) => a <= 2 ? 1 : a <= 4 ? 2 : 3;
+  const handleHotelAdultsChange = (a: number) => { setHotelAdults(a); setHotelRooms(hotelSmartRooms(a)); };
 
   const [busFrom, setBusFrom] = useState("");
   const [busTo,   setBusTo]   = useState("");
@@ -169,7 +173,7 @@ export function SearchTabs({
   // Use hotelSearchCity (the actual city) for search — differs when hotel brand is selected
   const hotelCityForSearch = hotelSearchCity.trim() || hotelLocation.trim();
   const hotelsUrl = (hotelCityForSearch && hotelCheckIn.trim() && hotelCheckOut.trim())
-    ? `/hotels/results?city=${encodeURIComponent(hotelCityForSearch)}&checkin=${encodeURIComponent(hotelCheckIn)}&checkout=${encodeURIComponent(hotelCheckOut)}&guests=${hotelGuests}`
+    ? `/hotels/results?city=${encodeURIComponent(hotelCityForSearch)}&checkin=${encodeURIComponent(hotelCheckIn)}&checkout=${encodeURIComponent(hotelCheckOut)}&adults=${hotelAdults}&rooms=${hotelRooms}`
     : "#";
 
   const busesUrl = (busFrom.trim() && busTo.trim() && busDate.trim())
@@ -403,7 +407,7 @@ export function SearchTabs({
 
           {/* ── Hotels ── */}
           <TabsContent value="hotels" className="pt-6 pb-2 px-2">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
               <div className="sm:col-span-2 lg:col-span-1 space-y-1">
                 <label className={labelCls}>Location or Hotel</label>
                 <AutocompleteInput placeholder="City or hotel name (e.g. Mumbai, Taj)" suggestions={hotelCitySuggestions} value={hotelLocation} onChange={handleHotelLocationChange} />
@@ -417,17 +421,30 @@ export function SearchTabs({
                 <input type="date" value={hotelCheckOut} min={hotelCheckIn || today} onChange={(e) => setHotelCheckOut(e.target.value)} className={inputCls} />
               </div>
               <div className="space-y-1">
-                <label className={labelCls}>Guests</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={20}
-                  value={hotelGuests}
-                  onChange={(e) => setHotelGuests(Math.max(1, parseInt(e.target.value) || 1))}
+                <label className={labelCls}>Adults</label>
+                <select
+                  value={hotelAdults}
+                  onChange={(e) => handleHotelAdultsChange(parseInt(e.target.value))}
                   className={inputCls}
-                />
+                >
+                  {[1,2,3,4,5,6].map((n) => (
+                    <option key={n} value={n}>{n} Adult{n > 1 ? "s" : ""}</option>
+                  ))}
+                </select>
               </div>
-              <div className="flex items-end">
+              <div className="space-y-1">
+                <label className={labelCls}>Rooms</label>
+                <select
+                  value={hotelRooms}
+                  onChange={(e) => setHotelRooms(parseInt(e.target.value))}
+                  className={inputCls}
+                >
+                  {[1,2,3,4,5].map((n) => (
+                    <option key={n} value={n}>{n} Room{n > 1 ? "s" : ""}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-end sm:col-span-2 lg:col-span-1">
                 <div className="w-full space-y-1">
                   <label className={labelCls + " invisible"}>Search</label>
                   <Button asChild size="lg" className="w-full h-12 text-base font-bold">

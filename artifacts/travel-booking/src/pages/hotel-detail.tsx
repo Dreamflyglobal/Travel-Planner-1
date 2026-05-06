@@ -105,7 +105,9 @@ export default function HotelDetail() {
   const p          = new URLSearchParams(searchString);
   const checkin    = p.get("checkin")  || "";
   const checkout   = p.get("checkout") || "";
-  const guests     = p.get("guests")   || "2";
+  const adults     = p.get("adults")  || p.get("guests") || "2";
+  const rooms      = p.get("rooms")   || "1";
+  const guests     = adults; // alias kept for API calls and display
   const nights     = nightsBetween(checkin, checkout);
   const urlRateKey = p.get("rateKey")  || null;
 

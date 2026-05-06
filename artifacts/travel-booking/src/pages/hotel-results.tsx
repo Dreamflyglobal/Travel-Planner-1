@@ -72,7 +72,9 @@ export default function HotelResults() {
   const city    = p.get("city")     || "";
   const checkin = p.get("checkin")  || "";
   const checkout= p.get("checkout") || "";
-  const guests  = p.get("guests")   || "1";
+  const adults  = p.get("adults")  || p.get("guests") || "2";
+  const rooms   = p.get("rooms")   || "1";
+  const guests  = adults; // alias for backward-compat with downstream params
 
   const { user, isAgent } = useAuth();
   useAbandonedLeadTracker("hotel");
@@ -250,14 +252,14 @@ export default function HotelResults() {
             )}
             <div className="flex items-center gap-1.5 bg-muted/60 border rounded-lg px-3 py-1.5 shrink-0">
               <Users className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-              <span className="text-sm font-medium">{guests} Guest{parseInt(guests) > 1 ? "s" : ""}</span>
+              <span className="text-sm font-medium">{adults} Adult{parseInt(adults) > 1 ? "s" : ""} · {rooms} Room{parseInt(rooms) > 1 ? "s" : ""}</span>
             </div>
           </div>
 
           <Button
             size="sm"
             className="bg-blue-600 hover:bg-blue-700 text-white font-bold shrink-0 gap-1.5"
-            onClick={() => setLocation(`/hotels?city=${encodeURIComponent(city)}&checkin=${checkin}&checkout=${checkout}&guests=${guests}`)}
+            onClick={() => setLocation(`/hotels?city=${encodeURIComponent(city)}&checkin=${checkin}&checkout=${checkout}&adults=${adults}&rooms=${rooms}`)}
           >
             <Pencil className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Modify</span>
@@ -412,7 +414,9 @@ export default function HotelResults() {
                       ratingLabel:  hotel.ratingLabel ?? "Good",
                       checkin,
                       checkout,
-                      guests,
+                      adults,
+                      rooms,
+                      guests:       adults,
                       nights:       String(nights),
                       rawPrice:     String(hotel.pricePerNight),
                       pricePerNight: String(pricePerNight),

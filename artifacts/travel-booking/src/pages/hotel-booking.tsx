@@ -58,7 +58,7 @@ export default function HotelBooking() {
   const rating     = parseFloat(p.get("rating")  || "0");
   const checkin    = p.get("checkin")       || "";
   const checkout   = p.get("checkout")      || "";
-  const guests     = parseInt(p.get("guests")    || "1");
+  const guests     = parseInt(p.get("adults") || p.get("guests") || "2");
   const nights     = parseInt(p.get("nights")    || "1");
   const roomType   = p.get("roomType")      || "Deluxe";
   const roomPrice  = parseInt(p.get("roomPrice") || "0");
