@@ -214,9 +214,9 @@ export default function Buses() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
                   {/* From + Swap + To */}
-                  <div className="md:col-span-2 flex items-end gap-2">
+                  <div className="md:col-span-2 flex flex-col md:flex-row md:items-end gap-3 md:gap-2">
                     {/* FROM */}
-                    <div className="flex-1 min-w-0">
+                    <div className="w-full md:flex-1 min-w-0">
                       <Label className="text-xs text-muted-foreground mb-2">FROM CITY</Label>
                       <div className="flex items-center gap-2 border rounded-lg px-3 py-2 bg-background focus-within:ring-2 focus-within:ring-primary">
                         <Bus className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -233,14 +233,14 @@ export default function Buses() {
                     {/* Swap button */}
                     <button
                       onClick={handleSwap}
-                      className="w-10 h-10 rounded-full border-2 border-primary bg-white text-primary hover:bg-primary hover:text-white transition-colors flex items-center justify-center shadow-md flex-shrink-0 mb-0.5"
+                      className="w-10 h-10 rounded-full border-2 border-primary bg-white text-primary hover:bg-primary hover:text-white transition-colors flex items-center justify-center shadow-md flex-shrink-0 self-center md:mb-0.5"
                       title="Swap cities"
                     >
                       <ArrowLeftRight className="w-4 h-4" />
                     </button>
 
                     {/* TO */}
-                    <div className="flex-1 min-w-0">
+                    <div className="w-full md:flex-1 min-w-0">
                       <Label className="text-xs text-muted-foreground mb-2">TO CITY</Label>
                       <div className="flex items-center gap-2 border rounded-lg px-3 py-2 bg-background focus-within:ring-2 focus-within:ring-primary">
                         <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
