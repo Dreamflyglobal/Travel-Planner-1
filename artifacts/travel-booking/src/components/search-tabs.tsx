@@ -445,17 +445,17 @@ export function SearchTabs({
           <TabsContent value="buses" className="pt-6 pb-2 px-2">
             <div className="flex flex-col lg:grid lg:grid-cols-4 gap-4">
               {/* FROM + swap + TO — stacked on mobile, row on md+ */}
-              <div className="lg:col-span-2 flex flex-col md:flex-row md:items-end gap-1.5 md:gap-2">
-                <div className="w-full md:flex-1 min-w-0 space-y-1">
+              <div className="lg:col-span-2 flex flex-col lg:flex-row lg:items-end gap-3 lg:gap-2">
+                <div className="w-full lg:flex-1 min-w-0 space-y-1">
                   <label className={labelCls}>Leaving From</label>
                   <AutocompleteInput placeholder="e.g. Hyderabad" suggestions={busCitySuggestions} value={busFrom} onChange={setBusFrom} />
                 </div>
                 <button onClick={handleBusSwap}
-                  className="w-9 h-9 rounded-full border border-gray-200 bg-white text-gray-400 hover:text-gray-600 hover:scale-105 active:scale-95 transition-all duration-150 flex items-center justify-center shadow-sm shrink-0 self-center md:self-auto md:mb-0.5"
+                  className="w-9 h-9 rounded-full border border-gray-200 bg-white text-gray-400 hover:text-gray-600 hover:scale-105 active:scale-95 transition-all duration-150 flex items-center justify-center shadow-sm shrink-0 self-center lg:self-auto lg:mb-0.5"
                   title="Swap cities">
                   <ArrowLeftRight className="w-4 h-4" />
                 </button>
-                <div className="w-full md:flex-1 min-w-0 space-y-1">
+                <div className="w-full lg:flex-1 min-w-0 space-y-1">
                   <label className={labelCls}>Going To</label>
                   <AutocompleteInput placeholder="e.g. Bangalore" suggestions={busCitySuggestions} value={busTo} onChange={setBusTo} />
                 </div>
