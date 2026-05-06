@@ -8,13 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Bus, ArrowLeft, CheckCircle2, LogIn, ChevronRight,
-  MapPin, Armchair,
+  Bus, ArrowLeft, CheckCircle2, ChevronRight,
+  MapPin, Armchair, UserPlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -125,27 +126,6 @@ export default function BusBooking() {
     setLocation("/booking/payment");
   }
 
-  if (!isAuthenticated) {
-    return (
-      <Layout>
-        <div className="container mx-auto px-4 py-20 text-center">
-          <Card className="max-w-md mx-auto">
-            <CardContent className="pt-12 pb-8">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-orange-100 flex items-center justify-center">
-                <LogIn className="w-8 h-8 text-orange-600" />
-              </div>
-              <h2 className="text-xl font-bold mb-2">Login Required</h2>
-              <p className="text-muted-foreground mb-6 text-sm">Please log in to complete your bus booking.</p>
-              <Button className="w-full bg-orange-500 hover:bg-orange-600" onClick={() => setLocation("/login")}>
-                Login to Continue
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </Layout>
-    );
-  }
-
   return (
     <Layout>
       {/* Header */}
@@ -186,6 +166,15 @@ export default function BusBooking() {
 
             {/* Left column */}
             <div className="flex-1 min-w-0 space-y-5">
+
+              {!isAuthenticated && (
+                <Alert className="border-orange-200 bg-orange-50">
+                  <UserPlus className="h-4 w-4 text-orange-600" />
+                  <AlertDescription className="text-orange-800 text-sm">
+                    <span className="font-semibold">No login needed!</span> An account will be created automatically after payment.
+                  </AlertDescription>
+                </Alert>
+              )}
 
               {/* Journey Summary */}
               <Card className="shadow-sm border overflow-hidden">

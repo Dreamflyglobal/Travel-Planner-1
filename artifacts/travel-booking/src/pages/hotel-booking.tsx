@@ -7,13 +7,14 @@ import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import {
   Building2, ArrowLeft, Calendar, Star, MapPin, CheckCircle2,
-  LogIn, ChevronRight, BedDouble, Moon,
+  ChevronRight, BedDouble, Moon, UserPlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -109,27 +110,6 @@ export default function HotelBooking() {
     setLocation("/booking/payment");
   }
 
-  if (!isAuthenticated) {
-    return (
-      <Layout>
-        <div className="container mx-auto px-4 py-20 text-center">
-          <Card className="max-w-md mx-auto">
-            <CardContent className="pt-12 pb-8">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-blue-100 flex items-center justify-center">
-                <LogIn className="w-8 h-8 text-blue-600" />
-              </div>
-              <h2 className="text-xl font-bold mb-2">Login Required</h2>
-              <p className="text-muted-foreground mb-6 text-sm">Please log in to complete your hotel booking.</p>
-              <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={() => setLocation("/login")}>
-                Login to Continue
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </Layout>
-    );
-  }
-
   return (
     <Layout>
       {/* Header */}
@@ -170,6 +150,15 @@ export default function HotelBooking() {
 
             {/* Left */}
             <div className="flex-1 min-w-0 space-y-5">
+
+              {!isAuthenticated && (
+                <Alert className="border-blue-200 bg-blue-50">
+                  <UserPlus className="h-4 w-4 text-blue-600" />
+                  <AlertDescription className="text-blue-800 text-sm">
+                    <span className="font-semibold">No login needed!</span> An account will be created automatically after payment.
+                  </AlertDescription>
+                </Alert>
+              )}
 
               {/* Hotel Summary */}
               <Card className="shadow-sm border overflow-hidden">
