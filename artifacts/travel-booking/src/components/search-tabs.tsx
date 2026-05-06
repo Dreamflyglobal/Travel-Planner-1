@@ -97,6 +97,7 @@ export function SearchTabs({
   const [hotelSearchCity, setHotelSearchCity] = useState(""); // actual city for search (may differ if hotel brand selected)
   const [hotelCheckIn,    setHotelCheckIn]    = useState(today);
   const [hotelCheckOut,   setHotelCheckOut]   = useState(tomorrow);
+  const [hotelGuests,     setHotelGuests]     = useState(2);
 
   const [busFrom, setBusFrom] = useState("");
   const [busTo,   setBusTo]   = useState("");
@@ -168,7 +169,7 @@ export function SearchTabs({
   // Use hotelSearchCity (the actual city) for search — differs when hotel brand is selected
   const hotelCityForSearch = hotelSearchCity.trim() || hotelLocation.trim();
   const hotelsUrl = (hotelCityForSearch && hotelCheckIn.trim() && hotelCheckOut.trim())
-    ? `/hotels/results?city=${encodeURIComponent(hotelCityForSearch)}&checkin=${encodeURIComponent(hotelCheckIn)}&checkout=${encodeURIComponent(hotelCheckOut)}&guests=1`
+    ? `/hotels/results?city=${encodeURIComponent(hotelCityForSearch)}&checkin=${encodeURIComponent(hotelCheckIn)}&checkout=${encodeURIComponent(hotelCheckOut)}&guests=${hotelGuests}`
     : "#";
 
   const busesUrl = (busFrom.trim() && busTo.trim() && busDate.trim())
@@ -402,8 +403,8 @@ export function SearchTabs({
 
           {/* ── Hotels ── */}
           <TabsContent value="hotels" className="pt-6 pb-2 px-2">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="space-y-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+              <div className="sm:col-span-2 lg:col-span-1 space-y-1">
                 <label className={labelCls}>Location or Hotel</label>
                 <AutocompleteInput placeholder="City or hotel name (e.g. Mumbai, Taj)" suggestions={hotelCitySuggestions} value={hotelLocation} onChange={handleHotelLocationChange} />
               </div>
@@ -414,6 +415,17 @@ export function SearchTabs({
               <div className="space-y-1">
                 <label className={labelCls}>Check-out</label>
                 <input type="date" value={hotelCheckOut} min={hotelCheckIn || today} onChange={(e) => setHotelCheckOut(e.target.value)} className={inputCls} />
+              </div>
+              <div className="space-y-1">
+                <label className={labelCls}>Guests</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={hotelGuests}
+                  onChange={(e) => setHotelGuests(Math.max(1, parseInt(e.target.value) || 1))}
+                  className={inputCls}
+                />
               </div>
               <div className="flex items-end">
                 <div className="w-full space-y-1">
@@ -432,18 +444,18 @@ export function SearchTabs({
           {/* ── Buses ── */}
           <TabsContent value="buses" className="pt-6 pb-2 px-2">
             <div className="flex flex-col lg:grid lg:grid-cols-4 gap-4">
-              {/* FROM + swap + TO — vertical on mobile, row on desktop */}
-              <div className="lg:col-span-2 flex flex-col sm:flex-row sm:items-end gap-1.5 sm:gap-2">
-                <div className="flex-1 min-w-0 space-y-1">
+              {/* FROM + swap + TO — stacked on mobile, row on md+ */}
+              <div className="lg:col-span-2 flex flex-col md:flex-row md:items-end gap-1.5 md:gap-2">
+                <div className="w-full md:flex-1 min-w-0 space-y-1">
                   <label className={labelCls}>Leaving From</label>
                   <AutocompleteInput placeholder="e.g. Hyderabad" suggestions={busCitySuggestions} value={busFrom} onChange={setBusFrom} />
                 </div>
                 <button onClick={handleBusSwap}
-                  className="w-9 h-9 rounded-full border border-gray-200 bg-white text-gray-400 hover:text-gray-600 hover:scale-105 active:scale-95 transition-all duration-150 flex items-center justify-center shadow-sm shrink-0 self-center sm:self-auto sm:mb-0.5 my-0 sm:my-0"
+                  className="w-9 h-9 rounded-full border border-gray-200 bg-white text-gray-400 hover:text-gray-600 hover:scale-105 active:scale-95 transition-all duration-150 flex items-center justify-center shadow-sm shrink-0 self-center md:self-auto md:mb-0.5"
                   title="Swap cities">
                   <ArrowLeftRight className="w-4 h-4" />
                 </button>
-                <div className="flex-1 min-w-0 space-y-1">
+                <div className="w-full md:flex-1 min-w-0 space-y-1">
                   <label className={labelCls}>Going To</label>
                   <AutocompleteInput placeholder="e.g. Bangalore" suggestions={busCitySuggestions} value={busTo} onChange={setBusTo} />
                 </div>
