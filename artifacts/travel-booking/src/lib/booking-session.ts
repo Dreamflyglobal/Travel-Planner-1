@@ -103,6 +103,9 @@ export type HotelBookingSession = {
   normalMarkup: number;
   agentId?: string;
   agentEmail?: string;
+  rateKey?: string | null;
+  holderFirstName?: string;
+  holderLastName?: string;
 };
 
 export type BookingSession =

@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import type { JSX } from "react";
 import { useParams, useLocation, useSearch } from "wouter";
 import { useAuth } from "@/contexts/auth-context";
-import { getHiddenMarkupAmount } from "@/lib/pricing";
+import { getHiddenMarkupAmount, getConvenienceFee } from "@/lib/pricing";
+import { saveBookingSession } from "@/lib/booking-session";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -35,7 +36,7 @@ interface PassengerInfo {
   phone:     string;
 }
 
-type BookingStep = "rooms" | "details" | "confirming" | "confirmed" | "failed";
+type BookingStep = "rooms" | "details" | "failed";
 
 // ── Amenity icons ──────────────────────────────────────────────────────────────
 const AMENITY_ICONS: Record<string, JSX.Element> = {
@@ -85,13 +86,13 @@ const PLACEHOLDER = "https://images.unsplash.com/photo-1566073771259-6a850609994
 
 // ── Step indicator ─────────────────────────────────────────────────────────────
 const STEP_LABELS: Record<string, string> = {
-  rooms:     "Select Room",
-  details:   "Your Details",
-  confirmed: "Confirmation",
+  rooms:   "Select Room",
+  details: "Your Details",
+  payment: "Payment",
 };
 
 function stepIndex(step: BookingStep): number {
-  return ["rooms", "details", "confirming", "confirmed", "failed"].indexOf(step);
+  return ["rooms", "details", "failed"].indexOf(step);
 }
 
 // ── Main component ─────────────────────────────────────────────────────────────
@@ -151,7 +152,6 @@ export default function HotelDetail() {
     firstName: "", lastName: "", email: "", phone: "",
   });
   const [formErrors,   setFormErrors]   = useState<Partial<Record<keyof PassengerInfo, string>>>({});
-  const [bookingRef,   setBookingRef]   = useState("");
   const [bookingError, setBookingError] = useState("");
 
   // ── Pricing ────────────────────────────────────────────
@@ -199,57 +199,60 @@ export default function HotelDetail() {
       .finally(() => setLoadingRooms(false));
   }, [id, checkin, checkout, guests]);
 
-  // ── Booking handler ────────────────────────────────────
-  const handleBookNow = useCallback(async () => {
+  // ── Booking handler — save session and proceed to payment ─────────
+  const handleBookNow = useCallback(() => {
     const errs = validatePassenger(passenger);
     if (Object.keys(errs).length > 0) { setFormErrors(errs); return; }
     setFormErrors({});
 
-    if (!selectedRoom?.rateKey) {
-      setBookingError("Room selection failed — rateKey missing. Please go back and select a room.");
+    if (!selectedRoom) {
+      setBookingError("Please select a room first.");
       setStep("failed");
       return;
     }
 
+    const rawPrice  = selectedRoom.priceINR;
+    const convFee   = getConvenienceFee(rawPrice, "hotels") * nights;
+    const baseFare  = roomPrice * nights;
+    const totalBase = baseFare + convFee;
 
-    setStep("confirming");
+    saveBookingSession({
+      type:      "hotel",
+      hotelId:   String(hotel!.id),
+      hotelName: hotel!.name,
+      city:      hotel!.city,
+      location:  hotel!.location,
+      stars:     hotel!.stars,
+      rating:    hotel!.rating,
+      image:     hotelImages[0] || "",
+      checkin,
+      checkout,
+      nights,
+      guests:    parseInt(guests) || 2,
+      roomType:  selectedRoom.name,
+      rateKey:   selectedRoom.rateKey,
+      holderFirstName: passenger.firstName,
+      holderLastName:  passenger.lastName,
+      guest: {
+        name:  `${passenger.firstName} ${passenger.lastName}`.trim(),
+        email: passenger.email,
+        phone: passenger.phone,
+      },
+      rawPrice,
+      markupAmt:    effectiveMarkup,
+      baseFare,
+      convFee,
+      totalBase,
+      isAgent:      isAgent || false,
+      agentSavings: savings ?? 0,
+      normalMarkup,
+      agentId:      isAgent ? user?.id    : undefined,
+      agentEmail:   isAgent ? user?.email : undefined,
+    });
 
-    try {
-      const res = await fetch("/api/hotels/book", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          rateKey:      selectedRoom.rateKey,
-          hotelId:      hotel?.id,
-          hotelName:    hotel?.name,
-          holder:       { name: passenger.firstName, surname: passenger.lastName },
-          paxes:        [{ roomId: 1, type: "AD", name: passenger.firstName, surname: passenger.lastName }],
-          contactEmail: passenger.email,
-          contactPhone: passenger.phone,
-        }),
-      });
-
-      const data = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        setBookingError(data.error || `Booking failed (${res.status}). Please try again.`);
-        setStep("failed");
-        return;
-      }
-
-      const ref =
-        data?.booking?.reference        ||
-        data?.booking?.bookingReference  ||
-        data?.booking?.clientReference   ||
-        `DFG-${Date.now()}`;
-
-      setBookingRef(ref);
-      setStep("confirmed");
-    } catch (err: any) {
-      setBookingError("Network error. Please check your connection and try again.");
-      setStep("failed");
-    }
-  }, [selectedRoom, passenger, hotel]);
+    setLocation("/booking/payment");
+  }, [selectedRoom, passenger, hotel, nights, guests, roomPrice, hotelImages,
+      checkin, checkout, effectiveMarkup, normalMarkup, savings, isAgent, user, setLocation]);
 
   // ── Hotel not found ────────────────────────────────────
   if (!hotel) {
@@ -289,11 +292,9 @@ export default function HotelDetail() {
 
           {/* Progress steps */}
           <div className="flex items-center gap-2 mt-3">
-            {(["rooms", "details", "confirmed"] as const).map((s, i) => {
-              const currentIdx = stepIndex(step);
-              const thisIdx    = stepIndex(s as BookingStep);
-              const active     = step === s || (step === "confirming" && s === "details");
-              const done       = currentIdx > thisIdx && step !== "failed";
+            {(["rooms", "details", "payment"] as const).map((s, i) => {
+              const active = (s === "rooms" && step === "rooms") || (s === "details" && step === "details");
+              const done   = (s === "rooms" && step === "details");
               return (
                 <div key={s} className="flex items-center gap-2">
                   <div className={cn(
@@ -655,12 +656,12 @@ export default function HotelDetail() {
                     <div className="pt-2 space-y-2">
                       <Button
                         onClick={handleBookNow}
-                        className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-bold gap-2 text-base"
+                        className="w-full h-12 bg-orange-500 hover:bg-orange-600 text-white font-bold gap-2 text-base"
                       >
-                        Confirm Booking <ChevronRight className="w-5 h-5" />
+                        Continue to Payment <ChevronRight className="w-5 h-5" />
                       </Button>
                       <p className="text-[11px] text-center text-muted-foreground">
-                        By confirming, you agree to the hotel's cancellation policy.
+                        You'll complete payment securely via Razorpay on the next step.
                       </p>
                     </div>
                   </CardContent>
@@ -742,89 +743,6 @@ export default function HotelDetail() {
                   </Card>
                 </div>
               </div>
-            </div>
-          )}
-
-          {/* ══════════════════════ STEP: CONFIRMING ════════════════ */}
-          {step === "confirming" && (
-            <div className="flex items-center justify-center py-24">
-              <div className="text-center space-y-4">
-                <Loader2 className="w-14 h-14 animate-spin text-blue-600 mx-auto" />
-                <p className="font-bold text-slate-900 text-lg">Confirming your booking…</p>
-                <p className="text-muted-foreground text-sm">Please don't close this page.</p>
-              </div>
-            </div>
-          )}
-
-          {/* ══════════════════════ STEP: CONFIRMED ═════════════════ */}
-          {step === "confirmed" && (
-            <div className="max-w-lg mx-auto py-10">
-              <Card className="shadow-lg border border-green-200 overflow-hidden">
-                <div className="bg-green-600 text-white p-7 text-center">
-                  <CheckCircle2 className="w-14 h-14 mx-auto mb-3" />
-                  <h2 className="text-2xl font-extrabold">Booking Confirmed!</h2>
-                  <p className="text-green-100 text-sm mt-1">Your hotel room has been reserved.</p>
-                </div>
-
-                <CardContent className="p-6 space-y-5">
-                  <div className="bg-slate-50 rounded-xl p-4 text-center">
-                    <p className="text-xs text-muted-foreground mb-1">Booking Reference</p>
-                    <p className="text-2xl font-extrabold text-slate-900 tracking-wider">{bookingRef}</p>
-                  </div>
-
-                  <div className="space-y-3 text-sm">
-                    <div className="flex items-start gap-3">
-                      <Building2 className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
-                      <div>
-                        <p className="font-semibold text-slate-800">{hotel.name}</p>
-                        <p className="text-xs text-muted-foreground">{hotel.location}, {hotel.city}</p>
-                      </div>
-                    </div>
-
-                    {selectedRoom && (
-                      <div className="flex items-start gap-3">
-                        <BedDouble className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
-                        <div>
-                          <p className="font-semibold text-slate-800">{selectedRoom.name}</p>
-                          <p className="text-xs text-muted-foreground">{selectedRoom.boardName}</p>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="flex items-start gap-3">
-                      <Calendar className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
-                      <div>
-                        <p className="font-semibold text-slate-800">
-                          {formatDate(checkin)} → {formatDate(checkout)}
-                        </p>
-                        <p className="text-xs text-muted-foreground">{nights} night{nights > 1 ? "s" : ""}</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-3">
-                      <User className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
-                      <div>
-                        <p className="font-semibold text-slate-800">
-                          {passenger.firstName} {passenger.lastName}
-                        </p>
-                        <p className="text-xs text-muted-foreground">{passenger.email}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="pt-3 border-t flex justify-between items-center">
-                    <span className="font-bold text-slate-900">Total</span>
-                    <span className="text-2xl font-extrabold text-slate-900">₹{totalPrice.toLocaleString()}</span>
-                  </div>
-
-                  <Button
-                    onClick={() => setLocation("/hotels")}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold"
-                  >
-                    Browse More Hotels
-                  </Button>
-                </CardContent>
-              </Card>
             </div>
           )}
 

@@ -984,14 +984,11 @@ export default function BookingPayment() {
             toast({ variant: "destructive", title: "Booking Failed", description: flightBookResult?.error, duration: 8000 });
             return;
           }
-        } else {
-          // ── Bus / Hotel: existing flow (createBooking → DB save) ────────────
-          const booking = session.type === "bus"
-            ? buildBusBooking(session as BusBookingSession, paymentId, bookingRef, bookingUserId)
-            : buildHotelBooking(session as HotelBookingSession, paymentId, bookingRef, bookingUserId);
-
+        } else if (session.type === "bus") {
+          // ── Bus: save to DB ────────────────────────────────────────────────
+          const busBooking = buildBusBooking(session as BusBookingSession, paymentId, bookingRef, bookingUserId);
           try {
-            await createBooking.mutateAsync({ data: booking });
+            await createBooking.mutateAsync({ data: busBooking });
           } catch (err) {
             console.error("Booking save failed:", err);
             const refundResult = await attemptRefund(paymentId, totalAfterCoupon, "booking_save_failed");
@@ -1000,11 +997,72 @@ export default function BookingPayment() {
               ? `Payment successful but booking failed. Refund initiated — allow 5–7 business days. Payment ID: ${paymentId}`
               : `Payment successful but booking failed. Refund will be processed manually. Payment ID: ${paymentId} — please contact support.`;
             setPaymentError(refundMsg);
-            toast({
-              title:       "Refund Initiated",
-              description: `₹${totalAfterCoupon.toLocaleString("en-IN")} will be refunded to your account.`,
-              duration: 12000,
-            });
+            toast({ title: "Refund Initiated", description: `₹${totalAfterCoupon.toLocaleString("en-IN")} will be refunded to your account.`, duration: 12000 });
+            return;
+          }
+        } else {
+          // ── Hotel: confirm with HotelBeds (if rateKey present) then save to DB
+          const hs = session as HotelBookingSession;
+          const hotelBooking = buildHotelBooking(hs, paymentId, bookingRef, bookingUserId);
+
+          if (hs.rateKey) {
+            try {
+              const hbRes = await fetch("/api/hotels/book", {
+                method:  "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  rateKey:      hs.rateKey,
+                  hotelId:      parseInt(hs.hotelId),
+                  hotelName:    hs.hotelName,
+                  holder: {
+                    name:    hs.holderFirstName || hs.guest.name.split(" ")[0] || hs.guest.name,
+                    surname: hs.holderLastName  || hs.guest.name.split(" ").slice(1).join(" ") || ".",
+                  },
+                  paxes: [{
+                    roomId: 1, type: "AD",
+                    name:    hs.holderFirstName || hs.guest.name.split(" ")[0] || hs.guest.name,
+                    surname: hs.holderLastName  || hs.guest.name.split(" ").slice(1).join(" ") || ".",
+                  }],
+                  contactEmail: hs.guest.email,
+                  contactPhone: hs.guest.phone,
+                }),
+              });
+              const hbData = await hbRes.json().catch(() => ({}));
+              if (!hbRes.ok) {
+                const refundResult = await attemptRefund(paymentId, totalAfterCoupon, "hotelbeds_booking_failed");
+                setProcessing(false);
+                const refundMsg = refundResult.initiated
+                  ? `Hotel booking failed: ${hbData.error || "Could not confirm with hotel"}. Refund initiated — allow 5–7 business days. Payment ID: ${paymentId}`
+                  : `Hotel booking failed. Refund will be processed manually. Payment ID: ${paymentId} — please contact support.`;
+                setPaymentError(refundMsg);
+                toast({ variant: "destructive", title: "Hotel Booking Failed", description: hbData.error || "Could not confirm with hotel. Refund initiated.", duration: 8000 });
+                return;
+              }
+              const hbRef = hbData?.booking?.reference || hbData?.booking?.bookingReference || hbData?.booking?.clientReference;
+              if (hbRef) (hotelBooking as any).details.hbBookingRef = hbRef;
+            } catch {
+              const refundResult = await attemptRefund(paymentId, totalAfterCoupon, "hotelbeds_booking_network_error");
+              setProcessing(false);
+              const refundMsg = refundResult.initiated
+                ? `Hotel booking failed (network error). Refund initiated — allow 5–7 business days. Payment ID: ${paymentId}`
+                : `Hotel booking failed. Refund will be processed manually. Payment ID: ${paymentId} — please contact support.`;
+              setPaymentError(refundMsg);
+              toast({ variant: "destructive", title: "Hotel Booking Failed", description: "Network error during hotel confirmation.", duration: 8000 });
+              return;
+            }
+          }
+
+          try {
+            await createBooking.mutateAsync({ data: hotelBooking });
+          } catch (err) {
+            console.error("Booking save failed:", err);
+            const refundResult = await attemptRefund(paymentId, totalAfterCoupon, "booking_save_failed");
+            setProcessing(false);
+            const refundMsg = refundResult.initiated
+              ? `Payment successful but booking failed to save. Refund initiated — allow 5–7 business days. Payment ID: ${paymentId}`
+              : `Payment successful but booking failed. Refund will be processed manually. Payment ID: ${paymentId} — please contact support.`;
+            setPaymentError(refundMsg);
+            toast({ title: "Refund Initiated", description: `₹${totalAfterCoupon.toLocaleString("en-IN")} will be refunded to your account.`, duration: 12000 });
             return;
           }
         }
