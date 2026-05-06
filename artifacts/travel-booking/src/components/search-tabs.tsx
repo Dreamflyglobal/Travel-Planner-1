@@ -191,8 +191,8 @@ export function SearchTabs({
             onTabChange?.(val);
           }}
         >
-          <TabsList className="scrollbar-hide flex w-full overflow-x-auto gap-1 px-1 h-auto sm:grid sm:grid-cols-7 sm:overflow-visible sm:gap-0 sm:px-1 sm:h-14 bg-gray-100/80 rounded-lg p-1">
-            <TabsTrigger value="flights" className="shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 py-2 sm:px-2 sm:py-1 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary text-xs sm:text-sm font-semibold rounded-md">
+          <TabsList className="scrollbar-hide flex w-full overflow-x-auto gap-1 py-1 h-auto sm:grid sm:grid-cols-7 sm:overflow-visible sm:gap-0 sm:h-14 bg-gray-100/80 rounded-lg sm:p-1">
+            <TabsTrigger value="flights" className="ml-1 sm:ml-0 shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 py-2 sm:px-2 sm:py-1 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary text-xs sm:text-sm font-semibold rounded-md">
               <Plane className="w-4 h-4 shrink-0" /> Flights
             </TabsTrigger>
             <TabsTrigger value="hotels" className="shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 py-2 sm:px-2 sm:py-1 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary text-xs sm:text-sm font-semibold rounded-md">
@@ -210,7 +210,7 @@ export function SearchTabs({
             <TabsTrigger value="trains" className="shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 py-2 sm:px-2 sm:py-1 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary text-xs sm:text-sm font-semibold rounded-md">
               <Train className="w-4 h-4 shrink-0" /> Trains
             </TabsTrigger>
-            <TabsTrigger value="activities" className="shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 py-2 sm:px-2 sm:py-1 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary text-xs sm:text-sm font-semibold rounded-md">
+            <TabsTrigger value="activities" className="mr-1 sm:mr-0 shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 py-2 sm:px-2 sm:py-1 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary text-xs sm:text-sm font-semibold rounded-md">
               <Compass className="w-4 h-4 shrink-0" /> Activities
             </TabsTrigger>
           </TabsList>
