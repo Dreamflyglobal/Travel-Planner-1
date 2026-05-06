@@ -191,27 +191,27 @@ export function SearchTabs({
             onTabChange?.(val);
           }}
         >
-          <TabsList className="scrollbar-hide flex w-full overflow-x-auto gap-1 py-1 h-auto sm:grid sm:grid-cols-7 sm:overflow-visible sm:gap-0 sm:h-14 bg-gray-100/80 rounded-lg sm:p-1">
-            <TabsTrigger value="flights" className="ml-1 sm:ml-0 shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 py-2 sm:px-2 sm:py-1 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary text-xs sm:text-sm font-semibold rounded-md">
-              <Plane className="w-4 h-4 shrink-0" /> Flights
+          <TabsList className="grid grid-cols-4 gap-1 p-1 h-auto sm:grid-cols-7 sm:h-14 bg-gray-100/80 rounded-lg">
+            <TabsTrigger value="flights" className="flex flex-col items-center justify-center gap-0.5 py-2 px-1 h-auto sm:flex-row sm:gap-1.5 sm:px-2 sm:py-1 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary text-xs sm:text-sm font-semibold rounded-md w-full">
+              <Plane className="w-4 h-4 shrink-0" /><span>Flights</span>
             </TabsTrigger>
-            <TabsTrigger value="hotels" className="shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 py-2 sm:px-2 sm:py-1 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary text-xs sm:text-sm font-semibold rounded-md">
-              <Building2 className="w-4 h-4 shrink-0" /> Hotels
+            <TabsTrigger value="hotels" className="flex flex-col items-center justify-center gap-0.5 py-2 px-1 h-auto sm:flex-row sm:gap-1.5 sm:px-2 sm:py-1 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary text-xs sm:text-sm font-semibold rounded-md w-full">
+              <Building2 className="w-4 h-4 shrink-0" /><span>Hotels</span>
             </TabsTrigger>
-            <TabsTrigger value="buses" className="shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 py-2 sm:px-2 sm:py-1 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary text-xs sm:text-sm font-semibold rounded-md">
-              <Bus className="w-4 h-4 shrink-0" /> Buses
+            <TabsTrigger value="buses" className="flex flex-col items-center justify-center gap-0.5 py-2 px-1 h-auto sm:flex-row sm:gap-1.5 sm:px-2 sm:py-1 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary text-xs sm:text-sm font-semibold rounded-md w-full">
+              <Bus className="w-4 h-4 shrink-0" /><span>Buses</span>
             </TabsTrigger>
-            <TabsTrigger value="packages" className="shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 py-2 sm:px-2 sm:py-1 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary text-xs sm:text-sm font-semibold rounded-md">
-              <Map className="w-4 h-4 shrink-0" /> Holidays
+            <TabsTrigger value="packages" className="flex flex-col items-center justify-center gap-0.5 py-2 px-1 h-auto sm:flex-row sm:gap-1.5 sm:px-2 sm:py-1 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary text-xs sm:text-sm font-semibold rounded-md w-full">
+              <Map className="w-4 h-4 shrink-0" /><span>Holidays</span>
             </TabsTrigger>
-            <TabsTrigger value="cars" className="shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 py-2 sm:px-2 sm:py-1 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary text-xs sm:text-sm font-semibold rounded-md">
-              <Car className="w-4 h-4 shrink-0" /> Cars
+            <TabsTrigger value="cars" className="col-start-1 sm:col-auto flex flex-col items-center justify-center gap-0.5 py-2 px-1 h-auto sm:flex-row sm:gap-1.5 sm:px-2 sm:py-1 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary text-xs sm:text-sm font-semibold rounded-md w-full">
+              <Car className="w-4 h-4 shrink-0" /><span>Cars</span>
             </TabsTrigger>
-            <TabsTrigger value="trains" className="shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 py-2 sm:px-2 sm:py-1 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary text-xs sm:text-sm font-semibold rounded-md">
-              <Train className="w-4 h-4 shrink-0" /> Trains
+            <TabsTrigger value="trains" className="flex flex-col items-center justify-center gap-0.5 py-2 px-1 h-auto sm:flex-row sm:gap-1.5 sm:px-2 sm:py-1 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary text-xs sm:text-sm font-semibold rounded-md w-full">
+              <Train className="w-4 h-4 shrink-0" /><span>Trains</span>
             </TabsTrigger>
-            <TabsTrigger value="activities" className="mr-1 sm:mr-0 shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 py-2 sm:px-2 sm:py-1 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary text-xs sm:text-sm font-semibold rounded-md">
-              <Compass className="w-4 h-4 shrink-0" /> Activities
+            <TabsTrigger value="activities" className="flex flex-col items-center justify-center gap-0.5 py-2 px-1 h-auto sm:flex-row sm:gap-1.5 sm:px-2 sm:py-1 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary text-xs sm:text-sm font-semibold rounded-md w-full">
+              <Compass className="w-4 h-4 shrink-0" /><span>Activities</span>
             </TabsTrigger>
           </TabsList>
 
