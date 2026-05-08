@@ -1,5 +1,6 @@
 import jsPDF from "jspdf";
 import { APP_NAME, APP_SUPPORT_PHONE, APP_SUPPORT_EMAIL, APP_INITIALS } from "@/lib/app-config";
+import { sanitizeLocation } from "@/lib/location-utils";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -214,7 +215,7 @@ export function generateInvoicePDF(data: InvoiceData): void {
       ? `${data.flightAirline}${data.flightNumber ? ` (${data.flightNumber})` : ""}`
       : data.title.slice(0, 36);
     svcRows.push(["Airline", airlineLabel]);
-    if (data.flightFrom && data.flightTo) svcRows.push(["Route", `${data.flightFrom} → ${data.flightTo}`]);
+    if (data.flightFrom && data.flightTo) svcRows.push(["Route", `${sanitizeLocation(data.flightFrom) || data.flightFrom} \u2192 ${sanitizeLocation(data.flightTo) || data.flightTo}`]);
     svcRows.push(["Travel Date", dateStr(data.travelDate)]);
     if (data.flightDeparture) svcRows.push(["Departure", data.flightDeparture]);
     if (data.flightArrival)   svcRows.push(["Arrival",   data.flightArrival]);
@@ -226,7 +227,7 @@ export function generateInvoicePDF(data: InvoiceData): void {
       ? `${data.busOperator}${data.busType ? ` (${data.busType})` : ""}`
       : data.title.slice(0, 36);
     svcRows.push(["Operator", opLabel]);
-    if (data.busFrom && data.busTo) svcRows.push(["Route", `${data.busFrom} → ${data.busTo}`]);
+    if (data.busFrom && data.busTo) svcRows.push(["Route", `${sanitizeLocation(data.busFrom) || data.busFrom} \u2192 ${sanitizeLocation(data.busTo) || data.busTo}`]);
     svcRows.push(["Travel Date", dateStr(data.travelDate)]);
     const boardingLabel = data.busBoardingPoint
       ? `${data.busBoardingPoint}${data.busDeparture ? ` @ ${data.busDeparture}` : ""}`
@@ -240,7 +241,7 @@ export function generateInvoicePDF(data: InvoiceData): void {
     svcRows.push(["Passengers", String(data.passengers)]);
   } else if (isHotel) {
     if (data.hotelName) svcRows.push(["Hotel Name", data.hotelName.length > 28 ? data.hotelName.slice(0, 28) + "…" : data.hotelName]);
-    if (data.hotelCity) svcRows.push(["City", data.hotelCity]);
+    if (data.hotelCity) svcRows.push(["City", sanitizeLocation(data.hotelCity) || data.hotelCity]);
     svcRows.push(["Check-in",  dateStr(data.travelDate)]);
     if (data.checkoutDate) svcRows.push(["Check-out", dateStr(data.checkoutDate)]);
     if (data.hotelNights)  svcRows.push(["Nights", String(data.hotelNights)]);

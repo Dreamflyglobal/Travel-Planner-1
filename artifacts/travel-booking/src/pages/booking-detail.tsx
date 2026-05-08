@@ -26,6 +26,7 @@ import {
   BedDouble,
 } from "lucide-react";
 import { generateInvoicePDF } from "@/lib/invoice";
+import { sanitizeLocation, formatRoute } from "@/lib/location-utils";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -476,7 +477,7 @@ export default function BookingDetail() {
                   <div>
                     <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1"><MapPin className="w-3 h-3" /> Route</p>
                     <p className="font-bold text-base">
-                      {booking.flightFrom || "—"} → {booking.flightTo || "—"}
+                      {formatRoute(booking.flightFrom, booking.flightTo) || "—"}
                     </p>
                   </div>
                 )}
@@ -501,7 +502,7 @@ export default function BookingDetail() {
                         <span className="w-2 h-2 rounded-full bg-green-500" />
                         <span className="text-xs font-bold text-green-700 uppercase">Departure</span>
                       </div>
-                      <p className="font-bold text-base text-green-900">{booking.flightFrom || "—"}</p>
+                      <p className="font-bold text-base text-green-900">{sanitizeLocation(booking.flightFrom) || "—"}</p>
                       <p className="text-sm text-slate-500 mt-0.5 font-medium">{booking.flightDeparture}</p>
                     </div>
                   )}
@@ -511,7 +512,7 @@ export default function BookingDetail() {
                         <span className="w-2 h-2 rounded-full bg-red-500" />
                         <span className="text-xs font-bold text-red-700 uppercase">Arrival</span>
                       </div>
-                      <p className="font-bold text-base text-red-900">{booking.flightTo || "—"}</p>
+                      <p className="font-bold text-base text-red-900">{sanitizeLocation(booking.flightTo) || "—"}</p>
                       <p className="text-sm text-slate-500 mt-0.5 font-medium">{booking.flightArrival}</p>
                     </div>
                   )}
@@ -545,7 +546,7 @@ export default function BookingDetail() {
                 {(booking.busFrom || booking.busTo) && (
                   <div>
                     <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1"><MapPin className="w-3 h-3" /> Route</p>
-                    <p className="font-bold text-base">{booking.busFrom || "—"} → {booking.busTo || "—"}</p>
+                    <p className="font-bold text-base">{formatRoute(booking.busFrom, booking.busTo) || "—"}</p>
                   </div>
                 )}
                 <div>

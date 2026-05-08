@@ -2,6 +2,7 @@ import nodemailer from "nodemailer";
 import { logger } from "./logger.js";
 import type { FlightTicketData } from "./ticket-pdf.js";
 import { APP_NAME, APP_TAGLINE_LONG, APP_SUPPORT_PHONE, APP_SUPPORT_EMAIL, APP_DEFAULT_FROM, APP_INITIALS } from "./app-config.js";
+import { sanitizeLocation } from "./location-utils.js";
 
 function createTransport() {
   const user = (process.env.SMTP_USER || "").trim();
@@ -26,6 +27,8 @@ function createTransport() {
 // ── Legacy flight-specific email ─────────────────────────────────────────────
 
 function bookingEmailHTML(ticket: FlightTicketData): string {
+  const fromCity = sanitizeLocation(ticket.from) || ticket.from;
+  const toCity   = sanitizeLocation(ticket.to)   || ticket.to;
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -65,13 +68,13 @@ function bookingEmailHTML(ticket: FlightTicketData): string {
   <div class="hero">
     <p style="margin:0 0 8px;font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.05em">Booking ID: ${ticket.bookingId}</p>
     <div class="route">
-      <div class="city">${ticket.from}</div>
+      <div class="city">${fromCity}</div>
       <div class="arrow">
         <span>${ticket.duration}</span>
-        →
+        &#8594;
         <span>Non-stop</span>
       </div>
-      <div class="city">${ticket.to}</div>
+      <div class="city">${toCity}</div>
     </div>
     <div style="margin-top:12px;">
       <span class="badge">✓ Confirmed</span>
@@ -127,7 +130,7 @@ export async function sendBookingConfirmationEmail(
     await transport.sendMail({
       from: `"${APP_NAME} Tickets" <${from}>`,
       to:   ticket.passengerEmail,
-      subject: `✈ Booking Confirmed: ${ticket.from} → ${ticket.to} · ${ticket.bookingId}`,
+      subject: `✈ Booking Confirmed: ${sanitizeLocation(ticket.from) || ticket.from} to ${sanitizeLocation(ticket.to) || ticket.to} · ${ticket.bookingId}`,
       html: bookingEmailHTML(ticket),
       attachments: [
         {

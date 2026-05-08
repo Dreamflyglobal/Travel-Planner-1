@@ -1,5 +1,6 @@
 import { APP_NAME, APP_TAGLINE } from "./app-config.js";
 import PDFDocument from "pdfkit";
+import { sanitizeLocation, formatRoutePdfSafe } from "./location-utils.js";
 
 export interface FlightTicketData {
   bookingId:     string;
@@ -57,6 +58,10 @@ export function generateFlightTicketPDF(ticket: FlightTicketData): Promise<Buffe
     doc.on("end",   () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
+    // Sanitize route strings — strips encoding artifacts, IATA codes, normalises case
+    const fromCity = sanitizeLocation(ticket.from) || ticket.from;
+    const toCity   = sanitizeLocation(ticket.to)   || ticket.to;
+
     const W = 595;
     const margin = 50;
 
@@ -94,14 +99,14 @@ export function generateFlightTicketPDF(ticket: FlightTicketData): Promise<Buffe
     const col1 = margin;
     const col3 = W - margin - 80;
 
-    // FROM
-    doc.font("Helvetica-Bold").fontSize(36).fillColor(BLUE).text(ticket.from, col1, routeY, { width: 140 });
+    // FROM — use sanitized city name
+    doc.font("Helvetica-Bold").fontSize(36).fillColor(BLUE).text(fromCity, col1, routeY, { width: 140 });
     doc.font("Helvetica").fontSize(9).fillColor(GRAY).text("ORIGIN", col1, routeY + 42);
 
     // departure time
     doc.font("Helvetica-Bold").fontSize(13).fillColor("#1E293B").text(ticket.departure, col1, routeY + 56);
 
-    // Arrow + duration
+    // Arrow + duration (drawn as lines — no Unicode issues)
     const midX = W / 2 - 50;
     doc.font("Helvetica").fontSize(9).fillColor(GRAY).text(ticket.duration, midX, routeY + 14, { width: 100, align: "center" });
     doc
@@ -121,8 +126,8 @@ export function generateFlightTicketPDF(ticket: FlightTicketData): Promise<Buffe
 
     doc.font("Helvetica").fontSize(9).fillColor(GRAY).text("NON-STOP", midX, routeY + 38, { width: 100, align: "center" });
 
-    // TO
-    doc.font("Helvetica-Bold").fontSize(36).fillColor(BLUE).text(ticket.to, col3, routeY, { width: 140, align: "right" });
+    // TO — use sanitized city name
+    doc.font("Helvetica-Bold").fontSize(36).fillColor(BLUE).text(toCity, col3, routeY, { width: 140, align: "right" });
     doc.font("Helvetica").fontSize(9).fillColor(GRAY).text("DESTINATION", col3, routeY + 42, { width: 140, align: "right" });
     doc.font("Helvetica-Bold").fontSize(13).fillColor("#1E293B").text(ticket.arrival, col3, routeY + 56, { width: 140, align: "right" });
 
@@ -182,7 +187,7 @@ export function generateFlightTicketPDF(ticket: FlightTicketData): Promise<Buffe
       .fillColor("#1E293B")
       .text(ticket.bookingId, stripeX, barcodeY + 72, { width: 140, align: "center" });
 
-    // Stub text
+    // Stub text — use ASCII-safe route (PDFKit standard fonts don't support →)
     doc
       .font("Helvetica-Bold")
       .fontSize(14)
@@ -192,7 +197,7 @@ export function generateFlightTicketPDF(ticket: FlightTicketData): Promise<Buffe
       .font("Helvetica")
       .fontSize(9)
       .fillColor(GRAY)
-      .text(`${ticket.from}  →  ${ticket.to}   •   ${ticket.departure}`, margin, barcodeY + 40);
+      .text(`${fromCity}  to  ${toCity}   |   ${ticket.departure}`, margin, barcodeY + 40);
     doc
       .font("Helvetica-Bold")
       .fontSize(11)

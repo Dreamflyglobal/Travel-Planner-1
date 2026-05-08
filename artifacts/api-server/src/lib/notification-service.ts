@@ -15,6 +15,7 @@ import { logger } from "./logger.js";
 import { sendGeneralBookingEmail, type GeneralBookingEmailData } from "./email-service.js";
 import { sendWhatsAppNotification, type WhatsAppBookingData } from "./whatsapp-service.js";
 import { APP_NAME, APP_SUPPORT_PHONE } from "./app-config.js";
+import { sanitizeLocation } from "./location-utils.js";
 
 // ── Shared data shape ─────────────────────────────────────────────────────────
 
@@ -75,7 +76,9 @@ function buildSmsBody(data: BookingNotificationData): string {
 
   let detail = "";
   if ((data.bookingType === "flight" || data.bookingType === "bus") && data.from && data.to) {
-    detail = ` | ${data.from} to ${data.to}`;
+    const fromCity = sanitizeLocation(data.from) || data.from;
+    const toCity   = sanitizeLocation(data.to)   || data.to;
+    detail = ` | ${fromCity} to ${toCity}`;
   } else if (data.bookingType === "hotel" && data.hotelName) {
     detail = ` | ${data.hotelName}`;
   }

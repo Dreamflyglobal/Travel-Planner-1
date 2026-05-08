@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { generateInvoicePDF } from "@/lib/invoice";
+import { sanitizeLocation, formatRoute } from "@/lib/location-utils";
 
 // ── Seat label converter ──────────────────────────────────────────────────────
 const SEAT_COLS = ["A", "B", "C", "D"];
@@ -632,12 +633,12 @@ export default function InvoiceView() {
             {/* Route visual */}
             {(invoice.flightFrom || invoice.flightTo) && (
               <div className="flex items-center gap-3 mb-6">
-                <RouteChip label="Departure" place={invoice.flightFrom || "—"} time={invoice.flightDeparture} color="blue" />
+                <RouteChip label="Departure" place={sanitizeLocation(invoice.flightFrom) || "—"} time={invoice.flightDeparture} color="blue" />
                 <div className="flex-shrink-0 flex flex-col items-center gap-1">
                   <Plane className="w-5 h-5 text-slate-300 rotate-90 sm:rotate-0" />
                   <div className="w-12 h-px bg-slate-200" />
                 </div>
-                <RouteChip label="Arrival" place={invoice.flightTo || "—"} time={invoice.flightArrival} color="red" />
+                <RouteChip label="Arrival" place={sanitizeLocation(invoice.flightTo) || "—"} time={invoice.flightArrival} color="red" />
               </div>
             )}
 
@@ -680,7 +681,7 @@ export default function InvoiceView() {
                 {(invoice.busFrom || invoice.busTo) && (
                   <div className="ml-auto text-right">
                     <p className="text-slate-400 text-xs">Route</p>
-                    <p className="font-bold text-slate-700 text-sm">{invoice.busFrom} → {invoice.busTo}</p>
+                    <p className="font-bold text-slate-700 text-sm">{formatRoute(invoice.busFrom, invoice.busTo)}</p>
                   </div>
                 )}
               </div>
@@ -690,8 +691,8 @@ export default function InvoiceView() {
             <div className="flex items-stretch gap-3 mb-6">
               <RouteChip
                 label="Boarding Point"
-                place={invoice.busBoardingPoint || invoice.busFrom || "—"}
-                sublabel={invoice.busFrom || undefined}
+                place={sanitizeLocation(invoice.busBoardingPoint || invoice.busFrom) || "—"}
+                sublabel={sanitizeLocation(invoice.busFrom) || undefined}
                 time={invoice.busDeparture}
                 color="green"
                 mapQuery={invoice.busBoardingPoint || invoice.busFrom}
@@ -701,8 +702,8 @@ export default function InvoiceView() {
               </div>
               <RouteChip
                 label="Dropping Point"
-                place={invoice.busDroppingPoint || invoice.busTo || "—"}
-                sublabel={invoice.busTo || undefined}
+                place={sanitizeLocation(invoice.busDroppingPoint || invoice.busTo) || "—"}
+                sublabel={sanitizeLocation(invoice.busTo) || undefined}
                 time={invoice.busArrival}
                 color="red"
                 mapQuery={invoice.busDroppingPoint || invoice.busTo}

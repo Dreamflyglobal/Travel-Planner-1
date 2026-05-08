@@ -14,6 +14,7 @@ import {
   CheckCircle2, Clock, XCircle, Package, ChevronDown, ChevronUp,
   Filter,
 } from "lucide-react";
+import { sanitizeLocation, formatRoute } from "@/lib/location-utils";
 import {
   generateInvoicePDF,
   openWhatsAppConfirmation,
@@ -340,7 +341,7 @@ function InvoiceRow({ booking, onView, onDownload, onPrint, onEmail, onWhatsApp 
                   {booking.bookingType === "flight" && (
                     <>
                       {fi.airline   && <div className="flex justify-between"><span className="text-slate-500">Airline</span><span className="font-semibold">{fi.airline} {fi.flightNum}</span></div>}
-                      {fi.from && fi.to && <div className="flex justify-between"><span className="text-slate-500">Route</span><span className="font-semibold">{fi.from} → {fi.to}</span></div>}
+                      {fi.from && fi.to && <div className="flex justify-between"><span className="text-slate-500">Route</span><span className="font-semibold">{formatRoute(fi.from, fi.to)}</span></div>}
                       {fi.departure && <div className="flex justify-between"><span className="text-slate-500">Departure</span><span className="font-semibold">{fi.departure}</span></div>}
                       {fi.arrival   && <div className="flex justify-between"><span className="text-slate-500">Arrival</span><span className="font-semibold">{fi.arrival}</span></div>}
                       <div className="flex justify-between"><span className="text-slate-500">Passengers</span><span className="font-semibold">{booking.passengers}</span></div>
@@ -359,7 +360,7 @@ function InvoiceRow({ booking, onView, onDownload, onPrint, onEmail, onWhatsApp 
                     <>
                       {bi.operator   && <div className="flex justify-between"><span className="text-slate-500">Operator</span><span className="font-semibold">{bi.operator}</span></div>}
                       {bi.busType    && <div className="flex justify-between"><span className="text-slate-500">Bus Type</span><span className="font-semibold">{bi.busType}</span></div>}
-                      {bi.from && bi.to && <div className="flex justify-between"><span className="text-slate-500">Route</span><span className="font-semibold">{bi.from} → {bi.to}</span></div>}
+                      {bi.from && bi.to && <div className="flex justify-between"><span className="text-slate-500">Route</span><span className="font-semibold">{formatRoute(bi.from, bi.to)}</span></div>}
                       <div className="flex justify-between"><span className="text-slate-500">Passengers</span><span className="font-semibold">{booking.passengers}</span></div>
                     </>
                   )}

@@ -1,6 +1,7 @@
 import twilio from "twilio";
 import { logger } from "./logger.js";
 import { APP_NAME, APP_TAGLINE_LONG, APP_SUPPORT_PHONE, APP_SUPPORT_EMAIL } from "./app-config.js";
+import { sanitizeLocation } from "./location-utils.js";
 
 export interface WhatsAppBookingData {
   bookingId:      string;
@@ -54,29 +55,33 @@ function buildMessage(data: WhatsAppBookingData): string {
   const firstName = data.passengerName.split(" ")[0];
   const pdfLink   = data.invoiceUrl || "";
 
+  // Sanitize route strings before building message
+  const fromCity = sanitizeLocation(data.from) || data.from || "";
+  const toCity   = sanitizeLocation(data.to)   || data.to   || "";
+
   // Type-specific service info block
   let serviceBlock = "";
   const type = data.bookingType;
 
   if (type === "flight") {
     const airline  = data.airline   ? `✈️ *Airline:* ${data.airline}${data.flightNum ? ` (${data.flightNum})` : ""}\n` : "";
-    const route    = data.from && data.to ? `📍 *Route:* ${data.from} → ${data.to}\n` : "";
+    const route    = fromCity && toCity ? `📍 *Route:* ${fromCity} → ${toCity}\n` : "";
     const dep      = data.flightDeparture ? `🕐 *Departure:* ${data.flightDeparture}\n` : "";
     const arr      = data.flightArrival   ? `🕑 *Arrival:* ${data.flightArrival}\n`    : "";
     serviceBlock   = airline + route + dep + arr;
   } else if (type === "bus") {
     const operator = data.busOperator ? `🚌 *Operator:* ${data.busOperator}${data.busType ? ` (${data.busType})` : ""}\n` : "";
-    const route    = data.from && data.to ? `📍 *Route:* ${data.from} → ${data.to}\n` : "";
+    const route    = fromCity && toCity ? `📍 *Route:* ${fromCity} → ${toCity}\n` : "";
     const boarding = data.boardingPoint ? `🟢 *Boarding:* ${data.boardingPoint}${data.busDeparture ? ` at ${data.busDeparture}` : ""}\n` : "";
     const dropping = data.droppingPoint ? `🔴 *Dropping:* ${data.droppingPoint}${data.busArrival   ? ` at ${data.busArrival}`   : ""}\n` : "";
     serviceBlock   = operator + route + boarding + dropping;
   } else if (type === "hotel") {
-    const hotel    = data.hotelName  ? `🏨 *Hotel:* ${data.hotelName}\n`          : "";
-    const city     = data.hotelCity  ? `📍 *City:* ${data.hotelCity}\n`           : "";
-    const nights   = data.hotelNights ? `🌙 *Nights:* ${data.hotelNights}\n`      : "";
+    const hotel    = data.hotelName  ? `🏨 *Hotel:* ${data.hotelName}\n`                        : "";
+    const city     = data.hotelCity  ? `📍 *City:* ${sanitizeLocation(data.hotelCity) || data.hotelCity}\n` : "";
+    const nights   = data.hotelNights ? `🌙 *Nights:* ${data.hotelNights}\n`                    : "";
     serviceBlock   = hotel + city + nights;
   } else {
-    serviceBlock   = data.from && data.to ? `📍 *Route:* ${data.from} → ${data.to}\n` : "";
+    serviceBlock   = fromCity && toCity ? `📍 *Route:* ${fromCity} → ${toCity}\n` : "";
   }
 
   const downloadLine = pdfLink

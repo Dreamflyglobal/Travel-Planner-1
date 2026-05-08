@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { sanitizeLocation, formatRoute } from "@/lib/location-utils";
 import { Link } from "wouter";
 import {
   Card, CardContent, CardHeader, CardTitle, CardDescription,
@@ -229,7 +230,7 @@ function FlightDetails({ d }: { d: Record<string, any> }) {
         <Plane className="w-8 h-8 text-blue-600 shrink-0" />
         <div className="flex-1 min-w-0">
           <div className="font-bold text-lg text-slate-900">
-            {d.from || d.origin || "—"} → {d.to || d.destination || "—"}
+            {formatRoute(d.from || d.origin, d.to || d.destination) || "—"}
           </div>
           <div className="text-sm text-slate-600">
             {d.airline || d.airlineName || "—"} · {d.flightNumber || d.flight_number || "—"}
@@ -338,7 +339,7 @@ function BusDetails({ d }: { d: Record<string, any> }) {
         <BusIcon className="w-8 h-8 text-green-600 shrink-0" />
         <div className="flex-1 min-w-0">
           <div className="font-bold text-lg text-slate-900">
-            {d.from || d.origin || "—"} → {d.to || d.destination || "—"}
+            {formatRoute(d.from || d.origin, d.to || d.destination) || "—"}
           </div>
           <div className="text-sm text-slate-600">
             {d.operator || d.busName || d.name || "—"} · {d.busType || ""}

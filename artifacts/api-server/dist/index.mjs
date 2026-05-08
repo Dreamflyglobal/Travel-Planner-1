@@ -157504,6 +157504,24 @@ import twilio4 from "twilio";
 
 // src/lib/email-service.ts
 import nodemailer2 from "nodemailer";
+
+// src/lib/location-utils.ts
+function sanitizeLocation(raw) {
+  if (!raw) return "";
+  let s2 = String(raw).trim();
+  s2 = s2.replace(/!['\u2019\u0060\u0027;,\s]/g, " ");
+  s2 = s2.replace(/[\u2018\u2019\u201c\u201d\uFFFD\u00e2\u0086\u0092]/g, "");
+  s2 = s2.replace(/\u2192/g, " ");
+  s2 = s2.replace(/&rarr;|&#8594;|&#x2192;/gi, " ");
+  s2 = s2.replace(/\s*\([A-Z]{3,4}\)\s*/g, " ");
+  s2 = s2.replace(/\s+[A-Z]{3}$/, "");
+  s2 = s2.replace(/[^\w\s,.\-]/g, " ");
+  s2 = s2.replace(/\s+/g, " ").trim();
+  s2 = s2.split(" ").map((w) => w.length > 0 ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : "").join(" ");
+  return s2;
+}
+
+// src/lib/email-service.ts
 function createTransport() {
   const user = (process.env.SMTP_USER || "").trim();
   const pass = (process.env.SMTP_PASS || "").trim();
@@ -157522,6 +157540,8 @@ function createTransport() {
   });
 }
 function bookingEmailHTML(ticket) {
+  const fromCity = sanitizeLocation(ticket.from) || ticket.from;
+  const toCity = sanitizeLocation(ticket.to) || ticket.to;
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -157561,13 +157581,13 @@ function bookingEmailHTML(ticket) {
   <div class="hero">
     <p style="margin:0 0 8px;font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.05em">Booking ID: ${ticket.bookingId}</p>
     <div class="route">
-      <div class="city">${ticket.from}</div>
+      <div class="city">${fromCity}</div>
       <div class="arrow">
         <span>${ticket.duration}</span>
-        \u2192
+        &#8594;
         <span>Non-stop</span>
       </div>
-      <div class="city">${ticket.to}</div>
+      <div class="city">${toCity}</div>
     </div>
     <div style="margin-top:12px;">
       <span class="badge">\u2713 Confirmed</span>
@@ -157617,7 +157637,7 @@ async function sendBookingConfirmationEmail(ticket, pdfBuffer) {
     await transport.sendMail({
       from: `"${APP_NAME} Tickets" <${from}>`,
       to: ticket.passengerEmail,
-      subject: `\u2708 Booking Confirmed: ${ticket.from} \u2192 ${ticket.to} \xB7 ${ticket.bookingId}`,
+      subject: `\u2708 Booking Confirmed: ${sanitizeLocation(ticket.from) || ticket.from} to ${sanitizeLocation(ticket.to) || ticket.to} \xB7 ${ticket.bookingId}`,
       html: bookingEmailHTML(ticket),
       attachments: [
         {
@@ -157787,12 +157807,14 @@ function buildMessage(data) {
   const amount = data.amount.toLocaleString("en-IN");
   const firstName = data.passengerName.split(" ")[0];
   const pdfLink = data.invoiceUrl || "";
+  const fromCity = sanitizeLocation(data.from) || data.from || "";
+  const toCity = sanitizeLocation(data.to) || data.to || "";
   let serviceBlock = "";
   const type = data.bookingType;
   if (type === "flight") {
     const airline = data.airline ? `\u2708\uFE0F *Airline:* ${data.airline}${data.flightNum ? ` (${data.flightNum})` : ""}
 ` : "";
-    const route = data.from && data.to ? `\u{1F4CD} *Route:* ${data.from} \u2192 ${data.to}
+    const route = fromCity && toCity ? `\u{1F4CD} *Route:* ${fromCity} \u2192 ${toCity}
 ` : "";
     const dep = data.flightDeparture ? `\u{1F550} *Departure:* ${data.flightDeparture}
 ` : "";
@@ -157802,7 +157824,7 @@ function buildMessage(data) {
   } else if (type === "bus") {
     const operator = data.busOperator ? `\u{1F68C} *Operator:* ${data.busOperator}${data.busType ? ` (${data.busType})` : ""}
 ` : "";
-    const route = data.from && data.to ? `\u{1F4CD} *Route:* ${data.from} \u2192 ${data.to}
+    const route = fromCity && toCity ? `\u{1F4CD} *Route:* ${fromCity} \u2192 ${toCity}
 ` : "";
     const boarding = data.boardingPoint ? `\u{1F7E2} *Boarding:* ${data.boardingPoint}${data.busDeparture ? ` at ${data.busDeparture}` : ""}
 ` : "";
@@ -157812,13 +157834,13 @@ function buildMessage(data) {
   } else if (type === "hotel") {
     const hotel = data.hotelName ? `\u{1F3E8} *Hotel:* ${data.hotelName}
 ` : "";
-    const city = data.hotelCity ? `\u{1F4CD} *City:* ${data.hotelCity}
+    const city = data.hotelCity ? `\u{1F4CD} *City:* ${sanitizeLocation(data.hotelCity) || data.hotelCity}
 ` : "";
     const nights = data.hotelNights ? `\u{1F319} *Nights:* ${data.hotelNights}
 ` : "";
     serviceBlock = hotel + city + nights;
   } else {
-    serviceBlock = data.from && data.to ? `\u{1F4CD} *Route:* ${data.from} \u2192 ${data.to}
+    serviceBlock = fromCity && toCity ? `\u{1F4CD} *Route:* ${fromCity} \u2192 ${toCity}
 ` : "";
   }
   const downloadLine = pdfLink ? `
@@ -158093,7 +158115,9 @@ function buildSmsBody(data) {
   const amount = `Rs.${data.totalAmount.toLocaleString("en-IN")}`;
   let detail = "";
   if ((data.bookingType === "flight" || data.bookingType === "bus") && data.from && data.to) {
-    detail = ` | ${data.from} to ${data.to}`;
+    const fromCity = sanitizeLocation(data.from) || data.from;
+    const toCity = sanitizeLocation(data.to) || data.to;
+    detail = ` | ${fromCity} to ${toCity}`;
   } else if (data.bookingType === "hotel" && data.hotelName) {
     detail = ` | ${data.hotelName}`;
   }
@@ -158475,6 +158499,8 @@ function generateFlightTicketPDF(ticket) {
     doc.on("data", (c) => chunks.push(c));
     doc.on("end", () => resolve2(Buffer.concat(chunks)));
     doc.on("error", reject);
+    const fromCity = sanitizeLocation(ticket.from) || ticket.from;
+    const toCity = sanitizeLocation(ticket.to) || ticket.to;
     const W = 595;
     const margin = 50;
     doc.rect(0, 0, W, 90).fill(BLUE);
@@ -158486,7 +158512,7 @@ function generateFlightTicketPDF(ticket) {
     const routeY = 110;
     const col1 = margin;
     const col3 = W - margin - 80;
-    doc.font("Helvetica-Bold").fontSize(36).fillColor(BLUE).text(ticket.from, col1, routeY, { width: 140 });
+    doc.font("Helvetica-Bold").fontSize(36).fillColor(BLUE).text(fromCity, col1, routeY, { width: 140 });
     doc.font("Helvetica").fontSize(9).fillColor(GRAY).text("ORIGIN", col1, routeY + 42);
     doc.font("Helvetica-Bold").fontSize(13).fillColor("#1E293B").text(ticket.departure, col1, routeY + 56);
     const midX = W / 2 - 50;
@@ -158494,7 +158520,7 @@ function generateFlightTicketPDF(ticket) {
     doc.moveTo(midX, routeY + 30).lineTo(midX + 100, routeY + 30).strokeColor(BLUE).lineWidth(1.5).stroke();
     doc.moveTo(midX + 90, routeY + 25).lineTo(midX + 100, routeY + 30).lineTo(midX + 90, routeY + 35).strokeColor(BLUE).lineWidth(1.5).stroke();
     doc.font("Helvetica").fontSize(9).fillColor(GRAY).text("NON-STOP", midX, routeY + 38, { width: 100, align: "center" });
-    doc.font("Helvetica-Bold").fontSize(36).fillColor(BLUE).text(ticket.to, col3, routeY, { width: 140, align: "right" });
+    doc.font("Helvetica-Bold").fontSize(36).fillColor(BLUE).text(toCity, col3, routeY, { width: 140, align: "right" });
     doc.font("Helvetica").fontSize(9).fillColor(GRAY).text("DESTINATION", col3, routeY + 42, { width: 140, align: "right" });
     doc.font("Helvetica-Bold").fontSize(13).fillColor("#1E293B").text(ticket.arrival, col3, routeY + 56, { width: 140, align: "right" });
     let y = 222;
@@ -158528,7 +158554,7 @@ function generateFlightTicketPDF(ticket) {
     }
     doc.font("Courier").fontSize(8).fillColor("#1E293B").text(ticket.bookingId, stripeX, barcodeY + 72, { width: 140, align: "center" });
     doc.font("Helvetica-Bold").fontSize(14).fillColor(BLUE).text("BOARDING PASS", margin, barcodeY + 20);
-    doc.font("Helvetica").fontSize(9).fillColor(GRAY).text(`${ticket.from}  \u2192  ${ticket.to}   \u2022   ${ticket.departure}`, margin, barcodeY + 40);
+    doc.font("Helvetica").fontSize(9).fillColor(GRAY).text(`${fromCity}  to  ${toCity}   |   ${ticket.departure}`, margin, barcodeY + 40);
     doc.font("Helvetica-Bold").fontSize(11).fillColor("#1E293B").text(ticket.passengerName, margin, barcodeY + 58);
     const footerY = 760;
     doc.rect(0, footerY, W, 82).fill(BLUE);
