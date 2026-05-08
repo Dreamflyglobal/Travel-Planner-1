@@ -85,7 +85,7 @@ function storeInvoice(inv: StoredInvoice) {
   localStorage.setItem(LS_KEY, JSON.stringify(list));
 }
 
-function invoiceNumber(bookingId: string) {
+export function invoiceNumber(bookingId: string) {
   return `DFG-INV-${bookingId.replace(/[^A-Z0-9]/gi, "").toUpperCase().slice(-8)}`;
 }
 
