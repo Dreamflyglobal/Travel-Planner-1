@@ -8,6 +8,13 @@ import {
 import { and, desc, eq, ilike, inArray, or } from "drizzle-orm";
 import { logger } from "../lib/logger.js";
 import { requireAdmin } from "../lib/admin-auth.js";
+import {
+  sendBookingEmail,
+  sendBookingSMS,
+  sendBookingWhatsApp,
+  sendAllBookingNotifications,
+  type BookingNotificationData,
+} from "../lib/notification-service.js";
 
 const router = Router();
 
@@ -57,6 +64,7 @@ function shapeBooking(
     travelDate: b.travelDate,
     passengers: b.passengers,
     details: b.details,
+    createdAt: b.createdAt.toISOString(),
     refund: refund
       ? {
           id: refund.id,
@@ -67,6 +75,42 @@ function shapeBooking(
           createdAt: refund.createdAt.toISOString(),
         }
       : null,
+  };
+}
+
+// ── Helper: build BookingNotificationData from a DB row ─────────────────────
+function buildNotificationData(b: typeof bookingsTable.$inferSelect): BookingNotificationData {
+  const d = (b.details ?? {}) as Record<string, any>;
+  return {
+    bookingId:      b.bookingRef ?? String(b.id),
+    bookingType:    (b.bookingType as "flight" | "bus" | "hotel" | "package"),
+    passengerName:  b.passengerName,
+    passengerEmail: b.passengerEmail || undefined,
+    passengerPhone: b.passengerPhone || undefined,
+    travelDate:     b.travelDate,
+    totalAmount:    Number(b.totalPrice),
+    paymentId:      b.paymentId ?? "",
+    passengers:     b.passengers,
+    title:          b.title || undefined,
+    // flight
+    from:           d.from || d.origin || d.departure?.airport || undefined,
+    to:             d.to   || d.destination || d.arrival?.airport || undefined,
+    airline:        d.airline || d.airlineName || undefined,
+    flightNumber:   d.flightNumber || d.flight_number || undefined,
+    flightDeparture: d.departureTime || d.departure?.time || undefined,
+    flightArrival:   d.arrivalTime   || d.arrival?.time  || undefined,
+    flightDuration:  d.duration      || undefined,
+    // bus
+    busOperator:    d.operator || d.busName || undefined,
+    busType:        d.busType  || undefined,
+    boardingPoint:  d.boardingPoint || undefined,
+    droppingPoint:  d.droppingPoint || undefined,
+    busDeparture:   d.departure || d.departureTime || undefined,
+    busArrival:     d.arrival   || d.arrivalTime   || undefined,
+    // hotel
+    hotelName:  d.hotelName  || d.name   || undefined,
+    hotelCity:  d.city       || d.hotelCity || undefined,
+    hotelNights: d.nights    || undefined,
   };
 }
 
@@ -352,6 +396,86 @@ router.post("/admin/refund", requireAdmin, async (req, res) => {
   } catch (err) {
     logger.error({ err }, "[admin-bookings] refund failed");
     return res.status(500).json({ success: false, error: "Refund failed" });
+  }
+});
+
+// ── POST /api/admin/bookings/:id/resend ──────────────────────────────────────
+// Body: { channel: "email" | "sms" | "whatsapp" | "all" }
+router.post("/admin/bookings/:id/resend", requireAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ success: false, error: "Invalid booking id" });
+    }
+    const channel = String(req.body?.channel ?? "all").trim().toLowerCase();
+    if (!["email", "sms", "whatsapp", "all"].includes(channel)) {
+      return res.status(400).json({ success: false, error: "channel must be email | sms | whatsapp | all" });
+    }
+
+    const rows = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, error: "Booking not found" });
+    }
+    const booking = rows[0];
+    const data = buildNotificationData(booking);
+
+    let results: Record<string, { sent: boolean; reason?: string }> = {};
+
+    if (channel === "all") {
+      results = await sendAllBookingNotifications(data);
+    } else if (channel === "email") {
+      results.email = await sendBookingEmail(data);
+    } else if (channel === "sms") {
+      results.sms = await sendBookingSMS(data);
+    } else if (channel === "whatsapp") {
+      results.whatsapp = await sendBookingWhatsApp(data);
+    }
+
+    logger.info({ id, channel, results }, "[admin-bookings] resend notifications");
+    return res.json({ success: true, channel, results });
+  } catch (err) {
+    logger.error({ err }, "[admin-bookings] resend failed");
+    return res.status(500).json({ success: false, error: "Resend failed" });
+  }
+});
+
+// ── POST /api/admin/bookings/:id/notes ───────────────────────────────────────
+// Body: { note: string }
+// Appends an admin note to details.adminNotes[].
+router.post("/admin/bookings/:id/notes", requireAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ success: false, error: "Invalid booking id" });
+    }
+    const note = String(req.body?.note ?? "").trim();
+    if (!note) {
+      return res.status(400).json({ success: false, error: "note is required" });
+    }
+    const adminEmail = (req as any).admin?.email ?? "admin";
+
+    const rows = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, error: "Booking not found" });
+    }
+    const booking = rows[0];
+    const existingDetails = (booking.details ?? {}) as Record<string, any>;
+    const adminNotes: Array<{ note: string; addedAt: string; addedBy: string }> =
+      Array.isArray(existingDetails.adminNotes) ? existingDetails.adminNotes : [];
+
+    const newNote = { note, addedAt: new Date().toISOString(), addedBy: adminEmail };
+    adminNotes.push(newNote);
+
+    await db
+      .update(bookingsTable)
+      .set({ details: { ...existingDetails, adminNotes } })
+      .where(eq(bookingsTable.id, id));
+
+    logger.info({ id, addedBy: adminEmail }, "[admin-bookings] note added");
+    return res.json({ success: true, note: newNote, adminNotes });
+  } catch (err) {
+    logger.error({ err }, "[admin-bookings] add note failed");
+    return res.status(500).json({ success: false, error: "Failed to add note" });
   }
 });
 

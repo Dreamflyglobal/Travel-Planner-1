@@ -160379,6 +160379,7 @@ function shapeBooking(b, refund) {
     travelDate: b.travelDate,
     passengers: b.passengers,
     details: b.details,
+    createdAt: b.createdAt.toISOString(),
     refund: refund ? {
       id: refund.id,
       status: refund.status,
@@ -160387,6 +160388,40 @@ function shapeBooking(b, refund) {
       errorMessage: refund.errorMessage,
       createdAt: refund.createdAt.toISOString()
     } : null
+  };
+}
+function buildNotificationData(b) {
+  const d = b.details ?? {};
+  return {
+    bookingId: b.bookingRef ?? String(b.id),
+    bookingType: b.bookingType,
+    passengerName: b.passengerName,
+    passengerEmail: b.passengerEmail || void 0,
+    passengerPhone: b.passengerPhone || void 0,
+    travelDate: b.travelDate,
+    totalAmount: Number(b.totalPrice),
+    paymentId: b.paymentId ?? "",
+    passengers: b.passengers,
+    title: b.title || void 0,
+    // flight
+    from: d.from || d.origin || d.departure?.airport || void 0,
+    to: d.to || d.destination || d.arrival?.airport || void 0,
+    airline: d.airline || d.airlineName || void 0,
+    flightNumber: d.flightNumber || d.flight_number || void 0,
+    flightDeparture: d.departureTime || d.departure?.time || void 0,
+    flightArrival: d.arrivalTime || d.arrival?.time || void 0,
+    flightDuration: d.duration || void 0,
+    // bus
+    busOperator: d.operator || d.busName || void 0,
+    busType: d.busType || void 0,
+    boardingPoint: d.boardingPoint || void 0,
+    droppingPoint: d.droppingPoint || void 0,
+    busDeparture: d.departure || d.departureTime || void 0,
+    busArrival: d.arrival || d.arrivalTime || void 0,
+    // hotel
+    hotelName: d.hotelName || d.name || void 0,
+    hotelCity: d.city || d.hotelCity || void 0,
+    hotelNights: d.nights || void 0
   };
 }
 router22.get("/admin/bookings", requireAdmin, async (req, res) => {
@@ -160605,6 +160640,67 @@ router22.post("/admin/refund", requireAdmin, async (req, res) => {
   } catch (err) {
     logger.error({ err }, "[admin-bookings] refund failed");
     return res.status(500).json({ success: false, error: "Refund failed" });
+  }
+});
+router22.post("/admin/bookings/:id/resend", requireAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ success: false, error: "Invalid booking id" });
+    }
+    const channel = String(req.body?.channel ?? "all").trim().toLowerCase();
+    if (!["email", "sms", "whatsapp", "all"].includes(channel)) {
+      return res.status(400).json({ success: false, error: "channel must be email | sms | whatsapp | all" });
+    }
+    const rows = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, error: "Booking not found" });
+    }
+    const booking = rows[0];
+    const data = buildNotificationData(booking);
+    let results = {};
+    if (channel === "all") {
+      results = await sendAllBookingNotifications(data);
+    } else if (channel === "email") {
+      results.email = await sendBookingEmail(data);
+    } else if (channel === "sms") {
+      results.sms = await sendBookingSMS(data);
+    } else if (channel === "whatsapp") {
+      results.whatsapp = await sendBookingWhatsApp(data);
+    }
+    logger.info({ id, channel, results }, "[admin-bookings] resend notifications");
+    return res.json({ success: true, channel, results });
+  } catch (err) {
+    logger.error({ err }, "[admin-bookings] resend failed");
+    return res.status(500).json({ success: false, error: "Resend failed" });
+  }
+});
+router22.post("/admin/bookings/:id/notes", requireAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ success: false, error: "Invalid booking id" });
+    }
+    const note = String(req.body?.note ?? "").trim();
+    if (!note) {
+      return res.status(400).json({ success: false, error: "note is required" });
+    }
+    const adminEmail = req.admin?.email ?? "admin";
+    const rows = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, error: "Booking not found" });
+    }
+    const booking = rows[0];
+    const existingDetails = booking.details ?? {};
+    const adminNotes = Array.isArray(existingDetails.adminNotes) ? existingDetails.adminNotes : [];
+    const newNote = { note, addedAt: (/* @__PURE__ */ new Date()).toISOString(), addedBy: adminEmail };
+    adminNotes.push(newNote);
+    await db.update(bookingsTable).set({ details: { ...existingDetails, adminNotes } }).where(eq(bookingsTable.id, id));
+    logger.info({ id, addedBy: adminEmail }, "[admin-bookings] note added");
+    return res.json({ success: true, note: newNote, adminNotes });
+  } catch (err) {
+    logger.error({ err }, "[admin-bookings] add note failed");
+    return res.status(500).json({ success: false, error: "Failed to add note" });
   }
 });
 var admin_bookings_default = router22;
