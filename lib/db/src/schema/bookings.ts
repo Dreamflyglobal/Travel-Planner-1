@@ -38,6 +38,10 @@ export const bookingsTable = pgTable("bookings", {
   razorpayOrderId: text("razorpay_order_id"), // Razorpay order ID
   razorpaySignature: text("razorpay_signature"), // Payment verification signature
   emiDetails: jsonb("emi_details"), // EMI tenure, monthly amount, etc.
+  // Fare breakdown columns (stored top-level for fast aggregation)
+  baseFare: numeric("base_fare", { precision: 10, scale: 2 }),         // raw supplier fare before any markup
+  markupAmount: numeric("markup_amount", { precision: 10, scale: 2 }), // hidden platform margin
+  convenienceFee: numeric("convenience_fee", { precision: 10, scale: 2 }), // visible checkout fee
   // Booking lifecycle tracking (separate from payment)
   bookingStatus: text("booking_status").notNull().default("confirmed"),
   // pending | processing | confirmed | failed

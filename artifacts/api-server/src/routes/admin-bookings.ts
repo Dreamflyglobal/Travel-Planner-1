@@ -51,6 +51,18 @@ function shapeBooking(
   b: typeof bookingsTable.$inferSelect,
   refund: typeof bookingRefundsTable.$inferSelect | undefined,
 ) {
+  const d = (b.details as Record<string, any>) ?? {};
+  // Fare breakdown — prefer dedicated columns, fall back to JSONB for legacy rows
+  const baseFare = (b as any).baseFare != null
+    ? Number((b as any).baseFare)
+    : Number(d.rawBaseAmount ?? d.base_price ?? 0) || null;
+  const markupAmount = (b as any).markupAmount != null
+    ? Number((b as any).markupAmount)
+    : Number(d.markupAmount ?? d.markup ?? 0) || null;
+  const convenienceFee = (b as any).convenienceFee != null
+    ? Number((b as any).convenienceFee)
+    : Number(d.convenienceFee ?? d.convenience_fee ?? 0) || null;
+
   return {
     id: b.id,
     bookingRef: b.bookingRef,
@@ -61,6 +73,9 @@ function shapeBooking(
     serviceType: b.bookingType,
     title: b.title,
     amount: Number(b.totalPrice),
+    baseFare,
+    markupAmount,
+    convenienceFee,
     status: b.status,
     bookingStatus: (b as any).bookingStatus ?? "confirmed",
     failureReason: (b as any).failureReason ?? null,

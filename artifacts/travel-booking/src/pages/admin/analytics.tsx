@@ -22,7 +22,23 @@ function formatDate(iso?: string) {
 }
 
 const getAmount = (b: any): number =>
-  b.totalPrice ?? b.amount ?? b.details?.amount ?? 0;
+  Number(b.totalPrice ?? b.amount ?? b.details?.amount ?? 0);
+
+const getMarkup = (b: any): number =>
+  Number(b.markupAmount ?? b.details?.markupAmount ?? b.details?.markup ?? 0);
+
+const getConvFee = (b: any): number =>
+  Number(b.convenienceFee ?? b.details?.convenienceFee ?? b.details?.convenience_fee ?? 0);
+
+const getNetProfit = (b: any): number =>
+  getMarkup(b) + getConvFee(b) - (Number(b.commissionEarned) || Number(b.details?.commissionEarned) || 0);
+
+const isActive = (b: any): boolean => {
+  const s  = (b.status        || "").toLowerCase();
+  const bs = (b.bookingStatus || "").toLowerCase();
+  const ps = (b.paymentStatus || "").toLowerCase();
+  return s !== "booking_failed" && s !== "refunded" && s !== "cancelled" && bs !== "failed" && ps !== "failed";
+};
 
 const getBookingDate = (b: any): string =>
   b.createdAt?.slice(0, 10) ?? b.details?.createdAt?.slice(0, 10) ?? b.travelDate ?? "";
@@ -131,26 +147,35 @@ export default function AdminAnalytics() {
     [bookings]
   );
 
+  // Financial metrics are only computed over active (non-failed/refunded/cancelled) bookings
+  const activeBookings = useMemo(() => bookings.filter(isActive), [bookings]);
+
   const totalRevenue = useMemo(
-    () => bookings.reduce((sum, b) => sum + getAmount(b), 0),
-    [bookings]
+    () => activeBookings.reduce((sum, b) => sum + getAmount(b), 0),
+    [activeBookings]
   );
 
   const confirmedRevenue = useMemo(
-    () => confirmed.reduce((sum, b) => sum + getAmount(b), 0),
+    () => confirmed.filter(isActive).reduce((sum, b) => sum + getAmount(b), 0),
     [confirmed]
   );
 
+  const totalNetProfit = useMemo(
+    () => activeBookings.reduce((sum, b) => sum + getNetProfit(b), 0),
+    [activeBookings]
+  );
+
   const byType = useMemo(() => {
-    const map: Record<string, { count: number; revenue: number }> = {};
-    for (const b of bookings) {
+    const map: Record<string, { count: number; revenue: number; profit: number }> = {};
+    for (const b of activeBookings) {
       const t = (b.bookingType || b.type || "flight").toLowerCase();
-      if (!map[t]) map[t] = { count: 0, revenue: 0 };
+      if (!map[t]) map[t] = { count: 0, revenue: 0, profit: 0 };
       map[t].count++;
       map[t].revenue += getAmount(b);
+      map[t].profit  += getNetProfit(b);
     }
     return map;
-  }, [bookings]);
+  }, [activeBookings]);
 
   const now = new Date();
   const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
@@ -158,21 +183,21 @@ export default function AdminAnalytics() {
   const todayStr = now.toISOString().slice(0, 10);
 
   const bookingsThisMonth = useMemo(
-    () => bookings.filter((b) => getBookingDate(b) >= thisMonthStart),
-    [bookings, thisMonthStart]
+    () => activeBookings.filter((b) => getBookingDate(b) >= thisMonthStart),
+    [activeBookings, thisMonthStart]
   );
 
   const bookingsLastMonth = useMemo(
-    () => bookings.filter((b) => {
+    () => activeBookings.filter((b) => {
       const d = getBookingDate(b);
       return d >= lastMonthStart && d < thisMonthStart;
     }),
-    [bookings, lastMonthStart, thisMonthStart]
+    [activeBookings, lastMonthStart, thisMonthStart]
   );
 
   const bookingsToday = useMemo(
-    () => bookings.filter((b) => getBookingDate(b) === todayStr),
-    [bookings, todayStr]
+    () => activeBookings.filter((b) => getBookingDate(b) === todayStr),
+    [activeBookings, todayStr]
   );
 
   const revenueThisMonth = useMemo(
@@ -242,7 +267,7 @@ export default function AdminAnalytics() {
         ) : (
           <>
             {/* Top KPI cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
               <StatCard
                 icon={BookOpen}
                 label="Total Bookings"
@@ -253,19 +278,27 @@ export default function AdminAnalytics() {
               />
               <StatCard
                 icon={IndianRupee}
-                label="Total Revenue"
+                label="Revenue (Active)"
                 value={formatINR(totalRevenue)}
                 sub={`${formatINR(revenueThisMonth)} this month`}
                 color="text-green-700"
                 bg="bg-green-100"
               />
               <StatCard
+                icon={TrendingUp}
+                label="Net Profit"
+                value={formatINR(totalNetProfit)}
+                sub={`${totalRevenue > 0 ? ((totalNetProfit / totalRevenue) * 100).toFixed(1) : "0.0"}% margin`}
+                color="text-emerald-700"
+                bg="bg-emerald-100"
+              />
+              <StatCard
                 icon={CheckCircle2}
                 label="Confirmed"
                 value={confirmed.length}
                 sub={`${formatINR(confirmedRevenue)} confirmed revenue`}
-                color="text-emerald-700"
-                bg="bg-emerald-100"
+                color="text-teal-700"
+                bg="bg-teal-100"
               />
               <StatCard
                 icon={XCircle}
@@ -309,7 +342,7 @@ export default function AdminAnalytics() {
                         label={meta.label}
                         count={byType[key]?.count || 0}
                         revenue={byType[key]?.revenue || 0}
-                        total={total}
+                        total={activeBookings.length}
                         icon={meta.icon}
                         color={meta.color}
                         bg={meta.bg}
@@ -382,7 +415,8 @@ export default function AdminAnalytics() {
               <CardHeader className="pb-2">
                 <CardTitle className="text-base font-bold flex items-center gap-2">
                   <TrendingUp className="w-4 h-4 text-primary" />
-                  Service-wise Revenue Breakdown
+                  Service-wise Revenue & Profit Breakdown
+                  <span className="ml-1 text-xs font-normal text-muted-foreground">(failed/cancelled excluded)</span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
@@ -395,19 +429,24 @@ export default function AdminAnalytics() {
                         <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground">Confirmed</th>
                         <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground">Cancelled</th>
                         <th className="text-right px-4 py-3 text-xs font-semibold text-green-700">Revenue</th>
+                        <th className="text-right px-4 py-3 text-xs font-semibold text-amber-600">Markup</th>
+                        <th className="text-right px-4 py-3 text-xs font-semibold text-emerald-700">Net Profit</th>
                         <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground">Avg. Booking</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y">
                       {Object.entries(TYPE_META).map(([key, meta]) => {
                         const Icon = meta.icon;
-                        const svcBs = bookings.filter((b) => (b.bookingType || b.type || "").toLowerCase() === key);
+                        const allSvc = bookings.filter((b) => (b.bookingType || b.type || "").toLowerCase() === key);
+                        const svcBs  = allSvc.filter(isActive);
                         const svcRev = svcBs.reduce((s, b) => s + getAmount(b), 0);
-                        const svcConfirmed = svcBs.filter((b) => {
+                        const svcMkp = svcBs.reduce((s, b) => s + getMarkup(b), 0);
+                        const svcPft = svcBs.reduce((s, b) => s + getNetProfit(b), 0);
+                        const svcConfirmed = allSvc.filter((b) => {
                           const s = (b.status || b.paymentStatus || "").toLowerCase();
                           return s === "confirmed" || s === "paid";
                         }).length;
-                        const svcCancelled = svcBs.filter((b) =>
+                        const svcCancelled = allSvc.filter((b) =>
                           (b.status || b.paymentStatus || "").toLowerCase() === "cancelled"
                         ).length;
                         const avg = svcBs.length > 0 ? Math.round(svcRev / svcBs.length) : 0;
@@ -425,6 +464,12 @@ export default function AdminAnalytics() {
                             <td className="px-4 py-3 text-right font-bold text-green-700">
                               {svcRev > 0 ? formatINR(svcRev) : "—"}
                             </td>
+                            <td className="px-4 py-3 text-right font-semibold text-amber-600">
+                              {svcMkp > 0 ? formatINR(svcMkp) : "—"}
+                            </td>
+                            <td className="px-4 py-3 text-right font-bold text-emerald-700">
+                              {svcPft > 0 ? formatINR(svcPft) : "—"}
+                            </td>
                             <td className="px-4 py-3 text-right text-muted-foreground">
                               {avg > 0 ? formatINR(avg) : "—"}
                             </td>
@@ -435,12 +480,18 @@ export default function AdminAnalytics() {
                     <tfoot className="bg-muted/30 border-t-2">
                       <tr>
                         <td className="px-4 py-3 font-bold">Total</td>
-                        <td className="px-4 py-3 text-right font-bold">{total}</td>
+                        <td className="px-4 py-3 text-right font-bold">{activeBookings.length}</td>
                         <td className="px-4 py-3 text-right font-bold text-emerald-700">{confirmed.length}</td>
                         <td className="px-4 py-3 text-right font-bold text-red-600">{cancelled.length}</td>
                         <td className="px-4 py-3 text-right font-extrabold text-green-700">{formatINR(totalRevenue)}</td>
+                        <td className="px-4 py-3 text-right font-bold text-amber-600">
+                          {formatINR(activeBookings.reduce((s, b) => s + getMarkup(b), 0))}
+                        </td>
+                        <td className="px-4 py-3 text-right font-extrabold text-emerald-700">
+                          {formatINR(totalNetProfit)}
+                        </td>
                         <td className="px-4 py-3 text-right text-muted-foreground">
-                          {total > 0 ? formatINR(Math.round(totalRevenue / total)) : "—"}
+                          {activeBookings.length > 0 ? formatINR(Math.round(totalRevenue / activeBookings.length)) : "—"}
                         </td>
                       </tr>
                     </tfoot>

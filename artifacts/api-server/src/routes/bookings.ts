@@ -133,14 +133,30 @@ router.get("/bookings", async (req, res): Promise<void> => {
 
     const bookings = await query.orderBy(desc(bookingsTable.createdAt));
 
-    const mapped = bookings.map((b) => ({
-      ...b,
-      totalPrice: Number(b.totalPrice),
-      commissionEarned: b.commissionEarned ? Number(b.commissionEarned) : null,
-      createdAt: b.createdAt.toISOString(),
-      passengerPhone: b.passengerPhone ?? undefined,
-      details: b.details ?? undefined,
-    }));
+    const mapped = bookings.map((b) => {
+      const d = (b.details as Record<string, any>) ?? {};
+      // Expose fare columns with JSONB fallback for legacy bookings
+      const baseFare = (b as any).baseFare != null
+        ? Number((b as any).baseFare)
+        : Number(d.rawBaseAmount ?? d.base_price ?? 0) || null;
+      const markupAmount = (b as any).markupAmount != null
+        ? Number((b as any).markupAmount)
+        : Number(d.markupAmount ?? d.markup ?? 0) || null;
+      const convenienceFee = (b as any).convenienceFee != null
+        ? Number((b as any).convenienceFee)
+        : Number(d.convenienceFee ?? d.convenience_fee ?? 0) || null;
+      return {
+        ...b,
+        totalPrice: Number(b.totalPrice),
+        commissionEarned: b.commissionEarned ? Number(b.commissionEarned) : null,
+        createdAt: b.createdAt.toISOString(),
+        passengerPhone: b.passengerPhone ?? undefined,
+        details: b.details ?? undefined,
+        baseFare,
+        markupAmount,
+        convenienceFee,
+      };
+    });
     res.json(mapped);
   } catch (error) {
     logger.error("❌ Error fetching bookings:", error);
@@ -192,6 +208,21 @@ router.post("/bookings", async (req, res): Promise<void> => {
       ? String(details.commissionEarned || bookingData.commissionEarned)
       : null;
 
+    // Fare breakdown — top-level columns for fast aggregation.
+    // Read from explicit top-level fields first (new bookings), fall back to JSONB variants (legacy).
+    const rawBaseFareNum = Number(
+      bookingData.baseFare ?? details.rawBaseAmount ?? details.base_price ?? 0
+    );
+    const rawMarkupNum = Number(
+      bookingData.markupAmount ?? details.markupAmount ?? details.markup ?? 0
+    );
+    const rawConvFeeNum = Number(
+      bookingData.convenienceFee ?? details.convenienceFee ?? details.convenience_fee ?? 0
+    );
+    const baseFareVal   = rawBaseFareNum  > 0 ? String(rawBaseFareNum)  : null;
+    const markupVal     = rawMarkupNum    > 0 ? String(rawMarkupNum)    : null;
+    const convFeeVal    = rawConvFeeNum   > 0 ? String(rawConvFeeNum)   : null;
+
     const [inserted] = await db
       .insert(bookingsTable)
       .values({
@@ -215,7 +246,10 @@ router.post("/bookings", async (req, res): Promise<void> => {
         paymentMethod,
         paymentStatus: "paid",
         paymentId,
-      })
+        baseFare:       baseFareVal,
+        markupAmount:   markupVal,
+        convenienceFee: convFeeVal,
+      } as any)
       .returning();
 
     logger.info("✅ Booking saved to PostgreSQL:", inserted.id, "| ref:", bookingRef, "| user:", userId);

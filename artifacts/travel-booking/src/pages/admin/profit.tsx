@@ -18,13 +18,35 @@ function loadAgents(): any[] {
   } catch { return []; }
 }
 
-const getAmount       = (b: any): number => b.totalPrice ?? b.amount ?? b.details?.amount ?? 0;
-const getMarkupProfit = (b: any): number => b.details?.markupAmount ?? b.markupAmount ?? 0;
-const getFeeProfit    = (b: any): number => b.details?.convenienceFee ?? b.convenienceFee ?? 0;
-const getFee          = (b: any): number => getMarkupProfit(b) + getFeeProfit(b);
-const getAgentComm    = (b: any): number => Number(b.commissionEarned) || Number(b.details?.commissionEarned) || 0;
+const getAmount = (b: any): number =>
+  Number(b.totalPrice ?? b.amount ?? b.details?.amount ?? 0);
+
+// Prefer dedicated DB columns; fall back through all legacy JSONB field variants
+const getBaseFare = (b: any): number =>
+  Number(b.baseFare ?? b.details?.rawBaseAmount ?? b.details?.base_price ?? 0);
+const getMarkupProfit = (b: any): number =>
+  Number(b.markupAmount ?? b.details?.markupAmount ?? b.details?.markup ?? 0);
+const getFeeProfit = (b: any): number =>
+  Number(b.convenienceFee ?? b.details?.convenienceFee ?? b.details?.convenience_fee ?? 0);
+const getGrossProfit  = (b: any): number => getMarkupProfit(b) + getFeeProfit(b);
+const getAgentComm    = (b: any): number =>
+  Number(b.commissionEarned) || Number(b.details?.commissionEarned) || 0;
 const getBookingDate  = (b: any): string =>
   b.createdAt?.slice(0, 10) ?? b.details?.createdAt?.slice(0, 10) ?? b.travelDate ?? "";
+
+// Only include bookings where payment was collected and the booking wasn't later voided
+const isActiveBooking = (b: any): boolean => {
+  const status        = (b.status        || "").toLowerCase();
+  const bookingStatus = (b.bookingStatus || "").toLowerCase();
+  const paymentStatus = (b.paymentStatus || "").toLowerCase();
+  return (
+    status !== "booking_failed" &&
+    status !== "refunded" &&
+    status !== "cancelled" &&
+    bookingStatus !== "failed" &&
+    paymentStatus !== "failed"
+  );
+};
 
 export default function AdminProfit() {
   const [allBookings, setAllBookings] = useState<any[]>([]);
@@ -62,13 +84,21 @@ export default function AdminProfit() {
     return matchDf && matchDt;
   }), [allBookings, dateFrom, dateTo]);
 
-  const revenue    = filtered.reduce((s, b) => s + getAmount(b), 0);
-  const markup     = filtered.reduce((s, b) => s + getMarkupProfit(b), 0);
-  const fee        = filtered.reduce((s, b) => s + getFeeProfit(b), 0);
-  const profit     = filtered.reduce((s, b) => s + getFee(b), 0);
-  const commission = filtered.reduce((s, b) => s + getAgentComm(b), 0);
+  // Only include non-failed / non-refunded / non-cancelled bookings in financial metrics
+  const activeFiltered = useMemo(
+    () => filtered.filter(isActiveBooking),
+    [filtered],
+  );
+
+  const revenue    = activeFiltered.reduce((s, b) => s + getAmount(b), 0);
+  const baseCost   = activeFiltered.reduce((s, b) => s + getBaseFare(b), 0);
+  const markup     = activeFiltered.reduce((s, b) => s + getMarkupProfit(b), 0);
+  const fee        = activeFiltered.reduce((s, b) => s + getFeeProfit(b), 0);
+  const profit     = activeFiltered.reduce((s, b) => s + getGrossProfit(b), 0);
+  const commission = activeFiltered.reduce((s, b) => s + getAgentComm(b), 0);
   const netProfit  = profit - commission;
   const margin     = revenue > 0 ? ((netProfit / revenue) * 100).toFixed(1) : "0.0";
+  const failedCount = filtered.length - activeFiltered.length;
 
   return (
     <AdminLayout>
@@ -140,7 +170,7 @@ export default function AdminProfit() {
                 </Button>
               )}
               <span className="text-xs text-muted-foreground ml-auto">
-                {loading ? "Loading…" : `${filtered.length} booking${filtered.length !== 1 ? "s" : ""}`}
+                {loading ? "Loading…" : `${activeFiltered.length} active booking${activeFiltered.length !== 1 ? "s" : ""}${failedCount > 0 ? ` · ${failedCount} excluded` : ""}`}
               </span>
             </CardContent>
           </Card>
@@ -159,20 +189,37 @@ export default function AdminProfit() {
             </div>
           ) : (
             <>
+              {/* Excluded bookings notice */}
+              {failedCount > 0 && (
+                <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 text-xs text-amber-700">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span>
+                    <strong>{failedCount}</strong> failed / refunded / cancelled booking{failedCount !== 1 ? "s" : ""} excluded from all financial metrics.
+                  </span>
+                </div>
+              )}
+
               {/* Summary cards */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
                 <Card className="border-2 border-orange-200 bg-orange-50">
                   <CardContent className="p-4">
                     <p className="text-xs font-semibold text-orange-600 uppercase mb-1">Total Revenue</p>
                     <p className="text-xl font-bold text-orange-700">₹{revenue.toLocaleString("en-IN")}</p>
-                    <p className="text-xs text-orange-500 mt-1">Gross collected</p>
+                    <p className="text-xs text-orange-500 mt-1">{activeFiltered.length} active bookings</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-2 border-slate-200 bg-slate-50">
+                  <CardContent className="p-4">
+                    <p className="text-xs font-semibold text-slate-600 uppercase mb-1">Base Supplier Cost</p>
+                    <p className="text-xl font-bold text-slate-700">₹{baseCost.toLocaleString("en-IN")}</p>
+                    <p className="text-xs text-slate-500 mt-1">Raw fare paid to supplier</p>
                   </CardContent>
                 </Card>
                 <Card className="border-2 border-amber-200 bg-amber-50">
                   <CardContent className="p-4">
                     <p className="text-xs font-semibold text-amber-700 uppercase mb-1">Markup Earnings</p>
                     <p className="text-xl font-bold text-amber-700">₹{markup.toLocaleString("en-IN")}</p>
-                    <p className="text-xs text-amber-500 mt-1">Hidden margin</p>
+                    <p className="text-xs text-amber-500 mt-1">Hidden platform margin</p>
                   </CardContent>
                 </Card>
                 <Card className="border-2 border-blue-200 bg-blue-50">
@@ -204,6 +251,7 @@ export default function AdminProfit() {
                   <CardTitle className="text-base flex items-center gap-2">
                     <BarChart2 className="w-4 h-4 text-primary" />
                     Service-wise Profit & Revenue
+                    <span className="ml-2 text-xs font-normal text-muted-foreground">(failed/refunded/cancelled excluded)</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -214,6 +262,7 @@ export default function AdminProfit() {
                           <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Service</th>
                           <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Bookings</th>
                           <th className="text-right px-4 py-3 font-semibold text-orange-600">Revenue (₹)</th>
+                          <th className="text-right px-4 py-3 font-semibold text-slate-600">Base Cost (₹)</th>
                           <th className="text-right px-4 py-3 font-semibold text-amber-600">Markup (₹)</th>
                           <th className="text-right px-4 py-3 font-semibold text-blue-600">Conv. Fee (₹)</th>
                           <th className="text-right px-4 py-3 font-semibold text-red-600">Commission (₹)</th>
@@ -227,13 +276,14 @@ export default function AdminProfit() {
                           { key: "bus",     label: "Buses",    Icon: Bus },
                           { key: "package", label: "Holidays", Icon: Package },
                         ] as const).map(({ key, label, Icon }) => {
-                          const svcBs   = filtered.filter((b) => (b.bookingType || b.type || "").toLowerCase() === key);
+                          const svcBs   = activeFiltered.filter((b) => (b.bookingType || b.type || "").toLowerCase() === key);
                           const svcRev  = svcBs.reduce((s, b) => s + getAmount(b), 0);
+                          const svcBase = svcBs.reduce((s, b) => s + getBaseFare(b), 0);
                           const svcMkp  = svcBs.reduce((s, b) => s + getMarkupProfit(b), 0);
                           const svcFee  = svcBs.reduce((s, b) => s + getFeeProfit(b), 0);
                           const svcComm = svcBs.reduce((s, b) => s + getAgentComm(b), 0);
-                          const svcPft  = svcMkp + svcFee;
-                          const svcNet  = svcPft - svcComm;
+                          const svcGross = svcMkp + svcFee;
+                          const svcNet  = svcGross - svcComm;
                           return (
                             <tr key={key} className="hover:bg-muted/20 transition-colors">
                               <td className="px-4 py-3 font-medium">
@@ -245,6 +295,9 @@ export default function AdminProfit() {
                               <td className="px-4 py-3 text-right font-semibold">{svcBs.length}</td>
                               <td className="px-4 py-3 text-right font-semibold text-orange-600">
                                 {svcRev > 0 ? `₹${svcRev.toLocaleString("en-IN")}` : "—"}
+                              </td>
+                              <td className="px-4 py-3 text-right font-semibold text-slate-600">
+                                {svcBase > 0 ? `₹${svcBase.toLocaleString("en-IN")}` : "—"}
                               </td>
                               <td className="px-4 py-3 text-right font-semibold text-amber-600">
                                 {svcMkp > 0 ? `₹${svcMkp.toLocaleString("en-IN")}` : "—"}
@@ -265,8 +318,9 @@ export default function AdminProfit() {
                       <tfoot className="bg-muted/30 border-t-2">
                         <tr>
                           <td className="px-4 py-3 font-bold">Total</td>
-                          <td className="px-4 py-3 text-right font-bold">{filtered.length}</td>
+                          <td className="px-4 py-3 text-right font-bold">{activeFiltered.length}</td>
                           <td className="px-4 py-3 text-right font-bold text-orange-700">₹{revenue.toLocaleString("en-IN")}</td>
+                          <td className="px-4 py-3 text-right font-bold text-slate-700">₹{baseCost.toLocaleString("en-IN")}</td>
                           <td className="px-4 py-3 text-right font-bold text-amber-700">₹{markup.toLocaleString("en-IN")}</td>
                           <td className="px-4 py-3 text-right font-bold text-blue-700">₹{fee.toLocaleString("en-IN")}</td>
                           <td className="px-4 py-3 text-right font-bold text-red-700">₹{commission.toLocaleString("en-IN")}</td>
@@ -307,7 +361,7 @@ export default function AdminProfit() {
                         </thead>
                         <tbody className="divide-y">
                           {agents.map((agent: any) => {
-                            const agentBs   = filtered.filter((b) =>
+                            const agentBs   = activeFiltered.filter((b) =>
                               b.agentEmail === agent.email ||
                               b.details?.agentEmail === agent.email ||
                               b.passengerEmail === agent.email ||

@@ -351,6 +351,9 @@ export default function BookingPayment() {
     const travelDate = s.date || new Date().toISOString().split("T")[0];
     const commissionEarned = s.isAgent ? (s.agentSavings * s.travelers) : 0;
     const bookedByRole = s.isAgent ? "agent" : user?.role === "staff" ? "staff" : "customer";
+    const rawBaseAmount  = s.rawPrice * s.travelers;
+    const markupAmount   = s.hiddenMarkup * s.travelers;
+    const convenienceFee = s.convFee * s.travelers;
     return {
       bookingType: "flight" as const,
       referenceId: parseInt(s.flightId, 10) || 1,
@@ -359,6 +362,9 @@ export default function BookingPayment() {
       passengerPhone: s.passengers[0].phone,
       passengers: s.travelers,
       travelDate,
+      baseFare: rawBaseAmount,
+      markupAmount,
+      convenienceFee,
       details: {
         userId,
         bookedByRole,
@@ -377,10 +383,10 @@ export default function BookingPayment() {
         extraBaggageKg:  s.extraBaggageKg || undefined,
         extraBaggageCost:s.extraBaggageCost || undefined,
         amount:          totalAfterCoupon,
-        rawBaseAmount:   s.rawPrice * s.travelers,
-        markupAmount:    s.hiddenMarkup * s.travelers,
+        rawBaseAmount,
+        markupAmount,
         baseAmount:      s.baseFare * s.travelers,
-        convenienceFee:  s.convFee * s.travelers,
+        convenienceFee,
         discountAmount:  discount || undefined,
         creditApplied:   creditApplied || undefined,
         paymentMethod:   paymentId.startsWith("wallet") ? "wallet" : creditApplied > 0 ? "credits+razorpay" : "razorpay",
@@ -397,6 +403,9 @@ export default function BookingPayment() {
     const travelDate = s.date || new Date().toISOString().split("T")[0];
     const commissionEarned = s.isAgent ? (s.agentSavings * s.seatCount) : 0;
     const bookedByRole = s.isAgent ? "agent" : user?.role === "staff" ? "staff" : "customer";
+    const rawBaseAmount  = s.rawPrice * s.seatCount;
+    const markupAmount   = s.hiddenMarkup * s.seatCount;
+    const convenienceFee = s.convFee * s.seatCount;
     return {
       bookingType: "bus" as const,
       referenceId: parseInt(s.busId, 10) || 1,
@@ -406,6 +415,9 @@ export default function BookingPayment() {
       passengerPhone: s.passengers[0].phone,
       passengers: s.seatCount,
       travelDate,
+      baseFare: rawBaseAmount,
+      markupAmount,
+      convenienceFee,
       details: {
         userId,
         bookedByRole,
@@ -421,10 +433,10 @@ export default function BookingPayment() {
         customerGender:  s.passengers[0].gender,
         passengerDetails: s.passengers,
         amount:          totalAfterCoupon,
-        base_price:      s.rawPrice * s.seatCount,
-        markup:          s.hiddenMarkup * s.seatCount,
+        rawBaseAmount,
+        markupAmount,
         baseAmount:      s.baseFare * s.seatCount,
-        convenience_fee: s.convFee * s.seatCount,
+        convenienceFee,
         discountAmount:  discount || undefined,
         creditApplied:   creditApplied || undefined,
         paymentMethod:   paymentId.startsWith("wallet") ? "wallet" : creditApplied > 0 ? "credits+razorpay" : "razorpay",
@@ -437,6 +449,9 @@ export default function BookingPayment() {
   function buildHotelBooking(s: HotelBookingSession, paymentId: string, bookingRef: string, userId: string) {
     const commissionEarned = s.isAgent ? s.agentSavings : 0;
     const bookedByRole = s.isAgent ? "agent" : user?.role === "staff" ? "staff" : "customer";
+    const rawBaseAmount  = s.rawPrice * s.nights;
+    const markupAmount   = s.markupAmt * s.nights;
+    const convenienceFee = s.convFee;
     return {
       bookingType: "hotel" as const,
       referenceId: parseInt(s.hotelId, 10) || 1,
@@ -446,6 +461,9 @@ export default function BookingPayment() {
       passengerPhone: s.guest.phone,
       passengers: s.guests,
       travelDate: s.checkin,
+      baseFare: rawBaseAmount,
+      markupAmount,
+      convenienceFee,
       details: {
         userId,
         bookedByRole,
@@ -459,10 +477,10 @@ export default function BookingPayment() {
         customerEmail: s.guest.email,
         customerPhone: s.guest.phone,
         amount:        totalAfterCoupon,
-        base_price:    s.rawPrice * s.nights,
-        markup:        s.markupAmt * s.nights,
+        rawBaseAmount,
+        markupAmount,
         baseAmount:    s.baseFare,
-        convenience_fee: s.convFee,
+        convenienceFee,
         discountAmount:  discount || undefined,
         creditApplied:   creditApplied || undefined,
         paymentMethod:   paymentId.startsWith("wallet") ? "wallet" : creditApplied > 0 ? "credits+razorpay" : "razorpay",

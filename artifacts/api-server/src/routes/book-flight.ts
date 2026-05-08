@@ -235,6 +235,16 @@ router.post("/book-flight", async (req, res): Promise<void> => {
   const passengerEmail = String(bookingMeta?.passengerEmail ?? passengers[0]?.email ?? "");
   const passengerPhone = String(bookingMeta?.passengerPhone ?? passengers[0]?.phone ?? "");
 
+  // Fare breakdown — extract from bookingMeta or from the details blob
+  const _meta = bookingMeta ?? {};
+  const _d    = (typeof _meta.details === "object" && _meta.details !== null) ? (_meta.details as Record<string, any>) : {};
+  const _rawBaseFare  = Number(_meta.baseFare    ?? _d.rawBaseAmount ?? _d.base_price  ?? 0);
+  const _rawMarkup    = Number(_meta.markupAmount ?? _d.markupAmount  ?? _d.markup      ?? 0);
+  const _rawConvFee   = Number(_meta.convenienceFee ?? _d.convenienceFee ?? _d.convenience_fee ?? 0);
+  const _baseFareVal   = _rawBaseFare > 0 ? String(_rawBaseFare) : null;
+  const _markupVal     = _rawMarkup   > 0 ? String(_rawMarkup)   : null;
+  const _convFeeVal    = _rawConvFee  > 0 ? String(_rawConvFee)  : null;
+
   // ── STEP 1: Idempotency — prevent duplicate processing ───────────────────
   logger.info({ paymentId, bookingRef }, "[book-flight] STEP 1: duplicate check");
   const existing = await db
@@ -274,6 +284,9 @@ router.post("/book-flight", async (req, res): Promise<void> => {
         paymentStatus: "paid",
         paymentId,
         bookingStatus: "confirmed",
+        baseFare:       _baseFareVal,
+        markupAmount:   _markupVal,
+        convenienceFee: _convFeeVal,
         details:       {
           ...(typeof bookingMeta?.details === "object" && bookingMeta?.details !== null
             ? (bookingMeta.details as Record<string, unknown>)
@@ -407,6 +420,9 @@ router.post("/book-flight", async (req, res): Promise<void> => {
       bookingStatus: tjSuccess ? "confirmed" : "failed",
       failureReason: tjSuccess ? undefined : (tjError ?? "Ticket booking failed"),
       failureCode:   tjSuccess ? undefined : "api_error",
+      baseFare:       _baseFareVal,
+      markupAmount:   _markupVal,
+      convenienceFee: _convFeeVal,
       details:       bookingDetails,
     } as any)
     .returning();

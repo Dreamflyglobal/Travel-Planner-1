@@ -785,6 +785,59 @@ function BookingDetailSheet({
                     <span className="text-xs uppercase tracking-wide text-slate-500 font-semibold">Total Amount</span>
                     <span className="text-2xl font-bold text-slate-900">{formatINR(booking.amount)}</span>
                   </div>
+                  {/* Fare breakdown */}
+                  {(booking.baseFare || booking.markupAmount || booking.convenienceFee ||
+                    booking.details?.rawBaseAmount || booking.details?.base_price ||
+                    booking.details?.markupAmount || booking.details?.markup ||
+                    booking.details?.convenienceFee || booking.details?.convenience_fee) && (
+                    <div className="col-span-2 rounded-lg border border-slate-200 bg-white divide-y text-xs">
+                      {(() => {
+                        const baseFare = booking.baseFare ?? booking.details?.rawBaseAmount ?? booking.details?.base_price ?? null;
+                        const markup   = booking.markupAmount ?? booking.details?.markupAmount ?? booking.details?.markup ?? null;
+                        const convFee  = booking.convenienceFee ?? booking.details?.convenienceFee ?? booking.details?.convenience_fee ?? null;
+                        const discount = booking.details?.discountAmount ?? null;
+                        const credit   = booking.details?.creditApplied ?? null;
+                        return (
+                          <>
+                            {baseFare != null && Number(baseFare) > 0 && (
+                              <div className="flex justify-between px-3 py-2 text-slate-600">
+                                <span>Base Supplier Fare</span>
+                                <span className="font-medium">{formatINR(Number(baseFare))}</span>
+                              </div>
+                            )}
+                            {markup != null && Number(markup) > 0 && (
+                              <div className="flex justify-between px-3 py-2 text-amber-700">
+                                <span>Platform Markup</span>
+                                <span className="font-medium">+ {formatINR(Number(markup))}</span>
+                              </div>
+                            )}
+                            {convFee != null && Number(convFee) > 0 && (
+                              <div className="flex justify-between px-3 py-2 text-blue-700">
+                                <span>Convenience Fee</span>
+                                <span className="font-medium">+ {formatINR(Number(convFee))}</span>
+                              </div>
+                            )}
+                            {discount != null && Number(discount) > 0 && (
+                              <div className="flex justify-between px-3 py-2 text-green-700">
+                                <span>Coupon Discount</span>
+                                <span className="font-medium">− {formatINR(Number(discount))}</span>
+                              </div>
+                            )}
+                            {credit != null && Number(credit) > 0 && (
+                              <div className="flex justify-between px-3 py-2 text-teal-700">
+                                <span>Credits Applied</span>
+                                <span className="font-medium">− {formatINR(Number(credit))}</span>
+                              </div>
+                            )}
+                            <div className="flex justify-between px-3 py-2 font-semibold text-slate-900 bg-slate-50 rounded-b-lg">
+                              <span>Total Charged</span>
+                              <span>{formatINR(booking.amount)}</span>
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-slate-500">Payment</span>
                     <Badge variant="outline" className={`text-xs ${paymentStatusBadgeClass(booking.paymentStatus)}`}>

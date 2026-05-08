@@ -154738,6 +154738,13 @@ var bookingsTable = pgTable("bookings", {
   // Payment verification signature
   emiDetails: jsonb("emi_details"),
   // EMI tenure, monthly amount, etc.
+  // Fare breakdown columns (stored top-level for fast aggregation)
+  baseFare: numeric("base_fare", { precision: 10, scale: 2 }),
+  // raw supplier fare before any markup
+  markupAmount: numeric("markup_amount", { precision: 10, scale: 2 }),
+  // hidden platform margin
+  convenienceFee: numeric("convenience_fee", { precision: 10, scale: 2 }),
+  // visible checkout fee
   // Booking lifecycle tracking (separate from payment)
   bookingStatus: text("booking_status").notNull().default("confirmed"),
   // pending | processing | confirmed | failed
@@ -157230,14 +157237,23 @@ router9.get("/bookings", async (req, res) => {
       query = query.where(or(...conditions));
     }
     const bookings = await query.orderBy(desc(bookingsTable.createdAt));
-    const mapped = bookings.map((b) => ({
-      ...b,
-      totalPrice: Number(b.totalPrice),
-      commissionEarned: b.commissionEarned ? Number(b.commissionEarned) : null,
-      createdAt: b.createdAt.toISOString(),
-      passengerPhone: b.passengerPhone ?? void 0,
-      details: b.details ?? void 0
-    }));
+    const mapped = bookings.map((b) => {
+      const d = b.details ?? {};
+      const baseFare = b.baseFare != null ? Number(b.baseFare) : Number(d.rawBaseAmount ?? d.base_price ?? 0) || null;
+      const markupAmount = b.markupAmount != null ? Number(b.markupAmount) : Number(d.markupAmount ?? d.markup ?? 0) || null;
+      const convenienceFee = b.convenienceFee != null ? Number(b.convenienceFee) : Number(d.convenienceFee ?? d.convenience_fee ?? 0) || null;
+      return {
+        ...b,
+        totalPrice: Number(b.totalPrice),
+        commissionEarned: b.commissionEarned ? Number(b.commissionEarned) : null,
+        createdAt: b.createdAt.toISOString(),
+        passengerPhone: b.passengerPhone ?? void 0,
+        details: b.details ?? void 0,
+        baseFare,
+        markupAmount,
+        convenienceFee
+      };
+    });
     res.json(mapped);
   } catch (error40) {
     logger.error("\u274C Error fetching bookings:", error40);
@@ -157274,6 +157290,18 @@ router9.post("/bookings", async (req, res) => {
     const agentCode = bookingData.agentCode || details.agentCode || null;
     const agentEmail = bookingData.agentEmail || details.agentEmail || null;
     const commissionEarned = details.commissionEarned || bookingData.commissionEarned ? String(details.commissionEarned || bookingData.commissionEarned) : null;
+    const rawBaseFareNum = Number(
+      bookingData.baseFare ?? details.rawBaseAmount ?? details.base_price ?? 0
+    );
+    const rawMarkupNum = Number(
+      bookingData.markupAmount ?? details.markupAmount ?? details.markup ?? 0
+    );
+    const rawConvFeeNum = Number(
+      bookingData.convenienceFee ?? details.convenienceFee ?? details.convenience_fee ?? 0
+    );
+    const baseFareVal = rawBaseFareNum > 0 ? String(rawBaseFareNum) : null;
+    const markupVal = rawMarkupNum > 0 ? String(rawMarkupNum) : null;
+    const convFeeVal = rawConvFeeNum > 0 ? String(rawConvFeeNum) : null;
     const [inserted] = await db.insert(bookingsTable).values({
       bookingRef,
       userId,
@@ -157294,7 +157322,10 @@ router9.post("/bookings", async (req, res) => {
       commissionEarned,
       paymentMethod,
       paymentStatus: "paid",
-      paymentId
+      paymentId,
+      baseFare: baseFareVal,
+      markupAmount: markupVal,
+      convenienceFee: convFeeVal
     }).returning();
     logger.info("\u2705 Booking saved to PostgreSQL:", inserted.id, "| ref:", bookingRef, "| user:", userId);
     res.status(201).json({
@@ -160470,6 +160501,10 @@ async function loadRefundsForBookings(bookingIds) {
   return map2;
 }
 function shapeBooking(b, refund) {
+  const d = b.details ?? {};
+  const baseFare = b.baseFare != null ? Number(b.baseFare) : Number(d.rawBaseAmount ?? d.base_price ?? 0) || null;
+  const markupAmount = b.markupAmount != null ? Number(b.markupAmount) : Number(d.markupAmount ?? d.markup ?? 0) || null;
+  const convenienceFee = b.convenienceFee != null ? Number(b.convenienceFee) : Number(d.convenienceFee ?? d.convenience_fee ?? 0) || null;
   return {
     id: b.id,
     bookingRef: b.bookingRef,
@@ -160480,6 +160515,9 @@ function shapeBooking(b, refund) {
     serviceType: b.bookingType,
     title: b.title,
     amount: Number(b.totalPrice),
+    baseFare,
+    markupAmount,
+    convenienceFee,
     status: b.status,
     bookingStatus: b.bookingStatus ?? "confirmed",
     failureReason: b.failureReason ?? null,
@@ -165522,6 +165560,14 @@ router24.post("/book-flight", async (req, res) => {
   const passengerName = String(bookingMeta?.passengerName ?? passengers[0]?.name ?? "Unknown");
   const passengerEmail = String(bookingMeta?.passengerEmail ?? passengers[0]?.email ?? "");
   const passengerPhone = String(bookingMeta?.passengerPhone ?? passengers[0]?.phone ?? "");
+  const _meta = bookingMeta ?? {};
+  const _d = typeof _meta.details === "object" && _meta.details !== null ? _meta.details : {};
+  const _rawBaseFare = Number(_meta.baseFare ?? _d.rawBaseAmount ?? _d.base_price ?? 0);
+  const _rawMarkup = Number(_meta.markupAmount ?? _d.markupAmount ?? _d.markup ?? 0);
+  const _rawConvFee = Number(_meta.convenienceFee ?? _d.convenienceFee ?? _d.convenience_fee ?? 0);
+  const _baseFareVal = _rawBaseFare > 0 ? String(_rawBaseFare) : null;
+  const _markupVal = _rawMarkup > 0 ? String(_rawMarkup) : null;
+  const _convFeeVal = _rawConvFee > 0 ? String(_rawConvFee) : null;
   logger.info({ paymentId, bookingRef }, "[book-flight] STEP 1: duplicate check");
   const existing = await db.select().from(bookingsTable).where(eq(bookingsTable.paymentId, paymentId)).limit(1);
   if (existing.length > 0) {
@@ -165550,6 +165596,9 @@ router24.post("/book-flight", async (req, res) => {
       paymentStatus: "paid",
       paymentId,
       bookingStatus: "confirmed",
+      baseFare: _baseFareVal,
+      markupAmount: _markupVal,
+      convenienceFee: _convFeeVal,
       details: {
         ...typeof bookingMeta?.details === "object" && bookingMeta?.details !== null ? bookingMeta.details : {},
         paymentId,
@@ -165664,6 +165713,9 @@ router24.post("/book-flight", async (req, res) => {
     bookingStatus: tjSuccess ? "confirmed" : "failed",
     failureReason: tjSuccess ? void 0 : tjError ?? "Ticket booking failed",
     failureCode: tjSuccess ? void 0 : "api_error",
+    baseFare: _baseFareVal,
+    markupAmount: _markupVal,
+    convenienceFee: _convFeeVal,
     details: bookingDetails
   }).returning();
   if (tjSuccess) {
