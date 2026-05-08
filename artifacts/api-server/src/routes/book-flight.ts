@@ -5,6 +5,7 @@ import { extractTripJackError } from "../lib/tripjack-auth.js";
 import { tjPostWithRetry } from "../lib/tj-retry.js";
 import { logger } from "../lib/logger.js";
 import { verifyRazorpaySignature } from "./verify-payment.js";
+import { sendAllBookingNotifications, type BookingNotificationData } from "../lib/notification-service.js";
 
 const router = Router();
 
@@ -284,6 +285,26 @@ router.post("/book-flight", async (req, res): Promise<void> => {
       .returning();
     logger.info({ paymentId, bookingRef, bookingId: savedBooking.id }, "[book-flight] non-TJ booking CONFIRMED");
     res.json({ success: true, bookingRef, bookingId: savedBooking.id });
+
+    // Fire-and-forget notifications — do not await, never block the response
+    const _domain = process.env.REPLIT_DOMAINS?.split(",")[0] || process.env.REPLIT_DEV_DOMAIN || "";
+    const _base   = _domain ? `https://${_domain}` : "https://dreamflyglobal.in";
+    const _notif: BookingNotificationData = {
+      bookingId:      bookingRef,
+      bookingType:    "flight",
+      passengerName:  passengerName,
+      passengerEmail: passengerEmail || undefined,
+      passengerPhone: passengerPhone || undefined,
+      travelDate:     travelDate,
+      totalAmount:    totalPrice,
+      paymentId:      paymentId,
+      passengers:     passengers.length,
+      invoiceUrl:     `${_base}/invoice/${bookingRef}`,
+      title:          `Flight ${bookingRef}`,
+    };
+    sendAllBookingNotifications(_notif).catch((e) =>
+      logger.error({ err: e?.message }, "[book-flight] non-TJ notification error"),
+    );
     return;
   }
 
@@ -392,6 +413,36 @@ router.post("/book-flight", async (req, res): Promise<void> => {
       "[book-flight] STEP 4: booking CONFIRMED",
     );
     res.json({ success: true, pnr, tjBookingRef, bookingRef, bookingId: savedBooking.id });
+
+    // Fire-and-forget notifications — do not await, never block the response
+    const __domain = process.env.REPLIT_DOMAINS?.split(",")[0] || process.env.REPLIT_DEV_DOMAIN || "";
+    const __base   = __domain ? `https://${__domain}` : "https://dreamflyglobal.in";
+    const __details = typeof bookingMeta?.details === "object" && bookingMeta?.details !== null
+      ? (bookingMeta.details as Record<string, any>)
+      : {};
+    const __notif: BookingNotificationData = {
+      bookingId:       bookingRef,
+      bookingType:     "flight",
+      passengerName:   passengerName,
+      passengerEmail:  passengerEmail || undefined,
+      passengerPhone:  passengerPhone || undefined,
+      travelDate:      travelDate,
+      totalAmount:     totalPrice,
+      paymentId:       paymentId,
+      passengers:      passengers.length,
+      invoiceUrl:      `${__base}/invoice/${bookingRef}`,
+      title:           `Flight ${pnr ?? bookingRef}`,
+      from:            __details.from ?? __details.flightFrom ?? undefined,
+      to:              __details.to   ?? __details.flightTo   ?? undefined,
+      airline:         __details.airline        ?? __details.flightAirline ?? undefined,
+      flightNumber:    __details.flightNum      ?? __details.flightNumber  ?? undefined,
+      flightDeparture: __details.flightDeparture ?? undefined,
+      flightArrival:   __details.flightArrival  ?? undefined,
+      flightDuration:  __details.flightDuration ?? undefined,
+    };
+    sendAllBookingNotifications(__notif).catch((e) =>
+      logger.error({ err: e?.message }, "[book-flight] TJ notification error"),
+    );
     return;
   }
 

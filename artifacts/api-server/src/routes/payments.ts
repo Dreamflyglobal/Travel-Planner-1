@@ -2,9 +2,7 @@ import { Router }  from "express";
 import { logger } from "../lib/logger.js";
 import crypto      from "crypto";
 import Razorpay    from "razorpay";
-import { sendWhatsAppNotification }   from "../lib/whatsapp-service.js";
-import { sendGeneralBookingEmail }     from "../lib/email-service.js";
-import type { GeneralBookingEmailData } from "../lib/email-service.js";
+import { sendAllBookingNotifications, type BookingNotificationData } from "../lib/notification-service.js";
 import { scheduleBookingFollowUp }    from "../lib/marketing-scheduler.js";
 import { getProviderConfig }          from "../lib/provider-config.js";
 
@@ -123,7 +121,7 @@ router.post("/verify", async (req, res) => {
 
 /**
  * POST /api/payments/notify
- * Sends booking confirmation via Email + WhatsApp.
+ * Sends booking confirmation via Email + SMS + WhatsApp.
  */
 router.post("/notify", async (req, res) => {
   const { bookingContext, frontendBaseUrl } = req.body;
@@ -133,86 +131,44 @@ router.post("/notify", async (req, res) => {
   }
 
   const invoiceUrl = `${frontendBaseUrl || "https://dreamflyglobal.in"}/invoice/${bookingContext.bookingId}`;
-  logger.info(`[notify] Invoice URL: ${invoiceUrl}`);
+  logger.info(`[notify] Sending all channels — booking: ${bookingContext.bookingId}  invoiceUrl: ${invoiceUrl}`);
 
-  let emailSent    = false;
-  let emailReason  = "";
+  const notifData: BookingNotificationData = {
+    bookingId:      bookingContext.bookingId,
+    bookingType:    bookingContext.bookingType || "flight",
+    passengerName:  bookingContext.passengerName || "Traveller",
+    passengerEmail: bookingContext.passengerEmail || undefined,
+    passengerPhone: bookingContext.phone          || undefined,
+    travelDate:     bookingContext.travelDate     || new Date().toISOString(),
+    totalAmount:    bookingContext.totalAmount    || 0,
+    paymentId:      bookingContext.paymentId      || "",
+    passengers:     bookingContext.passengers     || 1,
+    invoiceUrl,
+    title:          bookingContext.title          || bookingContext.bookingId,
+    from:           bookingContext.from || bookingContext.flightFrom || bookingContext.busFrom || bookingContext.hotelCity || "",
+    to:             bookingContext.to   || bookingContext.flightTo   || bookingContext.busTo   || "",
+    // Flight
+    airline:         bookingContext.flightAirline,
+    flightNumber:    bookingContext.flightNumber,
+    flightDeparture: bookingContext.flightDeparture,
+    flightArrival:   bookingContext.flightArrival,
+    flightDuration:  bookingContext.flightDuration,
+    // Bus
+    busOperator:    bookingContext.busOperator,
+    busType:        bookingContext.busType,
+    boardingPoint:  bookingContext.busBoardingPoint,
+    droppingPoint:  bookingContext.busDroppingPoint,
+    busDeparture:   bookingContext.busDeparture,
+    busArrival:     bookingContext.busArrival,
+    // Hotel
+    hotelName:      bookingContext.hotelName,
+    hotelCity:      bookingContext.hotelCity,
+    hotelNights:    bookingContext.hotelNights,
+  };
 
-  if (bookingContext.passengerEmail) {
-    const emailData: GeneralBookingEmailData = {
-      bookingId:      bookingContext.bookingId,
-      bookingType:    bookingContext.bookingType || "flight",
-      passengerName:  bookingContext.passengerName || "Traveller",
-      passengerEmail: bookingContext.passengerEmail,
-      title:          bookingContext.title || bookingContext.bookingId,
-      travelDate:     bookingContext.travelDate || new Date().toISOString(),
-      passengers:     bookingContext.passengers || 1,
-      totalAmount:    bookingContext.totalAmount || 0,
-      paymentId:      bookingContext.paymentId   || "",
-      invoiceUrl,
-    };
-    try {
-      const result = await sendGeneralBookingEmail(emailData);
-      emailSent    = result.sent;
-      emailReason  = result.reason || "";
-      if (!result.sent) logger.warn(`[notify] Email not sent: ${result.reason}`);
-    } catch (err: any) {
-      emailReason = err.message;
-      logger.error(`[notify] Email error: ${err.message}`);
-    }
-  } else {
-    emailReason = "No email address provided";
-    logger.warn("[notify] No passengerEmail — skipping email");
-  }
+  const { email, sms, whatsapp } = await sendAllBookingNotifications(notifData);
 
-  let whatsappSent   = false;
-  let whatsappReason = "";
-
-  if (bookingContext.phone) {
-    logger.info("WhatsApp triggered", { bookingId: bookingContext.bookingId, phone: bookingContext.phone });
-    try {
-      const travelDateStr = bookingContext.travelDate
-        ? new Date(bookingContext.travelDate).toLocaleDateString("en-IN", {
-            day: "2-digit", month: "short", year: "numeric",
-          })
-        : "";
-      const result = await sendWhatsAppNotification({
-        bookingId:      bookingContext.bookingId,
-        passengerName:  bookingContext.passengerName || "Traveller",
-        phone:          bookingContext.phone,
-        bookingType:    bookingContext.bookingType,
-        from:           bookingContext.from || bookingContext.flightFrom || bookingContext.busFrom || bookingContext.hotelCity || "",
-        to:             bookingContext.to   || bookingContext.flightTo   || bookingContext.busTo   || "",
-        date:           travelDateStr,
-        amount:         bookingContext.totalAmount || 0,
-        invoiceUrl,
-        airline:        bookingContext.flightAirline,
-        flightNum:      bookingContext.flightNumber,
-        flightDeparture: bookingContext.flightDeparture,
-        flightArrival:  bookingContext.flightArrival,
-        flightDuration: bookingContext.flightDuration,
-        busOperator:    bookingContext.busOperator,
-        busType:        bookingContext.busType,
-        boardingPoint:  bookingContext.busBoardingPoint,
-        droppingPoint:  bookingContext.busDroppingPoint,
-        busDeparture:   bookingContext.busDeparture,
-        busArrival:     bookingContext.busArrival,
-        hotelName:      bookingContext.hotelName,
-        hotelCity:      bookingContext.hotelCity,
-        hotelNights:    bookingContext.hotelNights,
-      });
-      whatsappSent   = result.sent;
-      whatsappReason = result.reason || "";
-      if (!result.sent) logger.warn(`[notify] WhatsApp not sent: ${result.reason}`);
-    } catch (err: any) {
-      whatsappReason = err.message;
-      logger.error(`[notify] WhatsApp error: ${err.message}`);
-    }
-  } else {
-    whatsappReason = "No phone number provided";
-    logger.warn("[notify] No phone — skipping WhatsApp");
-  }
-
+  // Schedule marketing follow-up
   if (bookingContext.phone) {
     const userId = bookingContext.userId || `guest_${Date.now()}`;
     scheduleBookingFollowUp({
@@ -221,18 +177,20 @@ router.post("/notify", async (req, res) => {
       phone:       bookingContext.phone,
       bookingId:   bookingContext.bookingId,
       bookingType: bookingContext.bookingType || "flight",
-      from:        bookingContext.from || bookingContext.flightFrom || bookingContext.busFrom || "",
-      to:          bookingContext.to   || bookingContext.flightTo   || bookingContext.busTo   || "",
+      from:        notifData.from || "",
+      to:          notifData.to   || "",
     });
   }
 
   return res.json({
-    success: true,
+    success:      true,
     invoiceUrl,
-    emailSent,
-    whatsappSent,
-    ...(emailReason    ? { emailReason }    : {}),
-    ...(whatsappReason ? { whatsappReason } : {}),
+    emailSent:    email.sent,
+    smsSent:      sms.sent,
+    whatsappSent: whatsapp.sent,
+    ...(email.reason    ? { emailReason:    email.reason }    : {}),
+    ...(sms.reason      ? { smsReason:      sms.reason }      : {}),
+    ...(whatsapp.reason ? { whatsappReason: whatsapp.reason } : {}),
   });
 });
 

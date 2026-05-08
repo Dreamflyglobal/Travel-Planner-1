@@ -157373,6 +157373,278 @@ var import_express10 = __toESM(require_express2(), 1);
 var import_razorpay = __toESM(require_razorpay(), 1);
 import crypto2 from "crypto";
 
+// src/lib/notification-service.ts
+import twilio4 from "twilio";
+
+// src/lib/email-service.ts
+import nodemailer2 from "nodemailer";
+function createTransport() {
+  const user = (process.env.SMTP_USER || "").trim();
+  const pass = (process.env.SMTP_PASS || "").trim();
+  const host = (process.env.SMTP_HOST || "").trim();
+  const port2 = Number(process.env.SMTP_PORT || 465);
+  if (!user || !pass || !host) {
+    console.info("[email] SMTP_USER, SMTP_PASS, or SMTP_HOST not set \u2014 email disabled");
+    return null;
+  }
+  console.info(`[email] Using SMTP: ${host}:${port2} (secure=true)`);
+  return nodemailer2.createTransport({
+    host,
+    port: port2,
+    secure: true,
+    auth: { user, pass }
+  });
+}
+function bookingEmailHTML(ticket) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Booking Confirmation \u2014 ${APP_NAME}</title>
+  <style>
+    body { margin: 0; padding: 0; background: #f1f5f9; font-family: 'Helvetica Neue', Arial, sans-serif; color: #1e293b; }
+    .wrapper { max-width: 620px; margin: 32px auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,.08); }
+    .header  { background: #1e40af; padding: 32px 40px; }
+    .header h1 { color: #fff; margin: 0 0 4px; font-size: 22px; }
+    .header p  { color: #93c5fd; margin: 0; font-size: 13px; }
+    .hero { background: #eff6ff; padding: 28px 40px; border-bottom: 3px solid #f97316; }
+    .route { display: flex; align-items: center; gap: 0; }
+    .city { font-size: 38px; font-weight: 800; color: #1e40af; }
+    .arrow { flex: 1; text-align: center; color: #94a3b8; font-size: 22px; }
+    .arrow span { display: block; font-size: 10px; color: #94a3b8; }
+    .section { padding: 24px 40px; border-bottom: 1px solid #e2e8f0; }
+    .section h3 { margin: 0 0 16px; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .item label { display: block; font-size: 11px; color: #94a3b8; margin-bottom: 2px; text-transform: uppercase; }
+    .item p { margin: 0; font-size: 14px; font-weight: 600; color: #1e293b; }
+    .amount { color: #f97316 !important; font-size: 20px !important; }
+    .badge { display: inline-block; background: #dcfce7; color: #166534; border-radius: 6px; padding: 4px 12px; font-size: 12px; font-weight: 700; }
+    .footer { background: #1e40af; padding: 20px 40px; text-align: center; color: #93c5fd; font-size: 11px; }
+    .footer p { margin: 4px 0; }
+    .cta { text-align: center; padding: 28px 40px; }
+    .btn { display: inline-block; background: #1e40af; color: #fff; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 14px; }
+  </style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="header">
+    <h1>\u2708 ${APP_NAME}</h1>
+    <p>Your flight ticket is confirmed!</p>
+  </div>
+  <div class="hero">
+    <p style="margin:0 0 8px;font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.05em">Booking ID: ${ticket.bookingId}</p>
+    <div class="route">
+      <div class="city">${ticket.from}</div>
+      <div class="arrow">
+        <span>${ticket.duration}</span>
+        \u2192
+        <span>Non-stop</span>
+      </div>
+      <div class="city">${ticket.to}</div>
+    </div>
+    <div style="margin-top:12px;">
+      <span class="badge">\u2713 Confirmed</span>
+      &nbsp;
+      <span style="font-size:13px;color:#64748b;margin-left:8px;">${ticket.airline} \xB7 ${ticket.flightNum}</span>
+    </div>
+  </div>
+  <div class="section">
+    <h3>Flight Details</h3>
+    <div class="grid">
+      <div class="item"><label>Date</label><p>${ticket.date}</p></div>
+      <div class="item"><label>Duration</label><p>${ticket.duration}</p></div>
+      <div class="item"><label>Departure</label><p>${ticket.departure}</p></div>
+      <div class="item"><label>Arrival</label><p>${ticket.arrival}</p></div>
+      <div class="item"><label>Flight</label><p>${ticket.flightNum}</p></div>
+      <div class="item"><label>Class</label><p>${ticket.class || "Economy"}</p></div>
+    </div>
+  </div>
+  <div class="section">
+    <h3>Passenger & Payment</h3>
+    <div class="grid">
+      <div class="item"><label>Passenger</label><p>${ticket.passengerName}</p></div>
+      <div class="item"><label>Passengers</label><p>${ticket.passengers}</p></div>
+      <div class="item"><label>Total Amount</label><p class="amount">\u20B9${ticket.amount.toLocaleString("en-IN")}</p></div>
+      ${ticket.paymentId ? `<div class="item"><label>Payment Ref</label><p style="font-size:11px;color:#64748b;">${ticket.paymentId}</p></div>` : ""}
+    </div>
+  </div>
+  <div class="cta">
+    <p style="margin:0 0 16px;color:#64748b;font-size:13px;">Your e-ticket PDF is attached to this email. Please carry a valid photo ID at the airport.</p>
+  </div>
+  <div class="footer">
+    <p>${APP_NAME} \u2014 ${APP_TAGLINE_LONG}</p>
+    <p>This is an automated message. For support, reply to this email.</p>
+  </div>
+</div>
+</body>
+</html>`;
+}
+async function sendBookingConfirmationEmail(ticket, pdfBuffer) {
+  const transport = createTransport();
+  if (!transport) {
+    console.info("[email] SMTP not configured \u2014 skipping email delivery");
+    return { sent: false, reason: "SMTP not configured" };
+  }
+  const from = (process.env.SMTP_FROM || "bookings@dreamflyglobal.com").trim();
+  try {
+    await transport.sendMail({
+      from: `"${APP_NAME} Tickets" <${from}>`,
+      to: ticket.passengerEmail,
+      subject: `\u2708 Booking Confirmed: ${ticket.from} \u2192 ${ticket.to} \xB7 ${ticket.bookingId}`,
+      html: bookingEmailHTML(ticket),
+      attachments: [
+        {
+          filename: `${APP_NAME}-Ticket-${ticket.bookingId}.pdf`,
+          content: pdfBuffer,
+          contentType: "application/pdf"
+        }
+      ]
+    });
+    logger.info(`[email] Email sent successfully to ${ticket.passengerEmail} (Booking: ${ticket.bookingId})`);
+    return { sent: true };
+  } catch (err) {
+    logger.error(`[email] Failed to send booking confirmation email: ${err.message}`);
+    return { sent: false, reason: err.message };
+  }
+}
+var SERVICE_EMOJI = {
+  flight: "\u2708\uFE0F",
+  bus: "\u{1F68C}",
+  hotel: "\u{1F3E8}",
+  package: "\u{1F334}"
+};
+function generalBookingEmailHTML(data) {
+  const emoji3 = SERVICE_EMOJI[data.bookingType] ?? "\u{1F4CB}";
+  const dateStr = new Date(data.travelDate).toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric"
+  });
+  const amount = `\u20B9${data.totalAmount.toLocaleString("en-IN")}`;
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Booking Confirmation \u2014 ${APP_NAME}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 0; background: #f1f5f9; font-family: 'Helvetica Neue', Arial, sans-serif; color: #1e293b; }
+    .wrapper { max-width: 600px; margin: 32px auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,.10); }
+    .header { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 32px 40px; display: flex; align-items: center; gap: 16px; }
+    .logo-circle { width: 52px; height: 52px; background: #f97316; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .logo-text { color: #fff; font-weight: 900; font-size: 16px; }
+    .header-info h1 { color: #fff; margin: 0 0 2px; font-size: 20px; font-weight: 800; }
+    .header-info p  { color: #94a3b8; margin: 0; font-size: 12px; }
+    .hero { background: #fff7ed; border-bottom: 3px solid #f97316; padding: 28px 40px; }
+    .confirmed-badge { display: inline-flex; align-items: center; gap: 6px; background: #dcfce7; color: #166534; padding: 5px 14px; border-radius: 20px; font-size: 12px; font-weight: 700; margin-bottom: 12px; }
+    .service-title { font-size: 22px; font-weight: 800; color: #1e293b; margin: 0 0 4px; }
+    .booking-id { font-size: 12px; color: #64748b; font-family: monospace; }
+    .section { padding: 24px 40px; border-bottom: 1px solid #e2e8f0; }
+    .row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f1f5f9; }
+    .row:last-child { border-bottom: none; }
+    .row label { font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.04em; }
+    .row span { font-size: 13px; font-weight: 600; color: #1e293b; text-align: right; }
+    .amount-highlight { font-size: 18px !important; color: #f97316 !important; }
+    .cta { text-align: center; padding: 32px 40px; background: #f8fafc; }
+    .cta p { color: #64748b; font-size: 13px; margin: 0 0 20px; line-height: 1.6; }
+    .btn { display: inline-block; background: #f97316; color: #fff; padding: 14px 36px; border-radius: 10px; text-decoration: none; font-weight: 800; font-size: 15px; letter-spacing: 0.02em; }
+    .payment-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 14px 18px; margin-top: 12px; }
+    .payment-box p { margin: 0; font-size: 11px; color: #166534; font-family: monospace; }
+    .footer { background: #0f172a; padding: 24px 40px; text-align: center; }
+    .footer p { margin: 4px 0; color: #64748b; font-size: 11px; }
+    .footer .brand { color: #94a3b8; font-weight: 600; font-size: 13px; }
+  </style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="header">
+    <div class="logo-circle">
+      <span class="logo-text">${APP_INITIALS}</span>
+    </div>
+    <div class="header-info">
+      <h1>${APP_NAME}</h1>
+      <p>Your Ultimate Travel Companion</p>
+    </div>
+  </div>
+
+  <div class="hero">
+    <div class="confirmed-badge">\u2713 Booking Confirmed</div>
+    <p class="service-title">${emoji3} ${data.title}</p>
+    <p class="booking-id">Booking ID: ${data.bookingId}</p>
+  </div>
+
+  <div class="section">
+    <div class="row">
+      <label>Passenger</label>
+      <span>${data.passengerName}</span>
+    </div>
+    <div class="row">
+      <label>Service</label>
+      <span style="text-transform:capitalize">${data.bookingType}</span>
+    </div>
+    <div class="row">
+      <label>Travel Date</label>
+      <span>${dateStr}</span>
+    </div>
+    <div class="row">
+      <label>${data.bookingType === "hotel" ? "Rooms" : "Passengers"}</label>
+      <span>${data.passengers}</span>
+    </div>
+    <div class="row">
+      <label>Total Paid</label>
+      <span class="amount-highlight">${amount}</span>
+    </div>
+    <div class="payment-box">
+      <p>\u2713 Payment ID: ${data.paymentId}</p>
+    </div>
+  </div>
+
+  <div class="cta">
+    <p>
+      Hi ${data.passengerName.split(" ")[0]}, your booking is confirmed!<br />
+      Click below to view or download your invoice.
+    </p>
+    <a href="${data.invoiceUrl}" class="btn">\u{1F4C4} View Invoice &amp; Ticket</a>
+    <p style="margin-top:16px;font-size:11px;color:#94a3b8;">
+      Or copy this link: <a href="${data.invoiceUrl}" style="color:#f97316;text-decoration:none;">${data.invoiceUrl}</a>
+    </p>
+  </div>
+
+  <div class="footer">
+    <p class="brand">${APP_NAME} \u2014 ${APP_TAGLINE_LONG}</p>
+    <p>${APP_SUPPORT_PHONE} \xB7 ${APP_SUPPORT_EMAIL}</p>
+    <p>This is an automated confirmation. Do not reply to this email.</p>
+  </div>
+</div>
+</body>
+</html>`;
+}
+async function sendGeneralBookingEmail(data) {
+  const transport = createTransport();
+  if (!transport) {
+    console.info("[email] SMTP not configured \u2014 skipping general booking email. Set SMTP_USER and SMTP_PASS secrets.");
+    return { sent: false, reason: "SMTP not configured" };
+  }
+  const from = (process.env.SMTP_FROM || "bookings@dreamflyglobal.com").trim();
+  const emoji3 = SERVICE_EMOJI[data.bookingType] ?? "\u{1F4CB}";
+  const subject = `${emoji3} Booking Confirmed \u2013 ${APP_NAME} | ${data.bookingId}`;
+  try {
+    await transport.sendMail({
+      from: `"${APP_NAME}" <${from}>`,
+      to: data.passengerEmail,
+      subject,
+      html: generalBookingEmailHTML(data)
+    });
+    logger.info(`[email] General booking email sent to ${data.passengerEmail} (${data.bookingId})`);
+    return { sent: true };
+  } catch (err) {
+    logger.error(`[email] Failed to send general booking email: ${err.message}`);
+    return { sent: false, reason: err.message };
+  }
+}
+
 // src/lib/whatsapp-service.ts
 import twilio3 from "twilio";
 function formatPhone2(raw) {
@@ -157672,273 +157944,159 @@ async function sendHolidayWhatsApp(data) {
   }
 }
 
-// src/lib/email-service.ts
-import nodemailer2 from "nodemailer";
-function createTransport() {
-  const user = (process.env.SMTP_USER || "").trim();
-  const pass = (process.env.SMTP_PASS || "").trim();
-  const host = (process.env.SMTP_HOST || "").trim();
-  const port2 = Number(process.env.SMTP_PORT || 465);
-  if (!user || !pass || !host) {
-    console.info("[email] SMTP_USER, SMTP_PASS, or SMTP_HOST not set \u2014 email disabled");
-    return null;
-  }
-  console.info(`[email] Using SMTP: ${host}:${port2} (secure=true)`);
-  return nodemailer2.createTransport({
-    host,
-    port: port2,
-    secure: true,
-    auth: { user, pass }
-  });
+// src/lib/notification-service.ts
+function formatPhone3(raw) {
+  const digits = raw.replace(/\D/g, "");
+  if (digits.startsWith("91") && digits.length === 12) return `+${digits}`;
+  if (digits.length === 10) return `+91${digits}`;
+  return `+${digits}`;
 }
-function bookingEmailHTML(ticket) {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Booking Confirmation \u2014 ${APP_NAME}</title>
-  <style>
-    body { margin: 0; padding: 0; background: #f1f5f9; font-family: 'Helvetica Neue', Arial, sans-serif; color: #1e293b; }
-    .wrapper { max-width: 620px; margin: 32px auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,.08); }
-    .header  { background: #1e40af; padding: 32px 40px; }
-    .header h1 { color: #fff; margin: 0 0 4px; font-size: 22px; }
-    .header p  { color: #93c5fd; margin: 0; font-size: 13px; }
-    .hero { background: #eff6ff; padding: 28px 40px; border-bottom: 3px solid #f97316; }
-    .route { display: flex; align-items: center; gap: 0; }
-    .city { font-size: 38px; font-weight: 800; color: #1e40af; }
-    .arrow { flex: 1; text-align: center; color: #94a3b8; font-size: 22px; }
-    .arrow span { display: block; font-size: 10px; color: #94a3b8; }
-    .section { padding: 24px 40px; border-bottom: 1px solid #e2e8f0; }
-    .section h3 { margin: 0 0 16px; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    .item label { display: block; font-size: 11px; color: #94a3b8; margin-bottom: 2px; text-transform: uppercase; }
-    .item p { margin: 0; font-size: 14px; font-weight: 600; color: #1e293b; }
-    .amount { color: #f97316 !important; font-size: 20px !important; }
-    .badge { display: inline-block; background: #dcfce7; color: #166534; border-radius: 6px; padding: 4px 12px; font-size: 12px; font-weight: 700; }
-    .footer { background: #1e40af; padding: 20px 40px; text-align: center; color: #93c5fd; font-size: 11px; }
-    .footer p { margin: 4px 0; }
-    .cta { text-align: center; padding: 28px 40px; }
-    .btn { display: inline-block; background: #1e40af; color: #fff; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 14px; }
-  </style>
-</head>
-<body>
-<div class="wrapper">
-  <div class="header">
-    <h1>\u2708 ${APP_NAME}</h1>
-    <p>Your flight ticket is confirmed!</p>
-  </div>
-  <div class="hero">
-    <p style="margin:0 0 8px;font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.05em">Booking ID: ${ticket.bookingId}</p>
-    <div class="route">
-      <div class="city">${ticket.from}</div>
-      <div class="arrow">
-        <span>${ticket.duration}</span>
-        \u2192
-        <span>Non-stop</span>
-      </div>
-      <div class="city">${ticket.to}</div>
-    </div>
-    <div style="margin-top:12px;">
-      <span class="badge">\u2713 Confirmed</span>
-      &nbsp;
-      <span style="font-size:13px;color:#64748b;margin-left:8px;">${ticket.airline} \xB7 ${ticket.flightNum}</span>
-    </div>
-  </div>
-  <div class="section">
-    <h3>Flight Details</h3>
-    <div class="grid">
-      <div class="item"><label>Date</label><p>${ticket.date}</p></div>
-      <div class="item"><label>Duration</label><p>${ticket.duration}</p></div>
-      <div class="item"><label>Departure</label><p>${ticket.departure}</p></div>
-      <div class="item"><label>Arrival</label><p>${ticket.arrival}</p></div>
-      <div class="item"><label>Flight</label><p>${ticket.flightNum}</p></div>
-      <div class="item"><label>Class</label><p>${ticket.class || "Economy"}</p></div>
-    </div>
-  </div>
-  <div class="section">
-    <h3>Passenger & Payment</h3>
-    <div class="grid">
-      <div class="item"><label>Passenger</label><p>${ticket.passengerName}</p></div>
-      <div class="item"><label>Passengers</label><p>${ticket.passengers}</p></div>
-      <div class="item"><label>Total Amount</label><p class="amount">\u20B9${ticket.amount.toLocaleString("en-IN")}</p></div>
-      ${ticket.paymentId ? `<div class="item"><label>Payment Ref</label><p style="font-size:11px;color:#64748b;">${ticket.paymentId}</p></div>` : ""}
-    </div>
-  </div>
-  <div class="cta">
-    <p style="margin:0 0 16px;color:#64748b;font-size:13px;">Your e-ticket PDF is attached to this email. Please carry a valid photo ID at the airport.</p>
-  </div>
-  <div class="footer">
-    <p>${APP_NAME} \u2014 ${APP_TAGLINE_LONG}</p>
-    <p>This is an automated message. For support, reply to this email.</p>
-  </div>
-</div>
-</body>
-</html>`;
-}
-async function sendBookingConfirmationEmail(ticket, pdfBuffer) {
-  const transport = createTransport();
-  if (!transport) {
-    console.info("[email] SMTP not configured \u2014 skipping email delivery");
-    return { sent: false, reason: "SMTP not configured" };
+function buildSmsBody(data) {
+  const typeLabel = data.bookingType.charAt(0).toUpperCase() + data.bookingType.slice(1);
+  const dateStr = (() => {
+    try {
+      return new Date(data.travelDate).toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric"
+      });
+    } catch {
+      return data.travelDate;
+    }
+  })();
+  const amount = `Rs.${data.totalAmount.toLocaleString("en-IN")}`;
+  let detail = "";
+  if ((data.bookingType === "flight" || data.bookingType === "bus") && data.from && data.to) {
+    detail = ` | ${data.from} to ${data.to}`;
+  } else if (data.bookingType === "hotel" && data.hotelName) {
+    detail = ` | ${data.hotelName}`;
   }
-  const from = (process.env.SMTP_FROM || "bookings@dreamflyglobal.com").trim();
+  return `Your ${typeLabel} booking with ${APP_NAME} is confirmed${detail}. Booking ID: ${data.bookingId} | Date: ${dateStr} | Amount: ${amount}. Support: ${APP_SUPPORT_PHONE}`;
+}
+async function sendBookingEmail(data) {
+  if (!data.passengerEmail) {
+    logger.warn(`[notification/email] No email address \u2014 skipping (booking: ${data.bookingId})`);
+    return { sent: false, reason: "No passenger email address" };
+  }
+  const emailData = {
+    bookingId: data.bookingId,
+    bookingType: data.bookingType,
+    passengerName: data.passengerName,
+    passengerEmail: data.passengerEmail,
+    title: data.title || data.bookingId,
+    travelDate: data.travelDate,
+    passengers: data.passengers ?? 1,
+    totalAmount: data.totalAmount,
+    paymentId: data.paymentId,
+    invoiceUrl: data.invoiceUrl || ""
+  };
   try {
-    await transport.sendMail({
-      from: `"${APP_NAME} Tickets" <${from}>`,
-      to: ticket.passengerEmail,
-      subject: `\u2708 Booking Confirmed: ${ticket.from} \u2192 ${ticket.to} \xB7 ${ticket.bookingId}`,
-      html: bookingEmailHTML(ticket),
-      attachments: [
-        {
-          filename: `${APP_NAME}-Ticket-${ticket.bookingId}.pdf`,
-          content: pdfBuffer,
-          contentType: "application/pdf"
-        }
-      ]
-    });
-    logger.info(`[email] Email sent successfully to ${ticket.passengerEmail} (Booking: ${ticket.bookingId})`);
-    return { sent: true };
+    const result = await sendGeneralBookingEmail(emailData);
+    if (result.sent) {
+      logger.info(`[notification/email] Sent \u2713 \u2014 booking: ${data.bookingId}  to: ${data.passengerEmail}`);
+    } else {
+      logger.warn(`[notification/email] Not sent \u2014 booking: ${data.bookingId}  reason: ${result.reason}`);
+    }
+    return result;
   } catch (err) {
-    logger.error(`[email] Failed to send booking confirmation email: ${err.message}`);
+    logger.error(`[notification/email] Error: ${err.message}  booking: ${data.bookingId}`);
     return { sent: false, reason: err.message };
   }
 }
-var SERVICE_EMOJI = {
-  flight: "\u2708\uFE0F",
-  bus: "\u{1F68C}",
-  hotel: "\u{1F3E8}",
-  package: "\u{1F334}"
-};
-function generalBookingEmailHTML(data) {
-  const emoji3 = SERVICE_EMOJI[data.bookingType] ?? "\u{1F4CB}";
-  const dateStr = new Date(data.travelDate).toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric"
-  });
-  const amount = `\u20B9${data.totalAmount.toLocaleString("en-IN")}`;
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Booking Confirmation \u2014 ${APP_NAME}</title>
-  <style>
-    * { box-sizing: border-box; }
-    body { margin: 0; padding: 0; background: #f1f5f9; font-family: 'Helvetica Neue', Arial, sans-serif; color: #1e293b; }
-    .wrapper { max-width: 600px; margin: 32px auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,.10); }
-    .header { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 32px 40px; display: flex; align-items: center; gap: 16px; }
-    .logo-circle { width: 52px; height: 52px; background: #f97316; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-    .logo-text { color: #fff; font-weight: 900; font-size: 16px; }
-    .header-info h1 { color: #fff; margin: 0 0 2px; font-size: 20px; font-weight: 800; }
-    .header-info p  { color: #94a3b8; margin: 0; font-size: 12px; }
-    .hero { background: #fff7ed; border-bottom: 3px solid #f97316; padding: 28px 40px; }
-    .confirmed-badge { display: inline-flex; align-items: center; gap: 6px; background: #dcfce7; color: #166534; padding: 5px 14px; border-radius: 20px; font-size: 12px; font-weight: 700; margin-bottom: 12px; }
-    .service-title { font-size: 22px; font-weight: 800; color: #1e293b; margin: 0 0 4px; }
-    .booking-id { font-size: 12px; color: #64748b; font-family: monospace; }
-    .section { padding: 24px 40px; border-bottom: 1px solid #e2e8f0; }
-    .row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f1f5f9; }
-    .row:last-child { border-bottom: none; }
-    .row label { font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.04em; }
-    .row span { font-size: 13px; font-weight: 600; color: #1e293b; text-align: right; }
-    .amount-highlight { font-size: 18px !important; color: #f97316 !important; }
-    .cta { text-align: center; padding: 32px 40px; background: #f8fafc; }
-    .cta p { color: #64748b; font-size: 13px; margin: 0 0 20px; line-height: 1.6; }
-    .btn { display: inline-block; background: #f97316; color: #fff; padding: 14px 36px; border-radius: 10px; text-decoration: none; font-weight: 800; font-size: 15px; letter-spacing: 0.02em; }
-    .payment-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 14px 18px; margin-top: 12px; }
-    .payment-box p { margin: 0; font-size: 11px; color: #166534; font-family: monospace; }
-    .footer { background: #0f172a; padding: 24px 40px; text-align: center; }
-    .footer p { margin: 4px 0; color: #64748b; font-size: 11px; }
-    .footer .brand { color: #94a3b8; font-weight: 600; font-size: 13px; }
-  </style>
-</head>
-<body>
-<div class="wrapper">
-  <div class="header">
-    <div class="logo-circle">
-      <span class="logo-text">${APP_INITIALS}</span>
-    </div>
-    <div class="header-info">
-      <h1>${APP_NAME}</h1>
-      <p>Your Ultimate Travel Companion</p>
-    </div>
-  </div>
-
-  <div class="hero">
-    <div class="confirmed-badge">\u2713 Booking Confirmed</div>
-    <p class="service-title">${emoji3} ${data.title}</p>
-    <p class="booking-id">Booking ID: ${data.bookingId}</p>
-  </div>
-
-  <div class="section">
-    <div class="row">
-      <label>Passenger</label>
-      <span>${data.passengerName}</span>
-    </div>
-    <div class="row">
-      <label>Service</label>
-      <span style="text-transform:capitalize">${data.bookingType}</span>
-    </div>
-    <div class="row">
-      <label>Travel Date</label>
-      <span>${dateStr}</span>
-    </div>
-    <div class="row">
-      <label>${data.bookingType === "hotel" ? "Rooms" : "Passengers"}</label>
-      <span>${data.passengers}</span>
-    </div>
-    <div class="row">
-      <label>Total Paid</label>
-      <span class="amount-highlight">${amount}</span>
-    </div>
-    <div class="payment-box">
-      <p>\u2713 Payment ID: ${data.paymentId}</p>
-    </div>
-  </div>
-
-  <div class="cta">
-    <p>
-      Hi ${data.passengerName.split(" ")[0]}, your booking is confirmed!<br />
-      Click below to view or download your invoice.
-    </p>
-    <a href="${data.invoiceUrl}" class="btn">\u{1F4C4} View Invoice &amp; Ticket</a>
-    <p style="margin-top:16px;font-size:11px;color:#94a3b8;">
-      Or copy this link: <a href="${data.invoiceUrl}" style="color:#f97316;text-decoration:none;">${data.invoiceUrl}</a>
-    </p>
-  </div>
-
-  <div class="footer">
-    <p class="brand">${APP_NAME} \u2014 ${APP_TAGLINE_LONG}</p>
-    <p>${APP_SUPPORT_PHONE} \xB7 ${APP_SUPPORT_EMAIL}</p>
-    <p>This is an automated confirmation. Do not reply to this email.</p>
-  </div>
-</div>
-</body>
-</html>`;
-}
-async function sendGeneralBookingEmail(data) {
-  const transport = createTransport();
-  if (!transport) {
-    console.info("[email] SMTP not configured \u2014 skipping general booking email. Set SMTP_USER and SMTP_PASS secrets.");
-    return { sent: false, reason: "SMTP not configured" };
+async function sendBookingSMS(data) {
+  if (!data.passengerPhone) {
+    logger.warn(`[notification/sms] No phone number \u2014 skipping (booking: ${data.bookingId})`);
+    return { sent: false, reason: "No passenger phone number" };
   }
-  const from = (process.env.SMTP_FROM || "bookings@dreamflyglobal.com").trim();
-  const emoji3 = SERVICE_EMOJI[data.bookingType] ?? "\u{1F4CB}";
-  const subject = `${emoji3} Booking Confirmed \u2013 ${APP_NAME} | ${data.bookingId}`;
+  const accountSid = (process.env.TWILIO_ACCOUNT_SID || "").trim();
+  const authToken = (process.env.TWILIO_AUTH_TOKEN || "").trim();
+  const fromNumber = (process.env.TWILIO_SMS_FROM || "").trim();
+  if (!accountSid || !authToken || !fromNumber) {
+    logger.warn(`[notification/sms] Twilio SMS not fully configured \u2014 skipping (booking: ${data.bookingId})`);
+    return { sent: false, reason: "Twilio SMS credentials not configured" };
+  }
+  const toNumber = formatPhone3(data.passengerPhone);
+  const body = buildSmsBody(data);
+  logger.info(`[notification/sms] Sending \u2192 ${toNumber}  booking: ${data.bookingId}`);
   try {
-    await transport.sendMail({
-      from: `"${APP_NAME}" <${from}>`,
-      to: data.passengerEmail,
-      subject,
-      html: generalBookingEmailHTML(data)
-    });
-    logger.info(`[email] General booking email sent to ${data.passengerEmail} (${data.bookingId})`);
+    const client = twilio4(accountSid, authToken);
+    const message = await client.messages.create({ from: fromNumber, to: toNumber, body });
+    logger.info(`[notification/sms] Sent \u2713 SID: ${message.sid}  Status: ${message.status}  booking: ${data.bookingId}`);
     return { sent: true };
   } catch (err) {
-    logger.error(`[email] Failed to send general booking email: ${err.message}`);
+    const hint = err.code === 21211 ? " \u2014 Invalid 'to' number format" : err.code === 21214 ? " \u2014 Number cannot receive SMS" : err.code === 21608 ? " \u2014 'from' number not SMS-capable" : "";
+    logger.error(`[notification/sms] Failed \u2014 Code: ${err.code ?? "N/A"} | ${err.message}${hint}  booking: ${data.bookingId}`);
+    return { sent: false, reason: `${err.message}${hint}` };
+  }
+}
+async function sendBookingWhatsApp(data) {
+  if (!data.passengerPhone) {
+    logger.warn(`[notification/whatsapp] No phone number \u2014 skipping (booking: ${data.bookingId})`);
+    return { sent: false, reason: "No passenger phone number" };
+  }
+  const dateStr = (() => {
+    try {
+      return new Date(data.travelDate).toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric"
+      });
+    } catch {
+      return data.travelDate;
+    }
+  })();
+  const waData = {
+    bookingId: data.bookingId,
+    passengerName: data.passengerName,
+    phone: data.passengerPhone,
+    bookingType: data.bookingType,
+    from: data.from || "",
+    to: data.to || "",
+    date: dateStr,
+    amount: data.totalAmount,
+    invoiceUrl: data.invoiceUrl,
+    airline: data.airline,
+    flightNum: data.flightNumber,
+    flightDeparture: data.flightDeparture,
+    flightArrival: data.flightArrival,
+    flightDuration: data.flightDuration,
+    busOperator: data.busOperator,
+    busType: data.busType,
+    boardingPoint: data.boardingPoint,
+    droppingPoint: data.droppingPoint,
+    busDeparture: data.busDeparture,
+    busArrival: data.busArrival,
+    hotelName: data.hotelName,
+    hotelCity: data.hotelCity,
+    hotelNights: data.hotelNights
+  };
+  try {
+    const result = await sendWhatsAppNotification(waData);
+    if (result.sent) {
+      logger.info(`[notification/whatsapp] Sent \u2713 \u2014 booking: ${data.bookingId}`);
+    } else {
+      logger.warn(`[notification/whatsapp] Not sent \u2014 booking: ${data.bookingId}  reason: ${result.reason}`);
+    }
+    return result;
+  } catch (err) {
+    logger.error(`[notification/whatsapp] Error: ${err.message}  booking: ${data.bookingId}`);
     return { sent: false, reason: err.message };
   }
+}
+async function sendAllBookingNotifications(data) {
+  logger.info(`[notification] Sending all channels \u2014 booking: ${data.bookingId}  type: ${data.bookingType}`);
+  const [emailResult, smsResult, whatsappResult] = await Promise.allSettled([
+    sendBookingEmail(data),
+    sendBookingSMS(data),
+    sendBookingWhatsApp(data)
+  ]);
+  const email3 = emailResult.status === "fulfilled" ? emailResult.value : { sent: false, reason: String(emailResult.reason) };
+  const sms = smsResult.status === "fulfilled" ? smsResult.value : { sent: false, reason: String(smsResult.reason) };
+  const whatsapp = whatsappResult.status === "fulfilled" ? whatsappResult.value : { sent: false, reason: String(whatsappResult.reason) };
+  logger.info(
+    `[notification] Done \u2014 booking: ${data.bookingId}  email:${email3.sent} sms:${sms.sent} whatsapp:${whatsapp.sent}`
+  );
+  return { email: email3, sms, whatsapp };
 }
 
 // src/routes/payments.ts
@@ -158030,81 +158188,40 @@ router10.post("/notify", async (req, res) => {
     return res.status(400).json({ success: false, error: "bookingContext.bookingId is required" });
   }
   const invoiceUrl = `${frontendBaseUrl || "https://dreamflyglobal.in"}/invoice/${bookingContext.bookingId}`;
-  logger.info(`[notify] Invoice URL: ${invoiceUrl}`);
-  let emailSent = false;
-  let emailReason = "";
-  if (bookingContext.passengerEmail) {
-    const emailData = {
-      bookingId: bookingContext.bookingId,
-      bookingType: bookingContext.bookingType || "flight",
-      passengerName: bookingContext.passengerName || "Traveller",
-      passengerEmail: bookingContext.passengerEmail,
-      title: bookingContext.title || bookingContext.bookingId,
-      travelDate: bookingContext.travelDate || (/* @__PURE__ */ new Date()).toISOString(),
-      passengers: bookingContext.passengers || 1,
-      totalAmount: bookingContext.totalAmount || 0,
-      paymentId: bookingContext.paymentId || "",
-      invoiceUrl
-    };
-    try {
-      const result = await sendGeneralBookingEmail(emailData);
-      emailSent = result.sent;
-      emailReason = result.reason || "";
-      if (!result.sent) logger.warn(`[notify] Email not sent: ${result.reason}`);
-    } catch (err) {
-      emailReason = err.message;
-      logger.error(`[notify] Email error: ${err.message}`);
-    }
-  } else {
-    emailReason = "No email address provided";
-    logger.warn("[notify] No passengerEmail \u2014 skipping email");
-  }
-  let whatsappSent = false;
-  let whatsappReason = "";
-  if (bookingContext.phone) {
-    logger.info("WhatsApp triggered", { bookingId: bookingContext.bookingId, phone: bookingContext.phone });
-    try {
-      const travelDateStr = bookingContext.travelDate ? new Date(bookingContext.travelDate).toLocaleDateString("en-IN", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric"
-      }) : "";
-      const result = await sendWhatsAppNotification({
-        bookingId: bookingContext.bookingId,
-        passengerName: bookingContext.passengerName || "Traveller",
-        phone: bookingContext.phone,
-        bookingType: bookingContext.bookingType,
-        from: bookingContext.from || bookingContext.flightFrom || bookingContext.busFrom || bookingContext.hotelCity || "",
-        to: bookingContext.to || bookingContext.flightTo || bookingContext.busTo || "",
-        date: travelDateStr,
-        amount: bookingContext.totalAmount || 0,
-        invoiceUrl,
-        airline: bookingContext.flightAirline,
-        flightNum: bookingContext.flightNumber,
-        flightDeparture: bookingContext.flightDeparture,
-        flightArrival: bookingContext.flightArrival,
-        flightDuration: bookingContext.flightDuration,
-        busOperator: bookingContext.busOperator,
-        busType: bookingContext.busType,
-        boardingPoint: bookingContext.busBoardingPoint,
-        droppingPoint: bookingContext.busDroppingPoint,
-        busDeparture: bookingContext.busDeparture,
-        busArrival: bookingContext.busArrival,
-        hotelName: bookingContext.hotelName,
-        hotelCity: bookingContext.hotelCity,
-        hotelNights: bookingContext.hotelNights
-      });
-      whatsappSent = result.sent;
-      whatsappReason = result.reason || "";
-      if (!result.sent) logger.warn(`[notify] WhatsApp not sent: ${result.reason}`);
-    } catch (err) {
-      whatsappReason = err.message;
-      logger.error(`[notify] WhatsApp error: ${err.message}`);
-    }
-  } else {
-    whatsappReason = "No phone number provided";
-    logger.warn("[notify] No phone \u2014 skipping WhatsApp");
-  }
+  logger.info(`[notify] Sending all channels \u2014 booking: ${bookingContext.bookingId}  invoiceUrl: ${invoiceUrl}`);
+  const notifData = {
+    bookingId: bookingContext.bookingId,
+    bookingType: bookingContext.bookingType || "flight",
+    passengerName: bookingContext.passengerName || "Traveller",
+    passengerEmail: bookingContext.passengerEmail || void 0,
+    passengerPhone: bookingContext.phone || void 0,
+    travelDate: bookingContext.travelDate || (/* @__PURE__ */ new Date()).toISOString(),
+    totalAmount: bookingContext.totalAmount || 0,
+    paymentId: bookingContext.paymentId || "",
+    passengers: bookingContext.passengers || 1,
+    invoiceUrl,
+    title: bookingContext.title || bookingContext.bookingId,
+    from: bookingContext.from || bookingContext.flightFrom || bookingContext.busFrom || bookingContext.hotelCity || "",
+    to: bookingContext.to || bookingContext.flightTo || bookingContext.busTo || "",
+    // Flight
+    airline: bookingContext.flightAirline,
+    flightNumber: bookingContext.flightNumber,
+    flightDeparture: bookingContext.flightDeparture,
+    flightArrival: bookingContext.flightArrival,
+    flightDuration: bookingContext.flightDuration,
+    // Bus
+    busOperator: bookingContext.busOperator,
+    busType: bookingContext.busType,
+    boardingPoint: bookingContext.busBoardingPoint,
+    droppingPoint: bookingContext.busDroppingPoint,
+    busDeparture: bookingContext.busDeparture,
+    busArrival: bookingContext.busArrival,
+    // Hotel
+    hotelName: bookingContext.hotelName,
+    hotelCity: bookingContext.hotelCity,
+    hotelNights: bookingContext.hotelNights
+  };
+  const { email: email3, sms, whatsapp } = await sendAllBookingNotifications(notifData);
   if (bookingContext.phone) {
     const userId = bookingContext.userId || `guest_${Date.now()}`;
     scheduleBookingFollowUp({
@@ -158113,17 +158230,19 @@ router10.post("/notify", async (req, res) => {
       phone: bookingContext.phone,
       bookingId: bookingContext.bookingId,
       bookingType: bookingContext.bookingType || "flight",
-      from: bookingContext.from || bookingContext.flightFrom || bookingContext.busFrom || "",
-      to: bookingContext.to || bookingContext.flightTo || bookingContext.busTo || ""
+      from: notifData.from || "",
+      to: notifData.to || ""
     });
   }
   return res.json({
     success: true,
     invoiceUrl,
-    emailSent,
-    whatsappSent,
-    ...emailReason ? { emailReason } : {},
-    ...whatsappReason ? { whatsappReason } : {}
+    emailSent: email3.sent,
+    smsSent: sms.sent,
+    whatsappSent: whatsapp.sent,
+    ...email3.reason ? { emailReason: email3.reason } : {},
+    ...sms.reason ? { smsReason: sms.reason } : {},
+    ...whatsapp.reason ? { whatsappReason: whatsapp.reason } : {}
   });
 });
 router10.post("/webhook", async (req, res) => {
@@ -165089,6 +165208,24 @@ router24.post("/book-flight", async (req, res) => {
     }).returning();
     logger.info({ paymentId, bookingRef, bookingId: savedBooking2.id }, "[book-flight] non-TJ booking CONFIRMED");
     res.json({ success: true, bookingRef, bookingId: savedBooking2.id });
+    const _domain = process.env.REPLIT_DOMAINS?.split(",")[0] || process.env.REPLIT_DEV_DOMAIN || "";
+    const _base = _domain ? `https://${_domain}` : "https://dreamflyglobal.in";
+    const _notif = {
+      bookingId: bookingRef,
+      bookingType: "flight",
+      passengerName,
+      passengerEmail: passengerEmail || void 0,
+      passengerPhone: passengerPhone || void 0,
+      travelDate,
+      totalAmount: totalPrice,
+      paymentId,
+      passengers: passengers.length,
+      invoiceUrl: `${_base}/invoice/${bookingRef}`,
+      title: `Flight ${bookingRef}`
+    };
+    sendAllBookingNotifications(_notif).catch(
+      (e2) => logger.error({ err: e2?.message }, "[book-flight] non-TJ notification error")
+    );
     return;
   }
   const tjPayload = {
@@ -165181,6 +165318,32 @@ router24.post("/book-flight", async (req, res) => {
       "[book-flight] STEP 4: booking CONFIRMED"
     );
     res.json({ success: true, pnr, tjBookingRef, bookingRef, bookingId: savedBooking.id });
+    const __domain = process.env.REPLIT_DOMAINS?.split(",")[0] || process.env.REPLIT_DEV_DOMAIN || "";
+    const __base = __domain ? `https://${__domain}` : "https://dreamflyglobal.in";
+    const __details = typeof bookingMeta?.details === "object" && bookingMeta?.details !== null ? bookingMeta.details : {};
+    const __notif = {
+      bookingId: bookingRef,
+      bookingType: "flight",
+      passengerName,
+      passengerEmail: passengerEmail || void 0,
+      passengerPhone: passengerPhone || void 0,
+      travelDate,
+      totalAmount: totalPrice,
+      paymentId,
+      passengers: passengers.length,
+      invoiceUrl: `${__base}/invoice/${bookingRef}`,
+      title: `Flight ${pnr ?? bookingRef}`,
+      from: __details.from ?? __details.flightFrom ?? void 0,
+      to: __details.to ?? __details.flightTo ?? void 0,
+      airline: __details.airline ?? __details.flightAirline ?? void 0,
+      flightNumber: __details.flightNum ?? __details.flightNumber ?? void 0,
+      flightDeparture: __details.flightDeparture ?? void 0,
+      flightArrival: __details.flightArrival ?? void 0,
+      flightDuration: __details.flightDuration ?? void 0
+    };
+    sendAllBookingNotifications(__notif).catch(
+      (e2) => logger.error({ err: e2?.message }, "[book-flight] TJ notification error")
+    );
     return;
   }
   logger.info({ paymentId, tjError }, "[book-flight] STEP 4b: TJ failed \u2014 initiating auto-refund");
@@ -165346,7 +165509,7 @@ var tbo_default = router27;
 // src/routes/test-comms.ts
 var import_express28 = __toESM(require_express2(), 1);
 import nodemailer3 from "nodemailer";
-import twilio4 from "twilio";
+import twilio5 from "twilio";
 var router28 = (0, import_express28.Router)();
 function missingVars(keys) {
   return keys.filter((k) => !process.env[k]?.trim());
@@ -165422,7 +165585,7 @@ router28.get("/test-sms", async (_req, res) => {
   const body = `[Dream Fly Global] Test SMS sent at ${(/* @__PURE__ */ new Date()).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST. Your SMS integration is working!`;
   logger.info(`${tag} Sending test SMS \u2192 from: ${from}  to: ${to}`);
   try {
-    const client = twilio4(accountSid, authToken);
+    const client = twilio5(accountSid, authToken);
     const message = await client.messages.create({ from, to, body });
     logger.info(`${tag} SUCCESS \u2014 SID: ${message.sid}  status: ${message.status}  to: ${to}`);
     return res.json({ success: true, message: `Test SMS sent to ${to}`, sid: message.sid, status: message.status });
@@ -165454,7 +165617,7 @@ Your WhatsApp integration is working correctly! \u{1F389}
 _Sent at: ${(/* @__PURE__ */ new Date()).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST_`;
   logger.info(`${tag} Sending test WhatsApp \u2192 from: ${fromNumber}  to: ${toNumber}`);
   try {
-    const client = twilio4(accountSid, authToken);
+    const client = twilio5(accountSid, authToken);
     const message = await client.messages.create({ from: fromNumber, to: toNumber, body });
     logger.info(`${tag} SUCCESS \u2014 SID: ${message.sid}  status: ${message.status}  to: ${toNumber}`);
     return res.json({ success: true, message: `Test WhatsApp sent to ${toNumber}`, sid: message.sid, status: message.status });
