@@ -23,24 +23,13 @@ interface NotifyBody {
 }
 
 function buildTransport(user: string, pass: string) {
-  const domain = user.split("@")[1]?.toLowerCase() || "";
-  if (domain === "gmail.com") {
-    return nodemailer.createTransport({ service: "gmail", auth: { user, pass } });
-  }
-  if (domain === "outlook.com" || domain === "hotmail.com" || domain === "live.com") {
-    return nodemailer.createTransport({
-      host: "smtp.office365.com", port: 587, secure: false,
-      auth: { user, pass },
-      tls: { rejectUnauthorized: false, ciphers: "SSLv3" },
-    });
-  }
-  if (domain === "yahoo.com" || domain === "yahoo.in") {
-    return nodemailer.createTransport({ service: "yahoo", auth: { user, pass } });
-  }
+  const host = (process.env.SMTP_HOST || "").trim();
+  const port = Number(process.env.SMTP_PORT || 465);
   return nodemailer.createTransport({
-    host: `smtp.${domain}`, port: 587, secure: false,
+    host,
+    port,
+    secure: true,
     auth: { user, pass },
-    tls: { rejectUnauthorized: false },
   });
 }
 
@@ -61,7 +50,7 @@ router.post("/admin/notify", async (req, res) => {
   try {
     const transport = buildTransport(user, pass);
     await transport.sendMail({
-      from: from?.trim() || `"${APP_NAME}" <${user}>`,
+      from: from?.trim() || `"${APP_NAME}" <bookings@dreamflyglobal.com>`,
       to,
       subject,
       html: html || undefined,

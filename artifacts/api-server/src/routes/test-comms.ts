@@ -7,7 +7,7 @@
  * GET /api/test-whatsapp   — sends a test WhatsApp message via Twilio
  *
  * Required env vars:
- *   Email:     SMTP_USER, SMTP_PASS, SMTP_HOST (optional), SMTP_FROM (optional), TEST_EMAIL
+ *   Email:     SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM (optional), TEST_EMAIL
  *   SMS:       TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_SMS_FROM, TEST_PHONE
  *   WhatsApp:  TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_FROM, TEST_PHONE
  */
@@ -48,39 +48,23 @@ router.get("/test-email", async (_req, res) => {
 
   const user  = process.env.SMTP_USER!.trim();
   const pass  = process.env.SMTP_PASS!.trim();
-  const from  = (process.env.SMTP_FROM || user).trim();
+  const from  = (process.env.SMTP_FROM || "bookings@dreamflyglobal.com").trim();
   const to    = (process.env.TEST_EMAIL || user).trim();
+  const host  = (process.env.SMTP_HOST || "").trim();
+  const port  = Number(process.env.SMTP_PORT || 465);
 
-  const domain = user.split("@")[1]?.toLowerCase() || "";
-  let transport: nodemailer.Transporter;
-
-  if (domain === "gmail.com") {
-    logger.info(`${tag} Using Gmail service`);
-    transport = nodemailer.createTransport({ service: "gmail", auth: { user, pass } });
-  } else if (["outlook.com", "hotmail.com", "live.com"].includes(domain)) {
-    logger.info(`${tag} Using Outlook/Office365`);
-    transport = nodemailer.createTransport({
-      host: "smtp.office365.com", port: 587, secure: false,
-      auth: { user, pass }, tls: { rejectUnauthorized: false, ciphers: "SSLv3" },
-    });
-  } else if (["yahoo.com", "yahoo.in"].includes(domain)) {
-    logger.info(`${tag} Using Yahoo`);
-    transport = nodemailer.createTransport({ service: "yahoo", auth: { user, pass } });
-  } else if (process.env.SMTP_HOST) {
-    const host = process.env.SMTP_HOST.trim();
-    const port = parseInt(process.env.SMTP_PORT || "587", 10);
-    logger.info(`${tag} Using custom SMTP ${host}:${port}`);
-    transport = nodemailer.createTransport({
-      host, port, secure: port === 465,
-      auth: { user, pass }, tls: { rejectUnauthorized: false },
-    });
-  } else {
-    logger.info(`${tag} Guessing smtp.${domain}`);
-    transport = nodemailer.createTransport({
-      host: `smtp.${domain}`, port: 587, secure: false,
-      auth: { user, pass }, tls: { rejectUnauthorized: false },
-    });
+  if (!host) {
+    logger.warn(`${tag} SMTP_HOST not configured`);
+    return res.status(503).json({ success: false, reason: "SMTP_HOST not configured" });
   }
+
+  logger.info(`${tag} Using SMTP: ${host}:${port} (secure=true)`);
+  const transport = nodemailer.createTransport({
+    host,
+    port,
+    secure: true,
+    auth: { user, pass },
+  });
 
   logger.info(`${tag} Sending test email → from: ${from}  to: ${to}`);
 

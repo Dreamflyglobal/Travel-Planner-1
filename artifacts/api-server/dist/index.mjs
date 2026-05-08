@@ -155897,28 +155897,13 @@ var import_express4 = __toESM(require_express2(), 1);
 import nodemailer from "nodemailer";
 var router4 = (0, import_express4.Router)();
 function buildTransport(user, pass) {
-  const domain2 = user.split("@")[1]?.toLowerCase() || "";
-  if (domain2 === "gmail.com") {
-    return nodemailer.createTransport({ service: "gmail", auth: { user, pass } });
-  }
-  if (domain2 === "outlook.com" || domain2 === "hotmail.com" || domain2 === "live.com") {
-    return nodemailer.createTransport({
-      host: "smtp.office365.com",
-      port: 587,
-      secure: false,
-      auth: { user, pass },
-      tls: { rejectUnauthorized: false, ciphers: "SSLv3" }
-    });
-  }
-  if (domain2 === "yahoo.com" || domain2 === "yahoo.in") {
-    return nodemailer.createTransport({ service: "yahoo", auth: { user, pass } });
-  }
+  const host = (process.env.SMTP_HOST || "").trim();
+  const port2 = Number(process.env.SMTP_PORT || 465);
   return nodemailer.createTransport({
-    host: `smtp.${domain2}`,
-    port: 587,
-    secure: false,
-    auth: { user, pass },
-    tls: { rejectUnauthorized: false }
+    host,
+    port: port2,
+    secure: true,
+    auth: { user, pass }
   });
 }
 router4.post("/admin/notify", async (req, res) => {
@@ -155934,7 +155919,7 @@ router4.post("/admin/notify", async (req, res) => {
   try {
     const transport = buildTransport(user, pass);
     await transport.sendMail({
-      from: from?.trim() || `"${APP_NAME}" <${user}>`,
+      from: from?.trim() || `"${APP_NAME}" <bookings@dreamflyglobal.com>`,
       to,
       subject,
       html: html || void 0,
@@ -157692,55 +157677,18 @@ import nodemailer2 from "nodemailer";
 function createTransport() {
   const user = (process.env.SMTP_USER || "").trim();
   const pass = (process.env.SMTP_PASS || "").trim();
-  if (!user || !pass) {
-    console.info("[email] SMTP_USER or SMTP_PASS not set \u2014 email disabled");
+  const host = (process.env.SMTP_HOST || "").trim();
+  const port2 = Number(process.env.SMTP_PORT || 465);
+  if (!user || !pass || !host) {
+    console.info("[email] SMTP_USER, SMTP_PASS, or SMTP_HOST not set \u2014 email disabled");
     return null;
   }
-  const domain2 = user.split("@")[1]?.toLowerCase() || "";
-  if (domain2 === "gmail.com") {
-    console.info("[email] Using Gmail service config (App Password)");
-    return nodemailer2.createTransport({
-      service: "gmail",
-      auth: { user, pass }
-    });
-  }
-  if (domain2 === "outlook.com" || domain2 === "hotmail.com" || domain2 === "live.com") {
-    console.info("[email] Using Outlook/Office365 config");
-    return nodemailer2.createTransport({
-      host: "smtp.office365.com",
-      port: 587,
-      secure: false,
-      auth: { user, pass },
-      tls: { rejectUnauthorized: false, ciphers: "SSLv3" }
-    });
-  }
-  if (domain2 === "yahoo.com" || domain2 === "yahoo.in") {
-    console.info("[email] Using Yahoo service config");
-    return nodemailer2.createTransport({
-      service: "yahoo",
-      auth: { user, pass }
-    });
-  }
-  if (process.env.SMTP_HOST) {
-    const host = process.env.SMTP_HOST.trim();
-    const port2 = parseInt(process.env.SMTP_PORT || "587", 10);
-    const secure = port2 === 465;
-    console.info(`[email] Using custom SMTP host: ${host}:${port2}`);
-    return nodemailer2.createTransport({
-      host,
-      port: port2,
-      secure,
-      auth: { user, pass },
-      tls: { rejectUnauthorized: false }
-    });
-  }
-  console.info(`[email] Guessing SMTP host: smtp.${domain2}`);
+  console.info(`[email] Using SMTP: ${host}:${port2} (secure=true)`);
   return nodemailer2.createTransport({
-    host: `smtp.${domain2}`,
-    port: 587,
-    secure: false,
-    auth: { user, pass },
-    tls: { rejectUnauthorized: false }
+    host,
+    port: port2,
+    secure: true,
+    auth: { user, pass }
   });
 }
 function bookingEmailHTML(ticket) {
@@ -157834,7 +157782,7 @@ async function sendBookingConfirmationEmail(ticket, pdfBuffer) {
     console.info("[email] SMTP not configured \u2014 skipping email delivery");
     return { sent: false, reason: "SMTP not configured" };
   }
-  const from = process.env.SMTP_FROM || process.env.SMTP_USER || "${APP_DEFAULT_FROM}";
+  const from = (process.env.SMTP_FROM || "bookings@dreamflyglobal.com").trim();
   try {
     await transport.sendMail({
       from: `"${APP_NAME} Tickets" <${from}>`,
@@ -157975,7 +157923,7 @@ async function sendGeneralBookingEmail(data) {
     console.info("[email] SMTP not configured \u2014 skipping general booking email. Set SMTP_USER and SMTP_PASS secrets.");
     return { sent: false, reason: "SMTP not configured" };
   }
-  const from = process.env.SMTP_FROM || process.env.SMTP_USER || "${APP_DEFAULT_FROM}";
+  const from = (process.env.SMTP_FROM || "bookings@dreamflyglobal.com").trim();
   const emoji3 = SERVICE_EMOJI[data.bookingType] ?? "\u{1F4CB}";
   const subject = `${emoji3} Booking Confirmed \u2013 ${APP_NAME} | ${data.bookingId}`;
   try {
@@ -165420,46 +165368,21 @@ router28.get("/test-email", async (_req, res) => {
   }
   const user = process.env.SMTP_USER.trim();
   const pass = process.env.SMTP_PASS.trim();
-  const from = (process.env.SMTP_FROM || user).trim();
+  const from = (process.env.SMTP_FROM || "bookings@dreamflyglobal.com").trim();
   const to = (process.env.TEST_EMAIL || user).trim();
-  const domain2 = user.split("@")[1]?.toLowerCase() || "";
-  let transport;
-  if (domain2 === "gmail.com") {
-    logger.info(`${tag} Using Gmail service`);
-    transport = nodemailer3.createTransport({ service: "gmail", auth: { user, pass } });
-  } else if (["outlook.com", "hotmail.com", "live.com"].includes(domain2)) {
-    logger.info(`${tag} Using Outlook/Office365`);
-    transport = nodemailer3.createTransport({
-      host: "smtp.office365.com",
-      port: 587,
-      secure: false,
-      auth: { user, pass },
-      tls: { rejectUnauthorized: false, ciphers: "SSLv3" }
-    });
-  } else if (["yahoo.com", "yahoo.in"].includes(domain2)) {
-    logger.info(`${tag} Using Yahoo`);
-    transport = nodemailer3.createTransport({ service: "yahoo", auth: { user, pass } });
-  } else if (process.env.SMTP_HOST) {
-    const host = process.env.SMTP_HOST.trim();
-    const port2 = parseInt(process.env.SMTP_PORT || "587", 10);
-    logger.info(`${tag} Using custom SMTP ${host}:${port2}`);
-    transport = nodemailer3.createTransport({
-      host,
-      port: port2,
-      secure: port2 === 465,
-      auth: { user, pass },
-      tls: { rejectUnauthorized: false }
-    });
-  } else {
-    logger.info(`${tag} Guessing smtp.${domain2}`);
-    transport = nodemailer3.createTransport({
-      host: `smtp.${domain2}`,
-      port: 587,
-      secure: false,
-      auth: { user, pass },
-      tls: { rejectUnauthorized: false }
-    });
+  const host = (process.env.SMTP_HOST || "").trim();
+  const port2 = Number(process.env.SMTP_PORT || 465);
+  if (!host) {
+    logger.warn(`${tag} SMTP_HOST not configured`);
+    return res.status(503).json({ success: false, reason: "SMTP_HOST not configured" });
   }
+  logger.info(`${tag} Using SMTP: ${host}:${port2} (secure=true)`);
+  const transport = nodemailer3.createTransport({
+    host,
+    port: port2,
+    secure: true,
+    auth: { user, pass }
+  });
   logger.info(`${tag} Sending test email \u2192 from: ${from}  to: ${to}`);
   try {
     const info = await transport.sendMail({
