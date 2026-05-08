@@ -49,6 +49,14 @@ import {
   Bell,
   Send,
   Smartphone,
+  Mail,
+  Copy,
+  Loader2,
+  StickyNote,
+  User,
+  Hash,
+  Eye,
+  Hotel,
 } from "lucide-react";
 import { getMarkupSettings, saveMarkupSettings, getHiddenMarkupSettings, saveHiddenMarkupSettings, getHiddenMarkupAmount, getAgentMarkupSettings, saveAgentMarkupSettings, type MarkupSettings, type MarkupConfig } from "@/lib/pricing";
 import { getAllStaffBookings } from "@/lib/staff-data";
@@ -63,6 +71,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+} from "@/components/ui/sheet";
+import { Separator } from "@/components/ui/separator";
 import {
   Select,
   SelectContent,
@@ -605,6 +618,7 @@ export default function AdminDashboard() {
   const [bookingTypeFilter, setBookingTypeFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo]   = useState("");
+  const [viewBooking, setViewBooking] = useState<any>(null);
 
   // ── Holiday Leads & Enquiries ──────────────────────────────────────────────
   const [holidayLeads,     setHolidayLeads]     = useState<HolidayLead[]>([]);
@@ -2954,15 +2968,19 @@ export default function AdminDashboard() {
                               <tr
                                 key={booking.id || idx}
                                 className={cn(
-                                  "border-b last:border-0 hover:bg-primary/5 transition-colors",
+                                  "border-b last:border-0 hover:bg-primary/5 transition-colors cursor-pointer",
                                   idx % 2 === 0 ? "bg-white" : "bg-muted/10"
                                 )}
+                                onClick={() => setViewBooking(booking)}
                               >
                                 {/* Booking ID */}
                                 <td className="px-4 py-3 whitespace-nowrap">
-                                  <span className="font-mono text-xs bg-primary/10 text-primary px-2 py-1 rounded font-semibold">
+                                  <button
+                                    className="font-mono text-xs bg-primary/10 text-primary px-2 py-1 rounded font-semibold hover:bg-primary/20 transition-colors"
+                                    onClick={(e) => { e.stopPropagation(); setViewBooking(booking); }}
+                                  >
                                     {bookingId}
-                                  </span>
+                                  </button>
                                 </td>
 
                                 {/* Customer — show agent badge if booked via B2B agent */}
@@ -3116,6 +3134,14 @@ export default function AdminDashboard() {
                   )}
                 </CardContent>
               </Card>
+
+              {/* ── Booking Detail Sheet ── */}
+              <AdminBookingDetailSheet
+                booking={viewBooking}
+                open={!!viewBooking}
+                onOpenChange={(open) => { if (!open) setViewBooking(null); }}
+                onRefresh={fetchAdminBookings}
+              />
             </TabsContent>
 
             {/* ── Push Notifications ─────────────────────────────────────── */}
@@ -3127,6 +3153,985 @@ export default function AdminDashboard() {
         </div>
       </div>
     </AdminLayout>
+  );
+}
+
+// ── Admin Booking Detail Sheet ────────────────────────────────────────────────
+function AdminBookingDetailSheet({
+  booking,
+  open,
+  onOpenChange,
+  onRefresh,
+}: {
+  booking: any;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onRefresh?: () => void;
+}) {
+  const { toast } = useToast();
+  const [detailTab, setDetailTab] = useState("overview");
+  const [resending, setResending] = useState<string | null>(null);
+  const [acting, setActing] = useState(false);
+  const [noteText, setNoteText] = useState("");
+  const [addingNote, setAddingNote] = useState(false);
+  const [localNotes, setLocalNotes] = useState<any[]>([]);
+  const [localStatus, setLocalStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (booking) {
+      setLocalNotes(booking.details?.adminNotes || []);
+      setLocalStatus(null);
+      setDetailTab("overview");
+      setNoteText("");
+    }
+  }, [booking?.id]);
+
+  if (!booking) return null;
+
+  function getAuthHeader(): Record<string, string> {
+    const token =
+      localStorage.getItem("admin_jwt") || localStorage.getItem("jwt_token");
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  }
+
+  const bookingDbId = booking.id;
+  const bookingRef =
+    booking.details?.bookingRef ||
+    booking.bookingRef ||
+    booking.bookingId ||
+    `#${booking.id}`;
+  const name = booking.customerName || booking.passengerName || "—";
+  const email = booking.customerEmail || booking.passengerEmail || "—";
+  const phone =
+    booking.customerPhone ||
+    booking.passengerPhone ||
+    booking.details?.customerPhone ||
+    "—";
+  const type = booking.bookingType || booking.type || "flight";
+  const amount =
+    booking.amount ?? booking.details?.amount ?? booking.totalPrice ?? 0;
+  const currentStatus =
+    localStatus ?? booking.status ?? booking.details?.status ?? "paid";
+  const paymentId =
+    booking.paymentId || booking.details?.paymentId || "—";
+  const paymentMethod =
+    booking.paymentMethod || booking.details?.paymentMethod || "—";
+  const travelDate =
+    booking.travelDate ||
+    booking.details?.travelDate ||
+    booking.details?.checkIn ||
+    "—";
+  const createdAt = booking.createdAt || booking.details?.createdAt || "—";
+  const d = booking.details || {};
+  const fi = d.flightInfo || {};
+
+  const typeBadgeCls: Record<string, string> = {
+    flight: "bg-blue-100 text-blue-700 border-blue-200",
+    hotel: "bg-green-100 text-green-700 border-green-200",
+    bus: "bg-cyan-100 text-cyan-700 border-cyan-200",
+    package: "bg-purple-100 text-purple-700 border-purple-200",
+  };
+  const statusBadgeCls =
+    currentStatus === "confirmed" || currentStatus === "paid"
+      ? "bg-green-100 text-green-800 border-green-200"
+      : currentStatus === "cancelled"
+      ? "bg-red-100 text-red-800 border-red-200"
+      : "bg-yellow-100 text-yellow-800 border-yellow-200";
+
+  async function resend(channel: string) {
+    setResending(channel);
+    try {
+      const res = await fetch(`/api/admin/bookings/${bookingDbId}/resend`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeader(),
+        },
+        body: JSON.stringify({ channel }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast({ title: `Notification resent via ${channel} ✓` });
+      } else {
+        toast({
+          title: "Resend failed",
+          description: data.error || "Unknown error",
+          variant: "destructive",
+        });
+      }
+    } catch (e: any) {
+      toast({
+        title: "Network error",
+        description: e.message,
+        variant: "destructive",
+      });
+    }
+    setResending(null);
+  }
+
+  async function changeStatus(status: string) {
+    setActing(true);
+    try {
+      const res = await fetch(
+        `/api/admin/bookings/${bookingDbId}/status`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            ...getAuthHeader(),
+          },
+          body: JSON.stringify({ status }),
+        }
+      );
+      if (res.ok) {
+        setLocalStatus(status);
+        toast({ title: `Booking marked as ${status} ✓` });
+        onRefresh?.();
+      } else {
+        const data = await res.json();
+        toast({
+          title: "Status update failed",
+          description: data.error,
+          variant: "destructive",
+        });
+      }
+    } catch (e: any) {
+      toast({
+        title: "Network error",
+        description: e.message,
+        variant: "destructive",
+      });
+    }
+    setActing(false);
+  }
+
+  async function addNote() {
+    if (!noteText.trim()) return;
+    setAddingNote(true);
+    try {
+      const res = await fetch(
+        `/api/admin/bookings/${bookingDbId}/notes`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...getAuthHeader(),
+          },
+          body: JSON.stringify({ note: noteText.trim() }),
+        }
+      );
+      if (res.ok) {
+        const newNote = {
+          note: noteText.trim(),
+          addedAt: new Date().toISOString(),
+          addedBy: "admin",
+        };
+        setLocalNotes((prev) => [...prev, newNote]);
+        setNoteText("");
+        toast({ title: "Note added ✓" });
+      }
+    } catch {}
+    setAddingNote(false);
+  }
+
+  function copyBooking() {
+    const text = [
+      `Booking ID: ${bookingRef}`,
+      `Customer: ${name}`,
+      `Email: ${email}`,
+      `Phone: ${phone}`,
+      `Type: ${type}`,
+      `Amount: ₹${amount.toLocaleString("en-IN")}`,
+      `Status: ${currentStatus}`,
+      `Payment ID: ${paymentId}`,
+      `Travel Date: ${travelDate}`,
+      `Booked At: ${createdAt !== "—" ? new Date(createdAt).toLocaleString("en-IN") : "—"}`,
+    ].join("\n");
+    navigator.clipboard
+      .writeText(text)
+      .then(() => toast({ title: "Booking details copied ✓" }));
+  }
+
+  const timeline = [
+    createdAt !== "—"
+      ? { label: "Booking Created", time: createdAt, color: "bg-blue-500" }
+      : null,
+    paymentId !== "—"
+      ? {
+          label: "Payment Received",
+          time: createdAt,
+          color: "bg-green-500",
+          sub: paymentId,
+        }
+      : null,
+    currentStatus === "confirmed" || currentStatus === "paid"
+      ? {
+          label: "Booking Confirmed",
+          time: createdAt,
+          color: "bg-emerald-600",
+        }
+      : null,
+    currentStatus === "cancelled"
+      ? { label: "Booking Cancelled", time: travelDate, color: "bg-red-500" }
+      : null,
+  ].filter(Boolean) as { label: string; time: string; color: string; sub?: string }[];
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="right"
+        className="w-full sm:max-w-2xl overflow-y-auto p-0 flex flex-col"
+      >
+        {/* ── Header ── */}
+        <div className="sticky top-0 z-10 bg-white border-b px-5 py-4 flex-shrink-0">
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-mono text-sm font-bold text-primary">
+                  {bookingRef}
+                </span>
+                <Badge
+                  className={cn(
+                    "text-[10px] border capitalize",
+                    typeBadgeCls[type] || "bg-gray-100 text-gray-700"
+                  )}
+                >
+                  {type}
+                </Badge>
+                <Badge
+                  className={cn(
+                    "text-[10px] border capitalize",
+                    statusBadgeCls
+                  )}
+                >
+                  {currentStatus}
+                </Badge>
+              </div>
+              <p className="text-sm text-muted-foreground mt-0.5 truncate">
+                {name} · {phone}
+              </p>
+            </div>
+          </div>
+
+          {/* Quick action buttons */}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs gap-1.5"
+              onClick={() => resend("email")}
+              disabled={!!resending}
+            >
+              {resending === "email" ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <Mail className="w-3 h-3" />
+              )}{" "}
+              Email
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs gap-1.5"
+              onClick={() => resend("sms")}
+              disabled={!!resending}
+            >
+              {resending === "sms" ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <Phone className="w-3 h-3" />
+              )}{" "}
+              SMS
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs gap-1.5"
+              onClick={() => resend("whatsapp")}
+              disabled={!!resending}
+            >
+              {resending === "whatsapp" ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <MessageSquare className="w-3 h-3" />
+              )}{" "}
+              WhatsApp
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs gap-1.5"
+              onClick={() => resend("all")}
+              disabled={!!resending}
+            >
+              {resending === "all" ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <Send className="w-3 h-3" />
+              )}{" "}
+              Resend All
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs gap-1.5"
+              onClick={copyBooking}
+            >
+              <Copy className="w-3 h-3" /> Copy
+            </Button>
+            {bookingDbId && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs gap-1.5"
+                onClick={() =>
+                  window.open(`/api/tickets/${bookingDbId}`, "_blank")
+                }
+              >
+                <Eye className="w-3 h-3" /> View Ticket
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* ── Tabs ── */}
+        <div className="p-4 flex-1 overflow-y-auto">
+          <Tabs value={detailTab} onValueChange={setDetailTab}>
+            <TabsList className="w-full grid grid-cols-4 mb-4">
+              <TabsTrigger value="overview" className="text-xs">
+                Overview
+              </TabsTrigger>
+              <TabsTrigger value="details" className="text-xs">
+                Details
+              </TabsTrigger>
+              <TabsTrigger value="timeline" className="text-xs">
+                Timeline
+              </TabsTrigger>
+              <TabsTrigger value="notes" className="text-xs">
+                Notes
+                {localNotes.length > 0 && (
+                  <span className="ml-1 bg-amber-500 text-white text-[9px] rounded-full px-1.5 py-0.5">
+                    {localNotes.length}
+                  </span>
+                )}
+              </TabsTrigger>
+            </TabsList>
+
+            {/* ── Overview Tab ── */}
+            <TabsContent value="overview" className="space-y-4 mt-0">
+              {/* Customer card */}
+              <div className="rounded-xl border bg-blue-50/50 p-4 space-y-3">
+                <p className="text-xs font-bold text-blue-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5" /> Customer Information
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Name</p>
+                    <p className="font-medium">{name}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Phone</p>
+                    <p className="font-medium">{phone}</p>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <p className="text-xs text-muted-foreground">Email</p>
+                    <p className="font-medium break-all">{email}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Travel Date</p>
+                    <p className="font-medium">{travelDate}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Passengers</p>
+                    <p className="font-medium">
+                      {d.passengers?.length || d.guests?.length || 1}
+                    </p>
+                  </div>
+                  {(booking.userId || d.userId) && (
+                    <div>
+                      <p className="text-xs text-muted-foreground">User ID</p>
+                      <p className="font-medium text-muted-foreground text-xs">
+                        {booking.userId || d.userId}
+                      </p>
+                    </div>
+                  )}
+                  {(booking.agentCode || d.agentCode) && (
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Agent Code
+                      </p>
+                      <p className="font-medium text-blue-700">
+                        {booking.agentCode || d.agentCode}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Payment card */}
+              <div className="rounded-xl border bg-emerald-50/50 p-4 space-y-3">
+                <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <IndianRupee className="w-3.5 h-3.5" /> Payment Information
+                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">Total Amount</p>
+                  <p className="text-2xl font-extrabold text-emerald-700">
+                    ₹{amount.toLocaleString("en-IN")}
+                  </p>
+                </div>
+                <Separator />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-xs text-muted-foreground">
+                      Payment Status
+                    </p>
+                    <Badge
+                      className={cn(
+                        "text-[10px] border capitalize mt-0.5",
+                        statusBadgeCls
+                      )}
+                    >
+                      {currentStatus}
+                    </Badge>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Method</p>
+                    <p className="font-medium capitalize">{paymentMethod}</p>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <p className="text-xs text-muted-foreground">
+                      Razorpay Payment ID
+                    </p>
+                    <p className="font-mono text-xs break-all">{paymentId}</p>
+                  </div>
+                  {(d.orderId || booking.orderId) && (
+                    <div className="sm:col-span-2">
+                      <p className="text-xs text-muted-foreground">Order ID</p>
+                      <p className="font-mono text-xs break-all">
+                        {d.orderId || booking.orderId}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Support actions */}
+              <div className="rounded-xl border p-4 space-y-3">
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                  Support Actions
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    className="bg-emerald-600 hover:bg-emerald-700 gap-1.5 text-xs"
+                    onClick={() => changeStatus("confirmed")}
+                    disabled={
+                      acting || currentStatus === "confirmed"
+                    }
+                  >
+                    {acting ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <CheckCircle className="w-3.5 h-3.5" />
+                    )}{" "}
+                    Mark Confirmed
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    className="gap-1.5 text-xs"
+                    onClick={() => changeStatus("cancelled")}
+                    disabled={
+                      acting || currentStatus === "cancelled"
+                    }
+                  >
+                    {acting ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <XCircle className="w-3.5 h-3.5" />
+                    )}{" "}
+                    Cancel Booking
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 text-xs"
+                    onClick={() => setDetailTab("notes")}
+                  >
+                    <StickyNote className="w-3.5 h-3.5" /> Add Note
+                  </Button>
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* ── Details Tab ── */}
+            <TabsContent value="details" className="space-y-4 mt-0">
+              {/* Flight */}
+              {type === "flight" && (
+                <div className="rounded-xl border bg-blue-50/50 p-4 space-y-3">
+                  <p className="text-xs font-bold text-blue-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <Plane className="w-3.5 h-3.5" /> Flight Information
+                  </p>
+                  <div className="flex items-center gap-3 justify-center py-3 bg-blue-100 rounded-lg">
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-blue-800">
+                        {fi.from || d.from || "—"}
+                      </p>
+                      <p className="text-xs text-blue-600">
+                        {fi.departureTime || d.departureTime || ""}
+                      </p>
+                    </div>
+                    <div className="flex flex-col items-center px-2">
+                      <ArrowRight className="w-5 h-5 text-blue-500" />
+                      <p className="text-[10px] text-blue-500 mt-0.5">
+                        {fi.duration || d.duration || ""}
+                      </p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-blue-800">
+                        {fi.to || d.to || "—"}
+                      </p>
+                      <p className="text-xs text-blue-600">
+                        {fi.arrivalTime || d.arrivalTime || ""}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Airline</p>
+                      <p className="font-medium">
+                        {fi.airline || d.airline || "—"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Flight No.
+                      </p>
+                      <p className="font-medium">
+                        {fi.flightNumber || d.flightNumber || "—"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Cabin</p>
+                      <p className="font-medium capitalize">
+                        {fi.cabinClass || d.cabinClass || "—"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">PNR</p>
+                      <p className="font-mono font-bold text-primary">
+                        {d.pnr || fi.pnr || "—"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Ticket No.
+                      </p>
+                      <p className="font-mono text-xs">
+                        {d.ticketNumber || fi.ticketNumber || "—"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Airline PNR
+                      </p>
+                      <p className="font-mono text-xs">
+                        {d.airlinePnr || fi.airlinePnr || "—"}
+                      </p>
+                    </div>
+                  </div>
+                  {(d.passengers || []).length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground mb-2">
+                        Passengers
+                      </p>
+                      <div className="space-y-1.5">
+                        {d.passengers.map((p: any, i: number) => (
+                          <div
+                            key={i}
+                            className="flex items-center justify-between bg-white rounded-lg px-3 py-2 text-sm border"
+                          >
+                            <span className="font-medium">
+                              {p.firstName || p.name || `Passenger ${i + 1}`}{" "}
+                              {p.lastName || ""}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {p.seat || ""}{" "}
+                              {p.type || p.passengerType || ""}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Hotel */}
+              {type === "hotel" && (
+                <div className="rounded-xl border bg-green-50/50 p-4 space-y-3">
+                  <p className="text-xs font-bold text-green-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <Building2 className="w-3.5 h-3.5" /> Hotel Information
+                  </p>
+                  <div className="bg-green-100 rounded-lg px-4 py-3 text-center">
+                    <p className="text-lg font-bold text-green-800">
+                      {d.hotelName || d.hotel?.name || "—"}
+                    </p>
+                    <p className="text-xs text-green-600">
+                      {d.city || d.hotel?.city || "—"}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Check-in</p>
+                      <p className="font-medium">{d.checkIn || "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Check-out
+                      </p>
+                      <p className="font-medium">{d.checkOut || "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Nights</p>
+                      <p className="font-medium">{d.nights || "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Rooms</p>
+                      <p className="font-medium">{d.rooms || "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Room Type
+                      </p>
+                      <p className="font-medium">{d.roomType || "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Board</p>
+                      <p className="font-medium">
+                        {d.boardBasis || d.board || "—"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Booking Code
+                      </p>
+                      <p className="font-mono font-bold text-primary">
+                        {d.bookingCode || d.confirmationCode || "—"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Confirmation
+                      </p>
+                      <p className="font-mono text-xs">
+                        {d.confirmationNumber || "—"}
+                      </p>
+                    </div>
+                  </div>
+                  {(d.guests || []).length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground mb-2">
+                        Guests
+                      </p>
+                      <div className="space-y-1.5">
+                        {d.guests.map((g: any, i: number) => (
+                          <div
+                            key={i}
+                            className="flex items-center justify-between bg-white rounded-lg px-3 py-2 text-sm border"
+                          >
+                            <span className="font-medium">
+                              {g.name || g.firstName || `Guest ${i + 1}`}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {g.type || ""}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Bus */}
+              {type === "bus" && (
+                <div className="rounded-xl border bg-cyan-50/50 p-4 space-y-3">
+                  <p className="text-xs font-bold text-cyan-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <Bus className="w-3.5 h-3.5" /> Bus Information
+                  </p>
+                  <div className="flex items-center gap-3 justify-center py-3 bg-cyan-100 rounded-lg">
+                    <div className="text-center">
+                      <p className="text-xl font-bold text-cyan-800">
+                        {d.from || fi.from || "—"}
+                      </p>
+                      <p className="text-xs text-cyan-600">
+                        {d.departureTime || ""}
+                      </p>
+                    </div>
+                    <ArrowRight className="w-5 h-5 text-cyan-500" />
+                    <div className="text-center">
+                      <p className="text-xl font-bold text-cyan-800">
+                        {d.to || fi.to || "—"}
+                      </p>
+                      <p className="text-xs text-cyan-600">
+                        {d.arrivalTime || ""}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Operator</p>
+                      <p className="font-medium">
+                        {d.busOperator || d.operator || "—"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Bus Type</p>
+                      <p className="font-medium">{d.busType || "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Seat(s)</p>
+                      <p className="font-medium">
+                        {(d.seatNumbers || []).join(", ") ||
+                          d.seatNumber ||
+                          "—"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Ticket No.
+                      </p>
+                      <p className="font-mono font-bold text-primary">
+                        {d.ticketNumber || d.pnr || "—"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Boarding Point
+                      </p>
+                      <p className="font-medium text-xs">
+                        {d.boardingPoint || "—"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Dropping Point
+                      </p>
+                      <p className="font-medium text-xs">
+                        {d.droppingPoint || "—"}
+                      </p>
+                    </div>
+                  </div>
+                  {(d.passengers || []).length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground mb-2">
+                        Passengers
+                      </p>
+                      <div className="space-y-1.5">
+                        {d.passengers.map((p: any, i: number) => (
+                          <div
+                            key={i}
+                            className="flex items-center justify-between bg-white rounded-lg px-3 py-2 text-sm border"
+                          >
+                            <span className="font-medium">
+                              {p.name || p.firstName || `Passenger ${i + 1}`}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              Seat {p.seat || "—"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Package */}
+              {type === "package" && (
+                <div className="rounded-xl border bg-purple-50/50 p-4 space-y-3">
+                  <p className="text-xs font-bold text-purple-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <Map className="w-3.5 h-3.5" /> Package Information
+                  </p>
+                  <div className="bg-purple-100 rounded-lg px-4 py-3 text-center">
+                    <p className="text-lg font-bold text-purple-800">
+                      {d.packageName || d.destination || "—"}
+                    </p>
+                    <p className="text-xs text-purple-600">
+                      {d.nights || "—"} nights · {d.days || "—"} days
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Check-in</p>
+                      <p className="font-medium">{d.checkIn || "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Check-out
+                      </p>
+                      <p className="font-medium">{d.checkOut || "—"}</p>
+                    </div>
+                  </div>
+                  {(d.inclusions || []).length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground mb-2">
+                        Inclusions
+                      </p>
+                      <ul className="space-y-1">
+                        {d.inclusions.map((inc: string, i: number) => (
+                          <li
+                            key={i}
+                            className="flex items-center gap-1.5 text-sm text-purple-700"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />{" "}
+                            {inc}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Timestamps */}
+              <div className="rounded-xl border p-4 space-y-2">
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                  Timestamps
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <p className="text-xs text-muted-foreground">
+                      Booking Created
+                    </p>
+                    <p className="font-medium text-xs">
+                      {createdAt !== "—"
+                        ? new Date(createdAt).toLocaleString("en-IN")
+                        : "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">
+                      Travel Date
+                    </p>
+                    <p className="font-medium text-xs">{travelDate}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Raw API Response */}
+              <details className="rounded-xl border p-4">
+                <summary className="cursor-pointer text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                  <Hash className="w-3.5 h-3.5" /> Raw API Response (Debug)
+                </summary>
+                <pre className="mt-3 text-[10px] bg-slate-50 rounded p-3 overflow-x-auto max-h-64 leading-relaxed whitespace-pre-wrap break-all">
+                  {JSON.stringify(d, null, 2)}
+                </pre>
+              </details>
+            </TabsContent>
+
+            {/* ── Timeline Tab ── */}
+            <TabsContent value="timeline" className="mt-0">
+              <div className="relative pl-6 border-l-2 border-muted space-y-6 py-2 ml-2">
+                {timeline.length === 0 && localNotes.length === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    No timeline events yet.
+                  </p>
+                )}
+                {timeline.map((ev, i) => (
+                  <div key={i} className="relative">
+                    <div
+                      className={cn(
+                        "absolute -left-[29px] w-4 h-4 rounded-full border-2 border-white",
+                        ev.color
+                      )}
+                    />
+                    <p className="text-sm font-semibold">{ev.label}</p>
+                    {ev.sub && (
+                      <p className="text-xs text-muted-foreground font-mono">
+                        {ev.sub}
+                      </p>
+                    )}
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {ev.time && ev.time !== "—"
+                        ? new Date(ev.time).toLocaleString("en-IN")
+                        : ev.time}
+                    </p>
+                  </div>
+                ))}
+                {localNotes.map((note: any, i: number) => (
+                  <div key={`note-${i}`} className="relative">
+                    <div className="absolute -left-[29px] w-4 h-4 rounded-full border-2 border-white bg-amber-400" />
+                    <p className="text-sm font-semibold text-amber-700">
+                      Admin Note
+                    </p>
+                    <p className="text-xs bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-0.5">
+                      {note.note}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {note.addedBy} ·{" "}
+                      {note.addedAt
+                        ? new Date(note.addedAt).toLocaleString("en-IN")
+                        : ""}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </TabsContent>
+
+            {/* ── Notes Tab ── */}
+            <TabsContent value="notes" className="mt-0 space-y-4">
+              {localNotes.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <StickyNote className="w-10 h-10 mx-auto opacity-20 mb-2" />
+                  <p className="text-sm">No admin notes yet.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {localNotes.map((note: any, i: number) => (
+                    <div
+                      key={i}
+                      className="rounded-lg border border-amber-200 bg-amber-50 p-3"
+                    >
+                      <p className="text-sm">{note.note}</p>
+                      <p className="text-xs text-muted-foreground mt-1.5">
+                        {note.addedBy} ·{" "}
+                        {note.addedAt
+                          ? new Date(note.addedAt).toLocaleString("en-IN")
+                          : ""}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="space-y-2 pt-2 border-t">
+                <Label className="text-xs font-semibold">Add Admin Note</Label>
+                <Textarea
+                  placeholder="Type a note for this booking…"
+                  value={noteText}
+                  onChange={(e) => setNoteText(e.target.value)}
+                  className="text-sm min-h-[80px]"
+                />
+                <Button
+                  size="sm"
+                  onClick={addNote}
+                  disabled={addingNote || !noteText.trim()}
+                  className="gap-1.5"
+                >
+                  {addingNote ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <StickyNote className="w-3.5 h-3.5" />
+                  )}{" "}
+                  Save Note
+                </Button>
+              </div>
+            </TabsContent>
+          </Tabs>
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 
