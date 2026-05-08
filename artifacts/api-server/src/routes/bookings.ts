@@ -405,4 +405,59 @@ router.delete("/bookings/:id", async (req, res): Promise<void> => {
   );
 });
 
+// ── POST /api/bookings/record-failed ──────────────────────────────────────────
+// Saves a failed/cancelled payment attempt for admin visibility.
+// Does NOT create a confirmed booking — status is always "booking_failed".
+router.post("/bookings/record-failed", async (req, res): Promise<void> => {
+  try {
+    const body           = req.body?.data || req.body;
+    const passengerName  = String(body.passengerName  || "Unknown");
+    const passengerEmail = String(body.passengerEmail || "") || null;
+    const passengerPhone = String(body.passengerPhone || "") || null;
+    const bookingRef     = String(body.bookingRef || `FAIL-${Date.now().toString(36).toUpperCase()}`);
+    const bookingType    = String(body.bookingType || "flight");
+    const totalPrice     = String(Number(body.totalPrice ?? body.amount ?? 0));
+    const paymentId      = String(body.paymentId || "") || null;
+    const failureReason  = String(body.failureReason || body.error || "Payment failed");
+    const failureCode    = String(body.failureCode   || "payment_failed");
+    const details        = (typeof body.details === "object" && body.details !== null) ? body.details : {};
+    const travelDate     = String(body.travelDate || new Date().toISOString().split("T")[0]);
+
+    // Auto user lookup — best-effort, never block on error
+    let userId = "guest";
+    try {
+      const { id } = await findOrCreateUser(passengerPhone, passengerEmail, passengerName);
+      userId = String(id);
+    } catch { /* keep guest */ }
+
+    const [inserted] = await db
+      .insert(bookingsTable)
+      .values({
+        bookingRef,
+        userId,
+        bookingType,
+        passengerName,
+        passengerEmail: passengerEmail || "",
+        passengerPhone: passengerPhone || null,
+        totalPrice,
+        passengers:    Number(body.passengers ?? 1),
+        travelDate,
+        status:        "booking_failed",
+        paymentStatus: "failed",
+        bookingStatus: "failed",
+        paymentId,
+        failureReason,
+        failureCode,
+        details: { ...details, failureReason, failureCode, paymentId },
+      } as any)
+      .returning();
+
+    logger.info({ bookingRef, paymentId, failureReason }, "[bookings] failed payment record saved — id:", inserted.id);
+    res.status(201).json({ success: true, id: inserted.id, bookingRef });
+  } catch (err: any) {
+    logger.error({ err: err?.message }, "[bookings] failed to save failed payment record");
+    res.status(500).json({ success: false, error: err?.message || "Failed to save record" });
+  }
+});
+
 export default router;

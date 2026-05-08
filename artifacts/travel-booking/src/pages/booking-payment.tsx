@@ -1199,10 +1199,55 @@ export default function BookingPayment() {
 
       onFailure: (message) => {
         setProcessing(false);
-        if (message !== "Payment was cancelled.") {
+        const isCancelled = message === "Payment was cancelled.";
+
+        // Record actual failures (not simple modal dismissals) in DB for admin visibility
+        if (!isCancelled && session) {
+          const _custName  = session.type === "hotel"
+            ? (session as HotelBookingSession).guest.name
+            : (session as any).passengers?.[0]?.name  || "";
+          const _custEmail = session.type === "hotel"
+            ? (session as HotelBookingSession).guest.email
+            : (session as any).passengers?.[0]?.email || "";
+          const _custPhone = session.type === "hotel"
+            ? (session as HotelBookingSession).guest.phone
+            : (session as any).passengers?.[0]?.phone || "";
+          const _failRef = `FAIL-${Date.now().toString(36).toUpperCase()}`;
+          const _travelDate = session.type === "hotel"
+            ? (session as HotelBookingSession).checkin
+            : (session as any).date || new Date().toISOString().split("T")[0];
+          const _paxCount = session.type === "hotel"
+            ? (session as HotelBookingSession).guests
+            : session.type === "bus"
+            ? (session as BusBookingSession).seatCount
+            : (session as FlightBookingSession).travelers;
+
+          fetch("/api/bookings/record-failed", {
+            method:  "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              bookingRef:     _failRef,
+              bookingType:    session.type,
+              passengerName:  _custName,
+              passengerEmail: _custEmail,
+              passengerPhone: _custPhone,
+              totalPrice:     totalAfterCoupon,
+              travelDate:     _travelDate,
+              passengers:     _paxCount,
+              failureReason:  message,
+              failureCode:    "payment_failed",
+              details: {
+                from:          (session as any).from,
+                to:            (session as any).to,
+                failureReason: message,
+              },
+            }),
+          }).catch((e) => console.warn("[payment] could not save failed payment record:", e));
+
           setPaymentError(message || "Payment failed. Please try again.");
           toast({ variant: "destructive", title: "Payment Failed", description: message });
         }
+        // If cancelled (modal dismissed) — silently reset, no error shown
       },
 
       onDismiss: () => { setProcessing(false); },

@@ -136,10 +136,19 @@ export async function openRazorpayCheckout(opts: RazorpayPaymentOptions) {
   const rzp = new window.Razorpay(rzpOptions);
 
   rzp.on("payment.failed", (resp: any) => {
-    const msg = resp?.error?.description
-             || resp?.error?.reason
-             || "Payment failed. Please try again.";
-    console.error("[razorpay] Payment failed:", resp?.error);
+    const err  = resp?.error ?? {};
+    const code = err.code        || err.reason        || "PAYMENT_FAILED";
+    const msg  = err.description || err.reason        || "Payment failed. Please try again.";
+    const paymentId = err.metadata?.payment_id || "(unknown)";
+    console.error(
+      "[razorpay] Payment FAILED —",
+      "code:", code,
+      "| desc:", err.description,
+      "| reason:", err.reason,
+      "| source:", err.source,
+      "| step:", err.step,
+      "| paymentId:", paymentId,
+    );
     opts.onFailure(msg);
   });
 

@@ -4,7 +4,8 @@ import { db, bookingsTable, bookingRefundsTable } from "@workspace/db";
 import { extractTripJackError } from "../lib/tripjack-auth.js";
 import { tjPostWithRetry } from "../lib/tj-retry.js";
 import { logger } from "../lib/logger.js";
-import { verifyRazorpaySignature } from "./verify-payment.js";
+import { verifyRazorpaySignature, checkRazorpayPaymentLive } from "./verify-payment.js";
+import { getProviderConfig } from "../lib/provider-config.js";
 import { sendAllBookingNotifications, sendBookingFailureNotifications, sendRefundNotifications, type BookingNotificationData } from "../lib/notification-service.js";
 
 const router = Router();
@@ -213,11 +214,32 @@ router.post("/book-flight", async (req, res): Promise<void> => {
 
   const verifyResult = await verifyRazorpaySignature(paymentId, orderId, signature);
   if (!verifyResult.success) {
-    logger.warn({ paymentId, orderId, error: verifyResult.error }, "[book-flight] payment verification failed");
+    logger.warn({ paymentId, orderId, error: verifyResult.error }, "[book-flight] HMAC signature verification failed");
     res.status(400).json({ success: false, error: verifyResult.error ?? "Payment verification failed" });
     return;
   }
-  logger.info({ paymentId, orderId }, "[book-flight] payment verified ✓ — proceeding to booking");
+  logger.info({ paymentId, orderId }, "[book-flight] HMAC signature verified ✓");
+
+  // ── STEP 0b: Live payment status check via Razorpay API ──────────────────
+  // Even if HMAC is valid, confirm the payment is actually authorized/captured.
+  // This blocks bookings when failure@razorpay or any other failed payment is used.
+  const provCfg = await getProviderConfig();
+  const liveCheck = await checkRazorpayPaymentLive(paymentId, provCfg.paymentKeyId, provCfg.paymentKeySecret);
+  if (!liveCheck.ok) {
+    logger.warn(
+      { paymentId, status: liveCheck.status, error: liveCheck.error },
+      "[book-flight] live payment status check REJECTED",
+    );
+    res.status(400).json({
+      success: false,
+      error:   liveCheck.error ?? "Payment not completed. Please try again.",
+    });
+    return;
+  }
+  logger.info(
+    { paymentId, status: liveCheck.status, amountRupees: liveCheck.amountRupees },
+    "[book-flight] live payment status verified ✓ — proceeding to booking",
+  );
 
   // fareData.bookingId is optional — empty means a non-TripJack fare (synthetic / Booking.com).
   // In that case we skip the TripJack AirBook call and save the booking as confirmed

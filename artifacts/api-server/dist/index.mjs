@@ -157447,6 +157447,51 @@ router9.delete("/bookings/:id", async (req, res) => {
     })
   );
 });
+router9.post("/bookings/record-failed", async (req, res) => {
+  try {
+    const body = req.body?.data || req.body;
+    const passengerName = String(body.passengerName || "Unknown");
+    const passengerEmail = String(body.passengerEmail || "") || null;
+    const passengerPhone = String(body.passengerPhone || "") || null;
+    const bookingRef = String(body.bookingRef || `FAIL-${Date.now().toString(36).toUpperCase()}`);
+    const bookingType = String(body.bookingType || "flight");
+    const totalPrice = String(Number(body.totalPrice ?? body.amount ?? 0));
+    const paymentId = String(body.paymentId || "") || null;
+    const failureReason = String(body.failureReason || body.error || "Payment failed");
+    const failureCode = String(body.failureCode || "payment_failed");
+    const details = typeof body.details === "object" && body.details !== null ? body.details : {};
+    const travelDate = String(body.travelDate || (/* @__PURE__ */ new Date()).toISOString().split("T")[0]);
+    let userId = "guest";
+    try {
+      const { id } = await findOrCreateUser(passengerPhone, passengerEmail, passengerName);
+      userId = String(id);
+    } catch {
+    }
+    const [inserted] = await db.insert(bookingsTable).values({
+      bookingRef,
+      userId,
+      bookingType,
+      passengerName,
+      passengerEmail: passengerEmail || "",
+      passengerPhone: passengerPhone || null,
+      totalPrice,
+      passengers: Number(body.passengers ?? 1),
+      travelDate,
+      status: "booking_failed",
+      paymentStatus: "failed",
+      bookingStatus: "failed",
+      paymentId,
+      failureReason,
+      failureCode,
+      details: { ...details, failureReason, failureCode, paymentId }
+    }).returning();
+    logger.info({ bookingRef, paymentId, failureReason }, "[bookings] failed payment record saved \u2014 id:", inserted.id);
+    res.status(201).json({ success: true, id: inserted.id, bookingRef });
+  } catch (err) {
+    logger.error({ err: err?.message }, "[bookings] failed to save failed payment record");
+    res.status(500).json({ success: false, error: err?.message || "Failed to save record" });
+  }
+});
 var bookings_default = router9;
 
 // src/routes/payments.ts
@@ -165390,28 +165435,94 @@ async function verifyRazorpaySignature(razorpay_payment_id, razorpay_order_id, r
   if (!valid) {
     logger.warn(
       { razorpay_payment_id, razorpay_order_id },
-      "[verify-payment] signature mismatch"
+      "[verify-payment] HMAC signature mismatch"
     );
     return { success: false, error: "Payment verification failed. Invalid signature." };
   }
-  logger.info({ razorpay_payment_id, razorpay_order_id }, "[verify-payment] signature verified \u2713");
+  logger.info({ razorpay_payment_id, razorpay_order_id }, "[verify-payment] HMAC signature verified \u2713");
   return { success: true };
+}
+async function checkRazorpayPaymentLive(paymentId, keyId, keySecret) {
+  if (!keyId || !keySecret || paymentId.startsWith("demo_") || paymentId.startsWith("wallet_") || paymentId.startsWith("cred_")) {
+    logger.info({ paymentId }, "[verify-payment] non-Razorpay payment \u2014 skipping live status check");
+    return { ok: true, status: "authorized" };
+  }
+  try {
+    const auth = Buffer.from(`${keyId}:${keySecret}`).toString("base64");
+    const resp = await fetch(
+      `https://api.razorpay.com/v1/payments/${encodeURIComponent(paymentId)}`,
+      { headers: { Authorization: `Basic ${auth}` } }
+    );
+    if (!resp.ok) {
+      const errBody = await resp.json().catch(() => ({}));
+      const errMsg = errBody?.error?.description || errBody?.error?.reason || `HTTP ${resp.status}`;
+      logger.error({ paymentId, httpStatus: resp.status, errMsg }, "[verify-payment] Razorpay payment fetch failed");
+      return { ok: false, error: `Could not verify payment: ${errMsg}` };
+    }
+    const p = await resp.json();
+    const status = p.status ?? "unknown";
+    const amountRupees = Number(p.amount ?? 0) / 100;
+    const method = p.method ?? "unknown";
+    logger.info(
+      { paymentId, status, amountRupees, method, orderId: p.order_id },
+      "[verify-payment] Razorpay payment status fetched"
+    );
+    if (status === "failed") {
+      const reason = p.error_description || p.error_reason || "Payment was declined";
+      const code = p.error_code || "PAYMENT_FAILED";
+      logger.warn({ paymentId, status, reason, code }, "[verify-payment] payment is FAILED");
+      return { ok: false, status, error: `Payment failed: ${reason}` };
+    }
+    if (status === "authorized" || status === "captured") {
+      return { ok: true, status, amountRupees, method };
+    }
+    logger.warn({ paymentId, status }, "[verify-payment] unexpected payment status \u2014 rejecting");
+    return { ok: false, status, error: `Payment not completed (status: ${status})` };
+  } catch (err) {
+    logger.error({ paymentId, err: err?.message }, "[verify-payment] exception during live status check");
+    return { ok: false, error: `Payment status check failed: ${err?.message ?? "network error"}` };
+  }
 }
 router23.post("/verify-payment", async (req, res) => {
   const { razorpay_payment_id, razorpay_order_id, razorpay_signature } = req.body ?? {};
   if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
-    return res.status(400).json({ success: false, error: "razorpay_payment_id, razorpay_order_id, and razorpay_signature are required" });
+    return res.status(400).json({
+      success: false,
+      error: "razorpay_payment_id, razorpay_order_id, and razorpay_signature are required"
+    });
   }
   try {
-    const result = await verifyRazorpaySignature(
+    const hmacResult = await verifyRazorpaySignature(
       razorpay_payment_id,
       razorpay_order_id,
       razorpay_signature
     );
-    if (!result.success) {
-      return res.status(result.error === "Payment gateway not configured" ? 503 : 400).json({ success: false, error: result.error });
+    if (!hmacResult.success) {
+      return res.status(hmacResult.error === "Payment gateway not configured" ? 503 : 400).json({ success: false, error: hmacResult.error });
     }
-    return res.json({ success: true, paymentId: razorpay_payment_id, message: "Payment verified" });
+    const cfg = await getProviderConfig();
+    const statusCheck = await checkRazorpayPaymentLive(
+      razorpay_payment_id,
+      cfg.paymentKeyId,
+      cfg.paymentKeySecret
+    );
+    if (!statusCheck.ok) {
+      logger.warn(
+        { razorpay_payment_id, status: statusCheck.status, error: statusCheck.error },
+        "[verify-payment] live status check REJECTED booking"
+      );
+      return res.status(400).json({ success: false, error: statusCheck.error });
+    }
+    logger.info(
+      { razorpay_payment_id, status: statusCheck.status, amountRupees: statusCheck.amountRupees },
+      "[verify-payment] payment fully verified \u2713"
+    );
+    return res.json({
+      success: true,
+      paymentId: razorpay_payment_id,
+      paymentStatus: statusCheck.status,
+      message: "Payment verified"
+    });
   } catch (err) {
     logger.error({ err: err?.message }, "[verify-payment] unexpected error");
     res.status(500).json({ success: false, error: err?.message || "Verification failed" });
@@ -165544,11 +165655,28 @@ router24.post("/book-flight", async (req, res) => {
   }
   const verifyResult = await verifyRazorpaySignature(paymentId, orderId, signature);
   if (!verifyResult.success) {
-    logger.warn({ paymentId, orderId, error: verifyResult.error }, "[book-flight] payment verification failed");
+    logger.warn({ paymentId, orderId, error: verifyResult.error }, "[book-flight] HMAC signature verification failed");
     res.status(400).json({ success: false, error: verifyResult.error ?? "Payment verification failed" });
     return;
   }
-  logger.info({ paymentId, orderId }, "[book-flight] payment verified \u2713 \u2014 proceeding to booking");
+  logger.info({ paymentId, orderId }, "[book-flight] HMAC signature verified \u2713");
+  const provCfg = await getProviderConfig();
+  const liveCheck = await checkRazorpayPaymentLive(paymentId, provCfg.paymentKeyId, provCfg.paymentKeySecret);
+  if (!liveCheck.ok) {
+    logger.warn(
+      { paymentId, status: liveCheck.status, error: liveCheck.error },
+      "[book-flight] live payment status check REJECTED"
+    );
+    res.status(400).json({
+      success: false,
+      error: liveCheck.error ?? "Payment not completed. Please try again."
+    });
+    return;
+  }
+  logger.info(
+    { paymentId, status: liveCheck.status, amountRupees: liveCheck.amountRupees },
+    "[book-flight] live payment status verified \u2713 \u2014 proceeding to booking"
+  );
   const isTjBooking = !!fareData?.bookingId;
   logger.info(
     { paymentId, bookingId: fareData?.bookingId || "(non-TJ)", isTjBooking },
