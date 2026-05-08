@@ -1,5 +1,3 @@
-import axios from "axios";
-
 export interface Bus {
   id: number;
   name: string;
@@ -19,73 +17,59 @@ export interface Bus {
   droppingPoints: string[];
 }
 
-const BUS_API_URL = "https://jsonplaceholder.typicode.com/posts";
+// City-name aliases — maps display names / abbreviations to the canonical
+// lowercase key used by the backend live-search generator.
+const CITY_ALIASES: Record<string, string> = {
+  bengaluru:   "bangalore",
+  blr:         "bangalore",
+  bombay:      "mumbai",
+  bom:         "mumbai",
+  hyd:         "hyderabad",
+  del:         "delhi",
+  "new delhi": "delhi",
+  calcutta:    "kolkata",
+  ccu:         "kolkata",
+  madras:      "chennai",
+  maa:         "chennai",
+  cochin:      "kochi",
+  cok:         "kochi",
+};
 
-const OPERATORS = [
-  "Orange Travels", "VRL Travels", "SRS Travels", "Kaleswari Travels",
-  "Greenline", "Diamond Travels", "Royal Cruiser", "Neeta Tours",
-];
-
-const BUS_TYPES = ["AC Sleeper", "AC Semi-Sleeper", "Non-AC Sleeper", "Volvo Multi-Axle"];
-
-const ROUTES: Array<[string, string]> = [
-  ["Hyderabad", "Vijayawada"],
-  ["Bengaluru", "Chennai"],
-  ["Mumbai", "Pune"],
-  ["Delhi", "Jaipur"],
-  ["Kolkata", "Bhubaneswar"],
-];
-
-const AMENITY_POOL = ["AC", "Wifi", "Charging", "Water Bottle", "Blanket", "TV"];
-
-function fmtTime(hour: number, min: number): string {
-  const h = ((hour % 12) || 12).toString();
-  const m = min.toString().padStart(2, "0");
-  return `${h}:${m} ${hour < 12 || hour === 24 ? "AM" : "PM"}`;
+function normaliseCity(raw: string): string {
+  const key = raw.split(",")[0].trim().toLowerCase();
+  return CITY_ALIASES[key] ?? key;
 }
 
-function pickAmenities(seed: number): string[] {
-  const count = 2 + (seed % 4);
-  const out: string[] = [];
-  for (let i = 0; i < count; i++) {
-    out.push(AMENITY_POOL[(seed + i) % AMENITY_POOL.length]);
+export async function fetchBuses(from: string, to: string): Promise<Bus[]> {
+  const normFrom = normaliseCity(from);
+  const normTo   = normaliseCity(to);
+
+  if (!normFrom || !normTo) {
+    throw new Error("Both 'from' and 'to' cities are required");
   }
-  return Array.from(new Set(out));
-}
 
-function mapToBus(post: any): Bus {
-  const id = Number(post.id) || 0;
-  const route = ROUTES[id % ROUTES.length];
-  const depHour = (18 + (id % 6)) % 24;
-  const durHours = 5 + (id % 6);
-  const arrHour = (depHour + durHours) % 24;
-  const price = 600 + ((id * 137) % 1500);
+  const url = `/api/buses/live-search?from=${encodeURIComponent(normFrom)}&to=${encodeURIComponent(normTo)}`;
+  const res = await fetch(url);
 
-  return {
-    id,
-    name: OPERATORS[id % OPERATORS.length],
-    operator: OPERATORS[id % OPERATORS.length],
-    from: route[0],
-    to: route[1],
-    departure: fmtTime(depHour, 0),
-    arrival: fmtTime(arrHour, 30),
-    duration: `${durHours}h 30m`,
-    price,
-    busType: BUS_TYPES[id % BUS_TYPES.length],
-    totalSeats: 40,
-    seatsAvailable: 8 + (id % 25),
-    amenities: pickAmenities(id),
-    rating: Math.round((3.8 + (id % 12) / 10) * 10) / 10,
-    boardingPoints: ["Main Bus Stand", "City Centre", "Railway Station"],
-    droppingPoints: ["Central Bus Stop", "Town Square", "Highway Junction"],
-  };
-}
-
-export async function fetchBuses(): Promise<Bus[]> {
-  const { data } = await axios.get(BUS_API_URL);
-  if (!Array.isArray(data)) {
-    throw new Error("Unexpected buses response");
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as any)?.error || `Bus search failed (${res.status})`);
   }
-  // jsonplaceholder /posts returns 100 items — cap to 20 for a reasonable list.
-  return data.slice(0, 20).map(mapToBus);
+
+  const data = await res.json();
+
+  if (!Array.isArray(data?.buses)) {
+    throw new Error("Unexpected response format from bus search API");
+  }
+
+  // Strict route validation — only keep buses that exactly match the searched route.
+  // The backend already guarantees this, but we double-check on the frontend
+  // to prevent any stale data or edge-case mismatches from leaking through.
+  const filtered = (data.buses as Bus[]).filter((b) => {
+    const bFrom = normaliseCity(b.from);
+    const bTo   = normaliseCity(b.to);
+    return bFrom === normFrom && bTo === normTo;
+  });
+
+  return filtered;
 }

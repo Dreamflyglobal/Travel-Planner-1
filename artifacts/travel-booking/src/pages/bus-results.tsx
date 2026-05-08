@@ -111,7 +111,7 @@ export default function BusResults() {
     let cancelled = false;
     setIsLoading(true);
     setIsError(false);
-    fetchBuses()
+    fetchBuses(from, to)
       .then((list) => {
         if (cancelled) return;
         setAllBuses(list);
@@ -125,18 +125,11 @@ export default function BusResults() {
         setIsLoading(false);
       });
     return () => { cancelled = true; };
-  }, [reloadKey]);
+  }, [reloadKey, from, to]);
 
-  // Optional client-side route filter; fall back to full list if filter is empty.
-  const normalise = (v: string) => v.split(",")[0].trim().toLowerCase();
-  const fromCity = normalise(from);
-  const toCity   = normalise(to);
-  const routeFiltered: BusItem[] = allBuses.filter((b) => {
-    const bFrom = b.from.trim().toLowerCase();
-    const bTo   = b.to.trim().toLowerCase();
-    return (!fromCity || bFrom === fromCity) && (!toCity || bTo === toCity);
-  });
-  const busList: BusItem[] = routeFiltered.length > 0 ? routeFiltered : allBuses;
+  // Buses returned by the API are already strictly filtered for the searched route.
+  // No fallback to unrelated results — if empty, show "no buses found".
+  const busList: BusItem[] = allBuses;
   const dataSource = isError ? "fallback" : null;
 
   const operators  = Array.from(new Set(busList.map((b) => b.operator)));
