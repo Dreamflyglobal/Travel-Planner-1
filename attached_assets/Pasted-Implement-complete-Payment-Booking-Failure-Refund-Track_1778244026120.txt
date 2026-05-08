@@ -1,0 +1,117 @@
+Implement complete Payment, Booking Failure & Refund Tracking System with clear admin visibility.
+
+Required Flow:
+
+1. Handle all possible booking/payment cases separately:
+
+CASE 1:
+Payment Successful + Ticket Confirmed
+Status:
+
+- Payment Successful
+- Ticket Confirmed
+
+CASE 2:
+Payment Successful but Booking Failed
+Reasons:
+
+- API failure
+- PNR not generated
+- Seat unavailable
+- Booking timeout
+  Status:
+- Payment Successful
+- Booking Failed
+- Refund Initiated / Refund Processing / Refund Completed
+
+CASE 3:
+Payment Failed
+Status:
+
+- Payment Failed
+- Booking Not Created
+
+CASE 4:
+Payment Processing
+Status:
+
+- Payment Pending
+- Booking Pending
+
+2. Admin panel must clearly display BOTH:
+
+- Payment Status
+- Booking Status
+
+Do NOT combine them into one status.
+
+3. Booking table/admin details page must show:
+
+- Payment Status
+- Booking Status
+- Refund Status
+- Refund ID
+- Failure Reason
+- API Error Message
+- Razorpay Payment ID
+- Transaction timestamps
+
+4. Add color-coded statuses:
+
+- Green = Confirmed/Success
+- Yellow = Processing/Pending
+- Red = Failed
+- Blue = Refund initiated
+
+5. Customer “My Bookings” page must also show:
+
+- Payment successful but booking failed
+- Refund in progress
+- Ticket confirmed
+- Payment failed
+
+6. Refund handling:
+
+- Auto refund through Razorpay when booking fails after payment success
+- Store refund reference
+- Track refund completion
+
+7. Notifications:
+   Send Email + SMS + WhatsApp for:
+
+- Ticket confirmed
+- Payment failed
+- Booking failed
+- Refund initiated
+- Refund completed
+
+8. Add admin filters:
+
+- Payment Failed
+- Booking Failed
+- Refund Pending
+- Refund Completed
+- Ticket Confirmed
+- Processing
+
+9. Prevent duplicate actions:
+
+- Double payments
+- Duplicate bookings
+- Multiple ticket generations
+
+10. Sync all statuses and revenue correctly with:
+
+- Dashboard
+- Analytics
+- Revenue reports
+- Customer profiles
+- Booking details page
+- Invoices
+
+11. Admin must be able to clearly understand:
+
+- Whether payment was received or not
+- Whether booking succeeded or failed
+- Whether refund is pending or completed
+- Exact failure reason
