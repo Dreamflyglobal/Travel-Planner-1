@@ -155828,6 +155828,50 @@ router2.post("/auth/link-phone", requireAuth, async (req, res) => {
     return res.status(500).json({ error: "Failed to link mobile. Please try again." });
   }
 });
+router2.post("/auth/auto-login-by-contact", async (req, res) => {
+  const { phone, email: email3, name: name2 } = req.body;
+  const cleanPhone = phone ? normalizePhone(phone.trim()) : null;
+  const cleanEmail = email3 ? email3.trim().toLowerCase() : null;
+  if (!cleanPhone && !cleanEmail) {
+    return res.status(400).json({ error: "Phone or email is required" });
+  }
+  try {
+    let user = null;
+    if (cleanPhone) {
+      const [byPhone] = await db.select().from(usersTable).where(eq(usersTable.phone, cleanPhone)).limit(1);
+      if (byPhone) user = byPhone;
+    }
+    if (!user && cleanEmail) {
+      const [byEmail] = await db.select().from(usersTable).where(eq(usersTable.email, cleanEmail)).limit(1);
+      if (byEmail) user = byEmail;
+    }
+    if (!user) {
+      const userName = name2?.trim() || (cleanEmail ? cleanEmail.split("@")[0] : `User${cleanPhone?.slice(-4) ?? ""}`);
+      const [created] = await db.insert(usersTable).values({
+        name: userName,
+        phone: cleanPhone,
+        email: cleanEmail,
+        role: "user",
+        isApproved: false,
+        otpUser: !!cleanPhone,
+        walletBalance: "0",
+        referralCode: generateReferralCode()
+      }).returning();
+      user = created;
+    }
+    const token = signToken({
+      userId: user.id,
+      role: user.role,
+      phone: user.phone ?? void 0,
+      email: user.email ?? void 0
+    });
+    logger.info(`[auto-login] \u2705 Session established for user ${user.id} via contact lookup`);
+    return res.json({ success: true, token, user: safeUser(user) });
+  } catch (err) {
+    logger.error("[auth/auto-login-by-contact] error:", err.message);
+    return res.status(500).json({ error: "Auto-login failed" });
+  }
+});
 var auth_default = router2;
 
 // src/routes/admin.ts
@@ -157156,28 +157200,27 @@ router9.get("/stats/summary", async (_req, res) => {
 });
 router9.get("/bookings", async (req, res) => {
   try {
-    const { userId, phone } = req.query;
+    const { userId, phone, email: email3 } = req.query;
+    const phoneParam = phone && typeof phone === "string" ? phone.trim() : null;
+    const emailParam = email3 && typeof email3 === "string" ? email3.trim().toLowerCase() : null;
     let resolvedUserId = null;
-    if (phone && typeof phone === "string" && !(userId && typeof userId === "string")) {
-      const cleanPhone = phone.trim();
-      const [user] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.phone, cleanPhone)).limit(1);
-      if (user) resolvedUserId = String(user.id);
-    } else if (userId && typeof userId === "string") {
+    if (userId && typeof userId === "string" && /^\d+$/.test(userId)) {
       resolvedUserId = userId;
+    } else if (phoneParam) {
+      const [user] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.phone, phoneParam)).limit(1);
+      if (user) resolvedUserId = String(user.id);
+    } else if (emailParam) {
+      const [user] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, emailParam)).limit(1);
+      if (user) resolvedUserId = String(user.id);
     }
     let query = db.select().from(bookingsTable).$dynamic();
     if (resolvedUserId) {
-      const phoneParam = phone && typeof phone === "string" ? phone.trim() : null;
-      if (phoneParam) {
-        query = query.where(
-          or(
-            eq(bookingsTable.userId, resolvedUserId),
-            eq(bookingsTable.passengerPhone, phoneParam)
-          )
-        );
-      } else {
-        query = query.where(eq(bookingsTable.userId, resolvedUserId));
-      }
+      const conditions = [
+        eq(bookingsTable.userId, resolvedUserId)
+      ];
+      if (phoneParam) conditions.push(eq(bookingsTable.passengerPhone, phoneParam));
+      if (emailParam) conditions.push(eq(bookingsTable.passengerEmail, emailParam));
+      query = query.where(or(...conditions));
     }
     const bookings = await query.orderBy(desc(bookingsTable.createdAt));
     const mapped = bookings.map((b) => ({
@@ -165906,6 +165949,42 @@ router29.patch("/users/:id", async (req, res) => {
   } catch (err) {
     logger.error({ err }, "Failed to update user");
     res.status(500).json({ error: "Failed to update user" });
+  }
+});
+router29.post("/users/merge-duplicates", async (_req, res) => {
+  try {
+    const allUsers = await db.select({ id: usersTable.id, phone: usersTable.phone, email: usersTable.email }).from(usersTable).orderBy(usersTable.id);
+    let mergedPairs = 0;
+    let deletedUsers = 0;
+    const deleted = /* @__PURE__ */ new Set();
+    for (let i2 = 0; i2 < allUsers.length; i2++) {
+      if (deleted.has(allUsers[i2].id)) continue;
+      const primary = allUsers[i2];
+      for (let j = i2 + 1; j < allUsers.length; j++) {
+        if (deleted.has(allUsers[j].id)) continue;
+        const dup = allUsers[j];
+        const samePhone = primary.phone && dup.phone && primary.phone === dup.phone;
+        const sameEmail = primary.email && dup.email && primary.email.toLowerCase() === dup.email.toLowerCase();
+        if (!samePhone && !sameEmail) continue;
+        await db.update(bookingsTable).set({ userId: String(primary.id) }).where(eq(bookingsTable.userId, String(dup.id)));
+        if (dup.phone) {
+          await db.update(bookingsTable).set({ userId: String(primary.id) }).where(eq(bookingsTable.passengerPhone, dup.phone));
+        }
+        if (dup.email) {
+          await db.update(bookingsTable).set({ userId: String(primary.id) }).where(eq(bookingsTable.passengerEmail, dup.email));
+        }
+        await db.update(usersTable).set({ phone: null, email: null }).where(eq(usersTable.id, dup.id));
+        await db.delete(usersTable).where(eq(usersTable.id, dup.id));
+        deleted.add(dup.id);
+        deletedUsers++;
+        mergedPairs++;
+        logger.info({ primary: primary.id, duplicate: dup.id, samePhone, sameEmail }, "Merged duplicate user");
+      }
+    }
+    res.json({ success: true, mergedPairs, deletedUsers });
+  } catch (err) {
+    logger.error({ err }, "merge-duplicates failed");
+    res.status(500).json({ error: "Merge failed" });
   }
 });
 router29.get("/users/:id/bookings", async (req, res) => {

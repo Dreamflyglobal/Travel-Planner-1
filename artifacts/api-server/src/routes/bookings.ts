@@ -90,38 +90,45 @@ router.get("/stats/summary", async (_req, res): Promise<void> => {
 
 router.get("/bookings", async (req, res): Promise<void> => {
   try {
-    const { userId, phone } = req.query;
+    const { userId, phone, email } = req.query;
+
+    const phoneParam = phone && typeof phone === "string" ? phone.trim() : null;
+    const emailParam = email && typeof email === "string" ? email.trim().toLowerCase() : null;
 
     let resolvedUserId: string | null = null;
 
-    // Resolve userId from phone if phone is provided and userId is not
-    if (phone && typeof phone === "string" && !(userId && typeof userId === "string")) {
-      const cleanPhone = phone.trim();
+    if (userId && typeof userId === "string" && /^\d+$/.test(userId)) {
+      // Real numeric userId — use directly
+      resolvedUserId = userId;
+    } else if (phoneParam) {
+      // Resolve by phone
       const [user] = await db
         .select({ id: usersTable.id })
         .from(usersTable)
-        .where(eq(usersTable.phone, cleanPhone))
+        .where(eq(usersTable.phone, phoneParam))
         .limit(1);
       if (user) resolvedUserId = String(user.id);
-    } else if (userId && typeof userId === "string") {
-      resolvedUserId = userId;
+    } else if (emailParam) {
+      // Resolve by email
+      const [user] = await db
+        .select({ id: usersTable.id })
+        .from(usersTable)
+        .where(eq(usersTable.email, emailParam))
+        .limit(1);
+      if (user) resolvedUserId = String(user.id);
     }
 
     let query = db.select().from(bookingsTable).$dynamic();
 
     if (resolvedUserId) {
-      // Filter by userId OR passengerPhone (for bookings made before the auto-link was introduced)
-      const phoneParam = phone && typeof phone === "string" ? phone.trim() : null;
-      if (phoneParam) {
-        query = query.where(
-          or(
-            eq(bookingsTable.userId, resolvedUserId),
-            eq(bookingsTable.passengerPhone, phoneParam),
-          )!
-        );
-      } else {
-        query = query.where(eq(bookingsTable.userId, resolvedUserId));
-      }
+      // Build OR conditions: DB userId match + phone + email fallbacks for
+      // legacy bookings created before proper account linkage existed.
+      const conditions: ReturnType<typeof eq>[] = [
+        eq(bookingsTable.userId, resolvedUserId),
+      ];
+      if (phoneParam) conditions.push(eq(bookingsTable.passengerPhone, phoneParam));
+      if (emailParam) conditions.push(eq(bookingsTable.passengerEmail, emailParam));
+      query = query.where(or(...conditions)!);
     }
 
     const bookings = await query.orderBy(desc(bookingsTable.createdAt));

@@ -371,12 +371,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (res.status === 409) {
+        // Account already exists — look up the real user by phone/email so we
+        // get a proper JWT and the session links to their actual DB record.
+        try {
+          const lookupRes = await fetch(`${API}/api/auth/auto-login-by-contact`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ phone: cleanPhone, email: email.trim(), name }),
+          });
+          if (lookupRes.ok) {
+            const lookupData = await lookupRes.json();
+            localStorage.setItem(B2C_TOKEN_KEY, lookupData.token);
+            setUser(lookupData.user);
+            return { user: lookupData.user, isNew: false };
+          }
+        } catch { /* fall through */ }
+        // Fallback: return current user if already logged in, else a stub
         if (user) return { user, isNew: false };
         return { user: { id: `auto_${Date.now()}`, name: name || email.split("@")[0], email, phone: cleanPhone, role: "user" }, isNew: false };
       }
 
       throw new Error(data.error || "Failed");
-    } catch {
+    } catch (err) {
+      // On network failure, attempt contact lookup as final fallback
+      try {
+        const fallbackRes = await fetch(`${API}/api/auth/auto-login-by-contact`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone: cleanPhone, email: email.trim(), name }),
+        });
+        if (fallbackRes.ok) {
+          const fallbackData = await fallbackRes.json();
+          localStorage.setItem(B2C_TOKEN_KEY, fallbackData.token);
+          setUser(fallbackData.user);
+          return { user: fallbackData.user, isNew: false };
+        }
+      } catch { /* ignore */ }
       return { user: { id: `auto_${Date.now()}`, name: name || email.split("@")[0], email, phone: cleanPhone, role: "user" }, isNew: false };
     }
   };

@@ -239,6 +239,79 @@ router.patch("/users/:id", async (req, res): Promise<void> => {
   }
 });
 
+// ── POST /api/users/merge-duplicates ──────────────────────────────────────────
+// Finds users with the same phone or same email, merges all bookings to the
+// oldest account (lowest id), then deletes the duplicate records.
+// Safe to run multiple times (idempotent).
+router.post("/users/merge-duplicates", async (_req, res): Promise<void> => {
+  try {
+    const allUsers = await db
+      .select({ id: usersTable.id, phone: usersTable.phone, email: usersTable.email })
+      .from(usersTable)
+      .orderBy(usersTable.id); // oldest first → keep lowest id
+
+    let mergedPairs = 0;
+    let deletedUsers = 0;
+
+    // Track which ids have already been merged away so we don't process twice
+    const deleted = new Set<number>();
+
+    for (let i = 0; i < allUsers.length; i++) {
+      if (deleted.has(allUsers[i].id)) continue;
+      const primary = allUsers[i];
+
+      for (let j = i + 1; j < allUsers.length; j++) {
+        if (deleted.has(allUsers[j].id)) continue;
+        const dup = allUsers[j];
+
+        const samePhone = primary.phone && dup.phone && primary.phone === dup.phone;
+        const sameEmail = primary.email && dup.email && primary.email.toLowerCase() === dup.email.toLowerCase();
+
+        if (!samePhone && !sameEmail) continue;
+
+        // Re-link all of dup's bookings to primary
+        await db
+          .update(bookingsTable)
+          .set({ userId: String(primary.id) })
+          .where(eq(bookingsTable.userId, String(dup.id)));
+
+        // Also re-link by phone/email for any legacy unlinked bookings
+        if (dup.phone) {
+          await db
+            .update(bookingsTable)
+            .set({ userId: String(primary.id) })
+            .where(eq(bookingsTable.passengerPhone, dup.phone));
+        }
+        if (dup.email) {
+          await db
+            .update(bookingsTable)
+            .set({ userId: String(primary.id) })
+            .where(eq(bookingsTable.passengerEmail, dup.email));
+        }
+
+        // Safely delete the duplicate (nullify unique fields first to avoid constraint errors)
+        await db
+          .update(usersTable)
+          .set({ phone: null, email: null })
+          .where(eq(usersTable.id, dup.id));
+
+        await db.delete(usersTable).where(eq(usersTable.id, dup.id));
+
+        deleted.add(dup.id);
+        deletedUsers++;
+        mergedPairs++;
+
+        logger.info({ primary: primary.id, duplicate: dup.id, samePhone, sameEmail }, "Merged duplicate user");
+      }
+    }
+
+    res.json({ success: true, mergedPairs, deletedUsers });
+  } catch (err) {
+    logger.error({ err }, "merge-duplicates failed");
+    res.status(500).json({ error: "Merge failed" });
+  }
+});
+
 // ── GET /api/users/:id/bookings ────────────────────────────────────────────────
 // Returns all bookings for a specific user (by userId or email/phone fallback)
 router.get("/users/:id/bookings", async (req, res): Promise<void> => {

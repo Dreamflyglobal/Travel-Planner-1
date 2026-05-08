@@ -601,4 +601,78 @@ router.post("/auth/link-phone", requireAuth, async (req, res) => {
   }
 });
 
+// ── POST /api/auth/auto-login-by-contact ────────────────────────────────────
+// Called after a successful payment to establish a real session for the
+// customer who just booked as a guest. No password required because identity
+// was already verified by completing the payment.
+// Priority: phone first, then email.
+
+router.post("/auth/auto-login-by-contact", async (req, res) => {
+  const { phone, email, name } = req.body as { phone?: string; email?: string; name?: string };
+
+  const cleanPhone = phone ? normalizePhone(phone.trim()) : null;
+  const cleanEmail = email ? email.trim().toLowerCase() : null;
+
+  if (!cleanPhone && !cleanEmail) {
+    return res.status(400).json({ error: "Phone or email is required" });
+  }
+
+  try {
+    let user: typeof usersTable.$inferSelect | null = null;
+
+    // 1. Try phone first
+    if (cleanPhone) {
+      const [byPhone] = await db
+        .select()
+        .from(usersTable)
+        .where(eq(usersTable.phone, cleanPhone))
+        .limit(1);
+      if (byPhone) user = byPhone;
+    }
+
+    // 2. Fallback to email
+    if (!user && cleanEmail) {
+      const [byEmail] = await db
+        .select()
+        .from(usersTable)
+        .where(eq(usersTable.email, cleanEmail))
+        .limit(1);
+      if (byEmail) user = byEmail;
+    }
+
+    // 3. If still no user, create one (should rarely happen — findOrCreateUser
+    //    already runs during booking creation, but handle defensively)
+    if (!user) {
+      const userName = name?.trim() || (cleanEmail ? cleanEmail.split("@")[0] : `User${cleanPhone?.slice(-4) ?? ""}`);
+      const [created] = await db
+        .insert(usersTable)
+        .values({
+          name: userName,
+          phone: cleanPhone,
+          email: cleanEmail,
+          role: "user",
+          isApproved: false,
+          otpUser: !!cleanPhone,
+          walletBalance: "0",
+          referralCode: generateReferralCode(),
+        })
+        .returning();
+      user = created;
+    }
+
+    const token = signToken({
+      userId: user.id,
+      role:   user.role,
+      phone:  user.phone ?? undefined,
+      email:  user.email ?? undefined,
+    });
+
+    logger.info(`[auto-login] ✅ Session established for user ${user.id} via contact lookup`);
+    return res.json({ success: true, token, user: safeUser(user) });
+  } catch (err: any) {
+    logger.error("[auth/auto-login-by-contact] error:", err.message);
+    return res.status(500).json({ error: "Auto-login failed" });
+  }
+});
+
 export default router;

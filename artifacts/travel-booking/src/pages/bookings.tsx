@@ -32,12 +32,13 @@ export default function Bookings() {
   
   // Fetch bookings filtered by current user via GET /api/bookings?userId=&phone=
   const { data: bookings, isLoading, refetch } = useQuery({
-    queryKey: ["bookings", user?.id, (user as any)?.phone],
+    queryKey: ["bookings", user?.id, (user as any)?.phone, user?.email],
     queryFn: async () => {
       try {
         const params = new URLSearchParams();
         if (user?.id) params.set("userId", String(user.id));
         if ((user as any)?.phone) params.set("phone", String((user as any).phone));
+        if (user?.email) params.set("email", String(user.email));
         const url = params.toString() ? `/api/bookings?${params.toString()}` : "/api/bookings";
         const res = await fetch(url);
         if (!res.ok) throw new Error("Failed to fetch bookings");

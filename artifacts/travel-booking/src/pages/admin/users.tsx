@@ -331,10 +331,11 @@ function UserRow({
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function AdminUsers() {
-  const [users, setUsers]     = useState<ApiUser[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
-  const [error, setError]     = useState<string | null>(null);
+  const [users, setUsers]       = useState<ApiUser[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [syncing, setSyncing]   = useState(false);
+  const [merging, setMerging]   = useState(false);
+  const [error, setError]       = useState<string | null>(null);
   const [search, setSearch]   = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [blocked, setBlocked] = useState<Set<string>>(loadBlocked);
@@ -376,6 +377,30 @@ export default function AdminUsers() {
       toast({ title: "Sync failed", description: e.message, variant: "destructive" });
     } finally {
       setSyncing(false);
+    }
+  }, [fetchUsers, toast]);
+
+  // ── Merge duplicate users ─────────────────────────────────────────────────
+  const handleMergeDuplicates = useCallback(async () => {
+    setMerging(true);
+    try {
+      const res = await fetch("/api/users/merge-duplicates", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        toast({
+          title: data.deletedUsers > 0 ? `Merged ${data.deletedUsers} duplicate accounts` : "No duplicates found",
+          description: data.deletedUsers > 0
+            ? `${data.mergedPairs} pairs merged — all bookings consolidated to primary accounts.`
+            : "All user accounts are already unique.",
+        });
+        if (data.deletedUsers > 0) await fetchUsers();
+      } else {
+        throw new Error(data.error);
+      }
+    } catch (e: any) {
+      toast({ title: "Merge failed", description: e.message, variant: "destructive" });
+    } finally {
+      setMerging(false);
     }
   }, [fetchUsers, toast]);
 
@@ -441,6 +466,16 @@ export default function AdminUsers() {
             </p>
           </div>
           <div className="flex gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleMergeDuplicates}
+              disabled={merging || loading}
+              className="gap-1.5 text-xs text-orange-700 border-orange-200 hover:bg-orange-50"
+            >
+              <Users className={cn("w-3.5 h-3.5", merging && "animate-pulse")} />
+              {merging ? "Merging…" : "Merge Duplicates"}
+            </Button>
             <Button
               variant="outline"
               size="sm"
