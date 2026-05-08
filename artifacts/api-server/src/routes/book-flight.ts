@@ -5,7 +5,7 @@ import { extractTripJackError } from "../lib/tripjack-auth.js";
 import { tjPostWithRetry } from "../lib/tj-retry.js";
 import { logger } from "../lib/logger.js";
 import { verifyRazorpaySignature } from "./verify-payment.js";
-import { sendAllBookingNotifications, type BookingNotificationData } from "../lib/notification-service.js";
+import { sendAllBookingNotifications, sendBookingFailureNotifications, sendRefundNotifications, type BookingNotificationData } from "../lib/notification-service.js";
 
 const router = Router();
 
@@ -273,6 +273,7 @@ router.post("/book-flight", async (req, res): Promise<void> => {
         status:        "confirmed",
         paymentStatus: "paid",
         paymentId,
+        bookingStatus: "confirmed",
         details:       {
           ...(typeof bookingMeta?.details === "object" && bookingMeta?.details !== null
             ? (bookingMeta.details as Record<string, unknown>)
@@ -281,7 +282,7 @@ router.post("/book-flight", async (req, res): Promise<void> => {
           bookingRef,
           nonTjFare: true,
         },
-      })
+      } as any)
       .returning();
     logger.info({ paymentId, bookingRef, bookingId: savedBooking.id }, "[book-flight] non-TJ booking CONFIRMED");
     res.json({ success: true, bookingRef, bookingId: savedBooking.id });
@@ -403,8 +404,11 @@ router.post("/book-flight", async (req, res): Promise<void> => {
       status:        tjSuccess ? "confirmed" : "cancelled",
       paymentStatus: "paid",
       paymentId,
+      bookingStatus: tjSuccess ? "confirmed" : "failed",
+      failureReason: tjSuccess ? undefined : (tjError ?? "Ticket booking failed"),
+      failureCode:   tjSuccess ? undefined : "api_error",
       details:       bookingDetails,
-    })
+    } as any)
     .returning();
 
   if (tjSuccess) {
@@ -465,6 +469,27 @@ router.post("/book-flight", async (req, res): Promise<void> => {
     }
   } catch (refundErr: any) {
     logger.error({ paymentId, err: refundErr }, "[book-flight] refund threw");
+  }
+
+  // Fire-and-forget failure + refund notifications
+  const _failureNotif: BookingNotificationData = {
+    bookingId:      bookingRef,
+    bookingType:    "flight",
+    passengerName:  passengerName,
+    passengerEmail: passengerEmail || undefined,
+    passengerPhone: passengerPhone || undefined,
+    travelDate:     travelDate,
+    totalAmount:    totalPrice,
+    paymentId:      paymentId,
+    passengers:     passengers.length,
+  };
+  sendBookingFailureNotifications(_failureNotif, tjError ?? "Ticket booking failed").catch((e) =>
+    logger.error({ err: e?.message }, "[book-flight] failure notification error"),
+  );
+  if (refundResult.initiated) {
+    sendRefundNotifications(_failureNotif, "initiated", refundResult.refundId).catch((e) =>
+      logger.error({ err: e?.message }, "[book-flight] refund notification error"),
+    );
   }
 
   res.json({

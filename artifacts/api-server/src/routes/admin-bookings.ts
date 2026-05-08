@@ -13,17 +13,22 @@ import {
   sendBookingSMS,
   sendBookingWhatsApp,
   sendAllBookingNotifications,
+  sendBookingFailureNotifications,
+  sendRefundNotifications,
   type BookingNotificationData,
 } from "../lib/notification-service.js";
 
 const router = Router();
 
-const ALLOWED_STATUSES = ["pending", "confirmed", "cancelled", "refunded"] as const;
+const ALLOWED_STATUSES = ["pending", "confirmed", "cancelled", "refunded", "booking_failed"] as const;
 type AllowedStatus = (typeof ALLOWED_STATUSES)[number];
 
 function isAllowedStatus(s: unknown): s is AllowedStatus {
   return typeof s === "string" && (ALLOWED_STATUSES as readonly string[]).includes(s);
 }
+
+const ALLOWED_BOOKING_STATUSES = ["pending", "processing", "confirmed", "failed"] as const;
+const ALLOWED_PAYMENT_STATUSES = ["pending", "paid", "failed"] as const;
 
 async function loadRefundsForBookings(bookingIds: number[]) {
   if (bookingIds.length === 0) return new Map<number, typeof bookingRefundsTable.$inferSelect>();
@@ -57,6 +62,9 @@ function shapeBooking(
     title: b.title,
     amount: Number(b.totalPrice),
     status: b.status,
+    bookingStatus: (b as any).bookingStatus ?? "confirmed",
+    failureReason: (b as any).failureReason ?? null,
+    failureCode: (b as any).failureCode ?? null,
     paymentMethod: b.paymentMethod,
     paymentStatus: b.paymentStatus,
     paymentId: b.paymentId,
@@ -72,7 +80,9 @@ function shapeBooking(
           amount: Number(refund.amount),
           refundId: refund.refundId,
           errorMessage: refund.errorMessage,
+          initiatedBy: refund.initiatedBy,
           createdAt: refund.createdAt.toISOString(),
+          updatedAt: refund.updatedAt.toISOString(),
         }
       : null,
   };
@@ -115,18 +125,28 @@ function buildNotificationData(b: typeof bookingsTable.$inferSelect): BookingNot
 }
 
 // ── GET /api/admin/bookings ────────────────────────────────────────────────
-// Optional query: ?search= ?status= ?type= ?limit= ?offset=
+// Optional query: ?search= ?status= ?type= ?paymentStatus= ?bookingStatus= ?limit= ?offset=
 router.get("/admin/bookings", requireAdmin, async (req, res) => {
   try {
-    const search = (req.query.search as string | undefined)?.trim() ?? "";
-    const status = (req.query.status as string | undefined)?.trim() ?? "";
-    const type = (req.query.type as string | undefined)?.trim() ?? "";
-    const limit = Math.min(Number(req.query.limit ?? 200), 500);
-    const offset = Math.max(Number(req.query.offset ?? 0), 0);
+    const search        = (req.query.search        as string | undefined)?.trim() ?? "";
+    const status        = (req.query.status        as string | undefined)?.trim() ?? "";
+    const type          = (req.query.type          as string | undefined)?.trim() ?? "";
+    const paymentFilter = (req.query.paymentStatus as string | undefined)?.trim() ?? "";
+    const bookingFilter = (req.query.bookingStatus as string | undefined)?.trim() ?? "";
+    const limit  = Math.min(Number(req.query.limit  ?? 200), 500);
+    const offset = Math.max(Number(req.query.offset ?? 0),   0);
 
     const where = [] as Array<ReturnType<typeof eq>>;
     if (status && status !== "all" && isAllowedStatus(status)) {
       where.push(eq(bookingsTable.status, status));
+    }
+    if (paymentFilter && paymentFilter !== "all" &&
+        (ALLOWED_PAYMENT_STATUSES as readonly string[]).includes(paymentFilter)) {
+      where.push(eq(bookingsTable.paymentStatus, paymentFilter));
+    }
+    if (bookingFilter && bookingFilter !== "all" &&
+        (ALLOWED_BOOKING_STATUSES as readonly string[]).includes(bookingFilter)) {
+      where.push(eq((bookingsTable as any).bookingStatus, bookingFilter));
     }
     if (type && type !== "all") {
       where.push(eq(bookingsTable.bookingType, type));
@@ -436,6 +456,174 @@ router.post("/admin/bookings/:id/resend", requireAdmin, async (req, res) => {
   } catch (err) {
     logger.error({ err }, "[admin-bookings] resend failed");
     return res.status(500).json({ success: false, error: "Resend failed" });
+  }
+});
+
+// ── POST /api/admin/bookings/:id/mark-failed ─────────────────────────────────
+// Marks a booking as failed (bookingStatus=failed), optionally auto-refunds via Razorpay,
+// and sends customer notifications.
+// Body: { reason: string, code?: string, initiateRefund?: boolean }
+router.post("/admin/bookings/:id/mark-failed", requireAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ success: false, error: "Invalid booking id" });
+
+    const reason        = String(req.body?.reason ?? "Booking failed").trim();
+    const code          = String(req.body?.code   ?? "api_error").trim();
+    const doRefund      = req.body?.initiateRefund !== false; // default true
+
+    const rows = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
+    if (rows.length === 0) return res.status(404).json({ success: false, error: "Booking not found" });
+    const booking = rows[0];
+
+    // Update booking to failed — use cast since new columns may not be in generated types yet
+    await db.update(bookingsTable).set({
+      status:        "booking_failed",
+      bookingStatus: "failed",
+      failureReason: reason,
+      failureCode:   code,
+    } as any).where(eq(bookingsTable.id, id));
+
+    let refundResult: { initiated: boolean; refundId?: string; error?: string } = { initiated: false };
+
+    if (doRefund && booking.paymentStatus === "paid" && booking.paymentId) {
+      const totalPrice = Number(booking.totalPrice);
+      const [refundRow] = await db.insert(bookingRefundsTable).values({
+        bookingId:   id,
+        paymentId:   booking.paymentId,
+        amount:      totalPrice.toFixed(2),
+        currency:    "INR",
+        status:      "processing",
+        initiatedBy: "admin_mark_failed",
+      }).returning();
+
+      const { keyId, keySecret } = await loadRazorpayCreds();
+      const isDemo = !keyId || !keySecret || booking.paymentId.startsWith("demo_");
+
+      let finalStatus: "completed" | "failed" = "completed";
+      let providerRefundId: string | null = null;
+      let errorMessage: string | null = null;
+
+      if (isDemo) {
+        providerRefundId = `rfnd_demo_${Date.now()}`;
+      } else {
+        try {
+          const auth = Buffer.from(`${keyId}:${keySecret}`).toString("base64");
+          const resp = await fetch(
+            `https://api.razorpay.com/v1/payments/${encodeURIComponent(booking.paymentId)}/refund`,
+            {
+              method: "POST",
+              headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/json" },
+              body: JSON.stringify({
+                amount: Math.round(totalPrice * 100),
+                speed: "normal",
+                notes: { booking_id: String(id), reason, initiated_by: "admin_mark_failed" },
+              }),
+            },
+          );
+          const json = (await resp.json().catch(() => ({}))) as Record<string, unknown>;
+          if (!resp.ok) {
+            const e = (json?.error as Record<string, unknown> | undefined) ?? {};
+            errorMessage = (e?.description as string) || `Razorpay error ${resp.status}`;
+            finalStatus = "failed";
+          } else {
+            providerRefundId = (json?.id as string) ?? null;
+            finalStatus = (json?.status as string) === "failed" ? "failed" : "completed";
+          }
+        } catch (err) {
+          errorMessage = err instanceof Error ? err.message : "Refund failed";
+          finalStatus = "failed";
+        }
+      }
+
+      await db.update(bookingRefundsTable)
+        .set({ status: finalStatus, refundId: providerRefundId, errorMessage, updatedAt: new Date() })
+        .where(eq(bookingRefundsTable.id, refundRow.id));
+
+      if (finalStatus === "completed") {
+        await db.update(bookingsTable).set({ status: "refunded" }).where(eq(bookingsTable.id, id));
+      }
+
+      refundResult = { initiated: finalStatus === "completed", refundId: providerRefundId ?? undefined, error: errorMessage ?? undefined };
+
+      // Notify customer — failure + refund initiated
+      const notifData = buildNotificationData(booking);
+      sendBookingFailureNotifications(notifData, reason).catch(() => {});
+      if (finalStatus === "completed") {
+        sendRefundNotifications(notifData, "initiated", providerRefundId ?? undefined).catch(() => {});
+      }
+    }
+
+    const updated = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
+    const refundMap = await loadRefundsForBookings([id]);
+    logger.info({ id, reason, refundResult }, "[admin-bookings] mark-failed done");
+    return res.json({
+      success: true,
+      booking: shapeBooking(updated[0], refundMap.get(id)),
+      refund: refundResult,
+    });
+  } catch (err) {
+    logger.error({ err }, "[admin-bookings] mark-failed failed");
+    return res.status(500).json({ success: false, error: "Failed to mark booking as failed" });
+  }
+});
+
+// ── GET /api/admin/refund-logs ────────────────────────────────────────────────
+// Returns all refund records joined with basic booking info.
+router.get("/admin/refund-logs", requireAdmin, async (req, res) => {
+  try {
+    const limit  = Math.min(Number(req.query.limit  ?? 200), 500);
+    const offset = Math.max(Number(req.query.offset ?? 0),   0);
+    const statusFilter = (req.query.status as string | undefined)?.trim() ?? "";
+
+    let query = db
+      .select()
+      .from(bookingRefundsTable)
+      .orderBy(desc(bookingRefundsTable.id))
+      .limit(limit)
+      .offset(offset);
+
+    const rows = await (statusFilter && statusFilter !== "all"
+      ? query.where(eq(bookingRefundsTable.status, statusFilter))
+      : query);
+
+    // Load matching bookings
+    const bookingIds = [...new Set(rows.map((r) => r.bookingId).filter((x) => x > 0))];
+    const bookingMap = new Map<number, typeof bookingsTable.$inferSelect>();
+    if (bookingIds.length > 0) {
+      const bRows = await db.select().from(bookingsTable).where(inArray(bookingsTable.id, bookingIds));
+      for (const b of bRows) bookingMap.set(b.id, b);
+    }
+
+    const shaped = rows.map((r) => {
+      const b = bookingMap.get(r.bookingId);
+      return {
+        id:           r.id,
+        bookingId:    r.bookingId,
+        bookingRef:   b?.bookingRef ?? null,
+        paymentId:    r.paymentId,
+        refundId:     r.refundId,
+        amount:       Number(r.amount),
+        currency:     r.currency,
+        status:       r.status,
+        errorMessage: r.errorMessage,
+        initiatedBy:  r.initiatedBy,
+        createdAt:    r.createdAt.toISOString(),
+        updatedAt:    r.updatedAt.toISOString(),
+        // booking context
+        passengerName:  b?.passengerName  ?? null,
+        passengerEmail: b?.passengerEmail ?? null,
+        passengerPhone: b?.passengerPhone ?? null,
+        bookingType:    b?.bookingType    ?? null,
+        bookingAmount:  b ? Number(b.totalPrice) : null,
+        paymentStatus:  b?.paymentStatus  ?? null,
+      };
+    });
+
+    return res.json({ success: true, refundLogs: shaped, count: shaped.length });
+  } catch (err) {
+    logger.error({ err }, "[admin-bookings] refund-logs failed");
+    return res.status(500).json({ success: false, error: "Failed to load refund logs" });
   }
 });
 

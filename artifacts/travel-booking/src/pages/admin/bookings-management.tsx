@@ -56,6 +56,9 @@ type AdminBooking = {
   title: string | null;
   amount: number;
   status: string;
+  bookingStatus: string;
+  failureReason: string | null;
+  failureCode: string | null;
   paymentMethod: string | null;
   paymentStatus: string;
   paymentId: string | null;
@@ -70,11 +73,27 @@ type AdminBooking = {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const STATUS_OPTIONS = [
-  { value: "all",       label: "All statuses" },
-  { value: "pending",   label: "Pending" },
-  { value: "confirmed", label: "Confirmed" },
-  { value: "cancelled", label: "Cancelled" },
-  { value: "refunded",  label: "Refunded" },
+  { value: "all",           label: "All statuses" },
+  { value: "confirmed",     label: "Ticket Confirmed" },
+  { value: "pending",       label: "Pending" },
+  { value: "booking_failed",label: "Booking Failed" },
+  { value: "cancelled",     label: "Cancelled" },
+  { value: "refunded",      label: "Refunded" },
+];
+
+const PAYMENT_STATUS_OPTIONS = [
+  { value: "all",     label: "All payments" },
+  { value: "paid",    label: "Payment Successful" },
+  { value: "pending", label: "Payment Pending" },
+  { value: "failed",  label: "Payment Failed" },
+];
+
+const BOOKING_STATUS_OPTIONS = [
+  { value: "all",        label: "All booking states" },
+  { value: "confirmed",  label: "Ticket Confirmed" },
+  { value: "processing", label: "Booking Processing" },
+  { value: "pending",    label: "Booking Pending" },
+  { value: "failed",     label: "Booking Failed" },
 ];
 
 const TYPE_OPTIONS = [
@@ -99,11 +118,42 @@ function getAuthHeader(): Record<string, string> {
 
 function statusBadgeClass(status: string): string {
   switch (status) {
-    case "confirmed": return "bg-emerald-100 text-emerald-800 border-emerald-200";
-    case "pending":   return "bg-amber-100 text-amber-800 border-amber-200";
-    case "cancelled": return "bg-rose-100 text-rose-800 border-rose-200";
-    case "refunded":  return "bg-indigo-100 text-indigo-800 border-indigo-200";
-    default:          return "bg-slate-100 text-slate-700 border-slate-200";
+    case "confirmed":     return "bg-emerald-100 text-emerald-800 border-emerald-200";
+    case "pending":       return "bg-amber-100 text-amber-800 border-amber-200";
+    case "processing":    return "bg-blue-100 text-blue-800 border-blue-200";
+    case "cancelled":     return "bg-rose-100 text-rose-800 border-rose-200";
+    case "refunded":      return "bg-indigo-100 text-indigo-800 border-indigo-200";
+    case "booking_failed":
+    case "failed":        return "bg-red-100 text-red-800 border-red-200";
+    default:              return "bg-slate-100 text-slate-700 border-slate-200";
+  }
+}
+
+function paymentStatusBadgeClass(status: string): string {
+  switch (status) {
+    case "paid":    return "bg-emerald-100 text-emerald-800 border-emerald-200";
+    case "pending": return "bg-amber-100 text-amber-800 border-amber-200";
+    case "failed":  return "bg-rose-100 text-rose-800 border-rose-200";
+    default:        return "bg-slate-100 text-slate-700 border-slate-200";
+  }
+}
+
+function paymentStatusLabel(status: string): string {
+  switch (status) {
+    case "paid":    return "Payment Successful";
+    case "pending": return "Payment Pending";
+    case "failed":  return "Payment Failed";
+    default:        return status;
+  }
+}
+
+function bookingStatusLabel(status: string): string {
+  switch (status) {
+    case "confirmed":  return "Ticket Confirmed";
+    case "processing": return "Booking Processing";
+    case "pending":    return "Booking Pending";
+    case "failed":     return "Booking Failed";
+    default:           return status;
   }
 }
 
@@ -440,6 +490,16 @@ function buildTimeline(booking: AdminBooking): TimelineEvent[] {
     });
   }
 
+  if (booking.bookingStatus === "failed" || booking.status === "booking_failed") {
+    events.push({
+      label: "Booking Failed",
+      desc:  booking.failureReason ?? "The booking could not be confirmed after payment",
+      time:  fmtDate(booking.createdAt),
+      icon:  <AlertTriangle className="w-3.5 h-3.5" />,
+      color: "bg-red-500",
+    });
+  }
+
   if (booking.refund) {
     events.push({
       label: `Refund ${booking.refund.status === "completed" ? "Completed" : booking.refund.status === "processing" ? "Processing" : "Failed"}`,
@@ -483,6 +543,9 @@ function BookingDetailSheet({
   const [noteText, setNoteText] = useState("");
   const [addingNote, setAddingNote] = useState(false);
   const [resending, setResending] = useState<string | null>(null);
+  const [markingFailed, setMarkingFailed] = useState(false);
+  const [failureReasonInput, setFailureReasonInput] = useState("");
+  const [showMarkFailedForm, setShowMarkFailedForm] = useState(false);
 
   if (!booking) return null;
 
@@ -583,8 +646,41 @@ function BookingDetailSheet({
     });
   }
 
-  const canConfirm = booking.status !== "confirmed" && booking.status !== "refunded";
-  const canCancel  = booking.status !== "cancelled"  && booking.status !== "refunded";
+  const canConfirm    = booking.status !== "confirmed" && booking.status !== "refunded";
+  const canCancel     = booking.status !== "cancelled"  && booking.status !== "refunded";
+  const canMarkFailed = booking.paymentStatus === "paid"
+    && booking.bookingStatus !== "failed"
+    && booking.status !== "refunded"
+    && booking.status !== "booking_failed";
+
+  async function handleMarkFailed() {
+    if (!failureReasonInput.trim()) {
+      toast({ title: "Reason required", description: "Please enter the failure reason.", variant: "destructive" });
+      return;
+    }
+    setMarkingFailed(true);
+    try {
+      const res = await fetch(`/api/admin/bookings/${booking!.id}/mark-failed`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...getAuthHeader() },
+        body: JSON.stringify({ reason: failureReasonInput.trim(), code: "api_error", initiateRefund: true }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error || "Failed");
+      onBookingUpdated(json.booking as AdminBooking);
+      setShowMarkFailedForm(false);
+      setFailureReasonInput("");
+      toast({
+        title: "Booking marked as failed",
+        description: json.refund?.initiated
+          ? `Refund of ${formatINR(booking!.amount)} initiated successfully.`
+          : "Booking marked as failed. Refund could not be initiated automatically.",
+      });
+    } catch (e) {
+      toast({ title: "Failed", description: String(e instanceof Error ? e.message : e), variant: "destructive" });
+    } finally { setMarkingFailed(false); }
+  }
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -689,7 +785,18 @@ function BookingDetailSheet({
                     <span className="text-xs uppercase tracking-wide text-slate-500 font-semibold">Total Amount</span>
                     <span className="text-2xl font-bold text-slate-900">{formatINR(booking.amount)}</span>
                   </div>
-                  <Field label="Status"         value={booking.paymentStatus} className="capitalize" />
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-500">Payment</span>
+                    <Badge variant="outline" className={`text-xs ${paymentStatusBadgeClass(booking.paymentStatus)}`}>
+                      {paymentStatusLabel(booking.paymentStatus)}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-500">Booking</span>
+                    <Badge variant="outline" className={`text-xs ${statusBadgeClass(booking.bookingStatus)}`}>
+                      {bookingStatusLabel(booking.bookingStatus)}
+                    </Badge>
+                  </div>
                   <Field label="Method"         value={booking.paymentMethod} className="capitalize" />
                   <Field label="Payment ID"     value={booking.paymentId} mono />
                   <Field label="Razorpay Order" value={booking.razorpayOrderId} mono />
@@ -716,6 +823,32 @@ function BookingDetailSheet({
                 </div>
               )}
 
+              {/* Failure info banner */}
+              {(booking.bookingStatus === "failed" || booking.status === "booking_failed") && (
+                <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-red-600 mb-2 flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5" /> Booking Failure Details
+                  </h4>
+                  <div className="space-y-1.5">
+                    {booking.failureReason && (
+                      <p className="text-sm text-red-800"><span className="font-medium">Reason:</span> {booking.failureReason}</p>
+                    )}
+                    {booking.failureCode && (
+                      <p className="text-xs text-red-600 font-mono">Code: {booking.failureCode}</p>
+                    )}
+                    {booking.refund ? (
+                      <p className="text-xs text-emerald-700 mt-2 flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Refund {booking.refund.status} · {formatINR(booking.refund.amount)}
+                        {booking.refund.refundId && ` · ID: ${booking.refund.refundId}`}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-amber-700 mt-2">No refund record found.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Admin status actions */}
               <div>
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3 flex items-center gap-1.5">
@@ -736,7 +869,44 @@ function BookingDetailSheet({
                       Mark Cancelled
                     </Button>
                   )}
+                  {canMarkFailed && !showMarkFailedForm && (
+                    <Button size="sm" variant="outline" className="gap-1.5 border-red-300 text-red-700 hover:bg-red-50"
+                      onClick={() => setShowMarkFailedForm(true)} disabled={acting}>
+                      <AlertTriangle className="w-3.5 h-3.5" /> Mark Booking Failed
+                    </Button>
+                  )}
                 </div>
+
+                {/* Mark Failed inline form */}
+                {showMarkFailedForm && (
+                  <div className="mt-4 p-4 rounded-xl border border-red-200 bg-red-50 space-y-3">
+                    <p className="text-xs font-semibold text-red-700 uppercase tracking-wide">Mark Booking as Failed</p>
+                    <p className="text-xs text-red-600">
+                      This will mark the booking as failed and automatically initiate a full refund of {formatINR(booking.amount)} via Razorpay.
+                      The customer will be notified via email, SMS, and WhatsApp.
+                    </p>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold text-red-700">Failure Reason *</Label>
+                      <Textarea
+                        placeholder="e.g. Flight ticket could not be issued by the airline. Seats no longer available."
+                        value={failureReasonInput}
+                        onChange={(e) => setFailureReasonInput(e.target.value)}
+                        rows={2}
+                        className="resize-none text-sm border-red-200"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="destructive" className="gap-1.5"
+                        onClick={handleMarkFailed} disabled={markingFailed || !failureReasonInput.trim()}>
+                        {markingFailed ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <AlertTriangle className="w-3.5 h-3.5" />}
+                        Confirm & Initiate Refund
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => { setShowMarkFailedForm(false); setFailureReasonInput(""); }}>
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             </TabsContent>
 
@@ -839,8 +1009,10 @@ export default function BookingsManagementPage() {
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
   const [search, setSearch]     = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [typeFilter,   setTypeFilter]   = useState("all");
+  const [statusFilter,        setStatusFilter]        = useState("all");
+  const [typeFilter,          setTypeFilter]          = useState("all");
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState("all");
+  const [bookingStatusFilter, setBookingStatusFilter] = useState("all");
   const [viewBooking, setViewBooking]   = useState<AdminBooking | null>(null);
   const [confirmAction, setConfirmAction] = useState<{
     booking: AdminBooking; type: "cancel" | "confirm" | "refund";
@@ -853,9 +1025,11 @@ export default function BookingsManagementPage() {
     setError(null);
     try {
       const params = new URLSearchParams();
-      if (search.trim()) params.set("search", search.trim());
-      if (statusFilter !== "all") params.set("status", statusFilter);
-      if (typeFilter   !== "all") params.set("type",   typeFilter);
+      if (search.trim())                   params.set("search",        search.trim());
+      if (statusFilter        !== "all")   params.set("status",        statusFilter);
+      if (typeFilter          !== "all")   params.set("type",          typeFilter);
+      if (paymentStatusFilter !== "all")   params.set("paymentStatus", paymentStatusFilter);
+      if (bookingStatusFilter !== "all")   params.set("bookingStatus", bookingStatusFilter);
       const url = `/api/admin/bookings${params.toString() ? `?${params}` : ""}`;
       const res = await fetch(url, { credentials: "include", headers: { ...getAuthHeader() } });
       if (!res.ok) {
@@ -873,16 +1047,17 @@ export default function BookingsManagementPage() {
   useEffect(() => {
     const t = setTimeout(() => fetchBookings(), 300);
     return () => clearTimeout(t);
-  }, [search, statusFilter, typeFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [search, statusFilter, typeFilter, paymentStatusFilter, bookingStatusFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const summary = useMemo(() => {
-    const t = { total: 0, confirmed: 0, pending: 0, cancelled: 0, refunded: 0, revenue: 0 };
+    const t = { total: 0, confirmed: 0, pending: 0, cancelled: 0, refunded: 0, failed: 0, revenue: 0 };
     for (const b of bookings) {
       t.total++;
-      if (b.status === "confirmed") t.confirmed++;
-      if (b.status === "pending")   t.pending++;
-      if (b.status === "cancelled") t.cancelled++;
-      if (b.status === "refunded")  t.refunded++;
+      if (b.status === "confirmed")      t.confirmed++;
+      if (b.status === "pending")        t.pending++;
+      if (b.status === "cancelled")      t.cancelled++;
+      if (b.status === "refunded")       t.refunded++;
+      if (b.status === "booking_failed" || b.bookingStatus === "failed") t.failed++;
       if (b.status === "confirmed" || b.status === "pending") t.revenue += b.amount;
     }
     return t;
@@ -972,12 +1147,13 @@ export default function BookingsManagementPage() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
 
         {/* Summary cards */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
           <SummaryCard label="Total"     value={summary.total}     tone="slate" />
           <SummaryCard label="Confirmed" value={summary.confirmed} tone="emerald" />
           <SummaryCard label="Pending"   value={summary.pending}   tone="amber" />
           <SummaryCard label="Cancelled" value={summary.cancelled} tone="rose" />
           <SummaryCard label="Refunded"  value={summary.refunded}  tone="indigo" />
+          <SummaryCard label="Failed"    value={summary.failed}    tone="red" />
         </div>
 
         {/* Revenue banner */}
@@ -993,7 +1169,7 @@ export default function BookingsManagementPage() {
         <Card>
           <CardContent className="pt-5">
             <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-              <div className="md:col-span-6">
+              <div className="md:col-span-4">
                 <Label className="text-xs uppercase tracking-wide text-slate-500">Search</Label>
                 <div className="relative mt-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -1001,7 +1177,7 @@ export default function BookingsManagementPage() {
                     placeholder="Booking ID, email, name or phone…" className="pl-9" />
                 </div>
               </div>
-              <div className="md:col-span-3">
+              <div className="md:col-span-2">
                 <Label className="text-xs uppercase tracking-wide text-slate-500">Status</Label>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
                   <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
@@ -1010,7 +1186,25 @@ export default function BookingsManagementPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="md:col-span-3">
+              <div className="md:col-span-2">
+                <Label className="text-xs uppercase tracking-wide text-slate-500">Payment</Label>
+                <Select value={paymentStatusFilter} onValueChange={setPaymentStatusFilter}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {PAYMENT_STATUS_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="md:col-span-2">
+                <Label className="text-xs uppercase tracking-wide text-slate-500">Booking State</Label>
+                <Select value={bookingStatusFilter} onValueChange={setBookingStatusFilter}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {BOOKING_STATUS_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="md:col-span-2">
                 <Label className="text-xs uppercase tracking-wide text-slate-500">Service Type</Label>
                 <Select value={typeFilter} onValueChange={setTypeFilter}>
                   <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
@@ -1051,7 +1245,8 @@ export default function BookingsManagementPage() {
                       <TableHead>Customer</TableHead>
                       <TableHead>Type</TableHead>
                       <TableHead className="text-right">Amount</TableHead>
-                      <TableHead>Status</TableHead>
+                      <TableHead>Payment</TableHead>
+                      <TableHead>Booking</TableHead>
                       <TableHead>Refund</TableHead>
                       <TableHead>Travel Date</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
@@ -1082,9 +1277,19 @@ export default function BookingsManagementPage() {
                           {formatINR(b.amount)}
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className={`capitalize ${statusBadgeClass(b.status)}`}>
-                            {b.status}
+                          <Badge variant="outline" className={`text-xs ${paymentStatusBadgeClass(b.paymentStatus)}`}>
+                            {b.paymentStatus === "paid" ? "Paid" : b.paymentStatus === "failed" ? "Failed" : "Pending"}
                           </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={`text-xs ${statusBadgeClass(b.bookingStatus)}`}>
+                            {bookingStatusLabel(b.bookingStatus)}
+                          </Badge>
+                          {b.failureReason && (
+                            <div className="text-[10px] text-red-600 mt-0.5 max-w-[140px] truncate" title={b.failureReason}>
+                              {b.failureReason}
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell>
                           {b.refund
@@ -1113,6 +1318,12 @@ export default function BookingsManagementPage() {
                               <Button size="sm" variant="outline" className="text-indigo-700 hover:bg-indigo-50"
                                 title="Refund" onClick={() => { setRefundAmount(String(b.amount)); setConfirmAction({ booking: b, type: "refund" }); }}>
                                 <Wallet className="w-3.5 h-3.5" />
+                              </Button>
+                            )}
+                            {b.paymentStatus === "paid" && b.bookingStatus !== "failed" && b.status !== "refunded" && b.status !== "booking_failed" && (
+                              <Button size="sm" variant="outline" className="text-red-700 hover:bg-red-50 border-red-200"
+                                title="Mark Booking Failed" onClick={() => { setViewBooking(b); }}>
+                                <AlertTriangle className="w-3.5 h-3.5" />
                               </Button>
                             )}
                           </div>
@@ -1202,7 +1413,7 @@ export default function BookingsManagementPage() {
 
 function SummaryCard({ label, value, tone }: {
   label: string; value: number;
-  tone: "slate" | "emerald" | "amber" | "rose" | "indigo";
+  tone: "slate" | "emerald" | "amber" | "rose" | "indigo" | "red";
 }) {
   const tones: Record<typeof tone, string> = {
     slate:   "bg-slate-50 border-slate-200 text-slate-700",
@@ -1210,6 +1421,7 @@ function SummaryCard({ label, value, tone }: {
     amber:   "bg-amber-50 border-amber-200 text-amber-800",
     rose:    "bg-rose-50 border-rose-200 text-rose-800",
     indigo:  "bg-indigo-50 border-indigo-200 text-indigo-800",
+    red:     "bg-red-50 border-red-200 text-red-800",
   };
   return (
     <div className={`rounded-lg border p-3 ${tones[tone]}`}>

@@ -223,6 +223,93 @@ export async function sendBookingWhatsApp(
   }
 }
 
+// ── Raw channel helpers (custom message body) ─────────────────────────────────
+
+async function sendRawSMS(phone: string, body: string): Promise<{ sent: boolean; reason?: string }> {
+  const accountSid = (process.env.TWILIO_ACCOUNT_SID || "").trim();
+  const authToken  = (process.env.TWILIO_AUTH_TOKEN  || "").trim();
+  const fromNumber = (process.env.TWILIO_SMS_FROM    || "").trim();
+  if (!accountSid || !authToken || !fromNumber) return { sent: false, reason: "Twilio SMS not configured" };
+  try {
+    const client = twilio(accountSid, authToken);
+    await client.messages.create({ from: fromNumber, to: formatPhone(phone), body });
+    return { sent: true };
+  } catch (err: any) { return { sent: false, reason: err.message }; }
+}
+
+async function sendRawWhatsApp(phone: string, body: string): Promise<{ sent: boolean; reason?: string }> {
+  const accountSid = (process.env.TWILIO_ACCOUNT_SID || "").trim();
+  const authToken  = (process.env.TWILIO_AUTH_TOKEN  || "").trim();
+  const fromWA     = (process.env.TWILIO_WHATSAPP_FROM || "").trim();
+  if (!accountSid || !authToken || !fromWA) return { sent: false, reason: "Twilio WhatsApp not configured" };
+  try {
+    const client = twilio(accountSid, authToken);
+    await client.messages.create({ from: fromWA, to: `whatsapp:${formatPhone(phone)}`, body });
+    return { sent: true };
+  } catch (err: any) { return { sent: false, reason: err.message }; }
+}
+
+// ── sendBookingFailureNotifications ─────────────────────────────────────────
+// Called when payment succeeded but booking/ticketing failed.
+
+export async function sendBookingFailureNotifications(
+  data: BookingNotificationData,
+  reason: string,
+): Promise<{ email: { sent: boolean; reason?: string }; sms: { sent: boolean; reason?: string }; whatsapp: { sent: boolean; reason?: string } }> {
+  logger.info(`[notification/failure] booking: ${data.bookingId}  reason: ${reason}`);
+
+  const amount = `Rs.${data.totalAmount.toLocaleString("en-IN")}`;
+  const msg =
+    `Hi ${data.passengerName}, your payment of ${amount} was received for booking ${data.bookingId}, ` +
+    `but the booking could not be confirmed. Reason: ${reason}. ` +
+    `A full refund has been initiated and will reflect within 5-7 business days. ` +
+    `Support: ${APP_SUPPORT_PHONE}`;
+
+  const [emailRes, smsRes, waRes] = await Promise.allSettled([
+    sendBookingEmail(data),
+    data.passengerPhone ? sendRawSMS(data.passengerPhone, msg) : Promise.resolve({ sent: false, reason: "No phone" }),
+    data.passengerPhone ? sendRawWhatsApp(data.passengerPhone, msg) : Promise.resolve({ sent: false, reason: "No phone" }),
+  ]);
+
+  return {
+    email:    emailRes.status === "fulfilled" ? emailRes.value    : { sent: false, reason: String((emailRes as PromiseRejectedResult).reason) },
+    sms:      smsRes.status   === "fulfilled" ? smsRes.value      : { sent: false, reason: String((smsRes as PromiseRejectedResult).reason) },
+    whatsapp: waRes.status    === "fulfilled" ? waRes.value       : { sent: false, reason: String((waRes as PromiseRejectedResult).reason) },
+  };
+}
+
+// ── sendRefundNotifications ──────────────────────────────────────────────────
+// Called when a refund is initiated, completed, or fails.
+
+export async function sendRefundNotifications(
+  data: BookingNotificationData,
+  refundStatus: "initiated" | "completed" | "failed",
+  refundId?: string,
+): Promise<{ email: { sent: boolean; reason?: string }; sms: { sent: boolean; reason?: string }; whatsapp: { sent: boolean; reason?: string } }> {
+  logger.info(`[notification/refund] booking: ${data.bookingId}  status: ${refundStatus}`);
+
+  const amount = `Rs.${data.totalAmount.toLocaleString("en-IN")}`;
+  const ref = refundId ? ` (Ref: ${refundId})` : "";
+  const msg =
+    refundStatus === "initiated"
+      ? `Hi ${data.passengerName}, your refund of ${amount} for booking ${data.bookingId} has been initiated${ref}. It will reflect within 5-7 business days. Support: ${APP_SUPPORT_PHONE}`
+      : refundStatus === "completed"
+      ? `Hi ${data.passengerName}, your refund of ${amount} for booking ${data.bookingId} has been successfully processed${ref}. The amount will appear in your account shortly. Support: ${APP_SUPPORT_PHONE}`
+      : `Hi ${data.passengerName}, we were unable to process your refund of ${amount} for booking ${data.bookingId}. Please contact our support: ${APP_SUPPORT_PHONE}`;
+
+  const [emailRes, smsRes, waRes] = await Promise.allSettled([
+    sendBookingEmail(data),
+    data.passengerPhone ? sendRawSMS(data.passengerPhone, msg) : Promise.resolve({ sent: false, reason: "No phone" }),
+    data.passengerPhone ? sendRawWhatsApp(data.passengerPhone, msg) : Promise.resolve({ sent: false, reason: "No phone" }),
+  ]);
+
+  return {
+    email:    emailRes.status === "fulfilled" ? emailRes.value    : { sent: false, reason: String((emailRes as PromiseRejectedResult).reason) },
+    sms:      smsRes.status   === "fulfilled" ? smsRes.value      : { sent: false, reason: String((smsRes as PromiseRejectedResult).reason) },
+    whatsapp: waRes.status    === "fulfilled" ? waRes.value       : { sent: false, reason: String((waRes as PromiseRejectedResult).reason) },
+  };
+}
+
 // ── sendAllBookingNotifications ───────────────────────────────────────────────
 // Fires Email + SMS + WhatsApp concurrently. Each channel is independent —
 // a failure in one never blocks or invalidates the others.

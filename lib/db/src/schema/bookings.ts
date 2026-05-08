@@ -38,6 +38,11 @@ export const bookingsTable = pgTable("bookings", {
   razorpayOrderId: text("razorpay_order_id"), // Razorpay order ID
   razorpaySignature: text("razorpay_signature"), // Payment verification signature
   emiDetails: jsonb("emi_details"), // EMI tenure, monthly amount, etc.
+  // Booking lifecycle tracking (separate from payment)
+  bookingStatus: text("booking_status").notNull().default("confirmed"),
+  // pending | processing | confirmed | failed
+  failureReason: text("failure_reason"), // human-readable: "API failure", "PNR not generated", "Seat unavailable", "Booking timeout"
+  failureCode: text("failure_code"), // short code: api_error | pnr_not_generated | seat_unavailable | timeout | payment_failed
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

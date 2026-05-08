@@ -154738,6 +154738,13 @@ var bookingsTable = pgTable("bookings", {
   // Payment verification signature
   emiDetails: jsonb("emi_details"),
   // EMI tenure, monthly amount, etc.
+  // Booking lifecycle tracking (separate from payment)
+  bookingStatus: text("booking_status").notNull().default("confirmed"),
+  // pending | processing | confirmed | failed
+  failureReason: text("failure_reason"),
+  // human-readable: "API failure", "PNR not generated", "Seat unavailable", "Booking timeout"
+  failureCode: text("failure_code"),
+  // short code: api_error | pnr_not_generated | seat_unavailable | timeout | payment_failed
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
 });
 var insertBookingSchema = createInsertSchema(bookingsTable).omit({
@@ -158126,6 +158133,63 @@ async function sendBookingWhatsApp(data) {
     return { sent: false, reason: err.message };
   }
 }
+async function sendRawSMS(phone, body) {
+  const accountSid = (process.env.TWILIO_ACCOUNT_SID || "").trim();
+  const authToken = (process.env.TWILIO_AUTH_TOKEN || "").trim();
+  const fromNumber = (process.env.TWILIO_SMS_FROM || "").trim();
+  if (!accountSid || !authToken || !fromNumber) return { sent: false, reason: "Twilio SMS not configured" };
+  try {
+    const client = twilio4(accountSid, authToken);
+    await client.messages.create({ from: fromNumber, to: formatPhone3(phone), body });
+    return { sent: true };
+  } catch (err) {
+    return { sent: false, reason: err.message };
+  }
+}
+async function sendRawWhatsApp2(phone, body) {
+  const accountSid = (process.env.TWILIO_ACCOUNT_SID || "").trim();
+  const authToken = (process.env.TWILIO_AUTH_TOKEN || "").trim();
+  const fromWA = (process.env.TWILIO_WHATSAPP_FROM || "").trim();
+  if (!accountSid || !authToken || !fromWA) return { sent: false, reason: "Twilio WhatsApp not configured" };
+  try {
+    const client = twilio4(accountSid, authToken);
+    await client.messages.create({ from: fromWA, to: `whatsapp:${formatPhone3(phone)}`, body });
+    return { sent: true };
+  } catch (err) {
+    return { sent: false, reason: err.message };
+  }
+}
+async function sendBookingFailureNotifications(data, reason) {
+  logger.info(`[notification/failure] booking: ${data.bookingId}  reason: ${reason}`);
+  const amount = `Rs.${data.totalAmount.toLocaleString("en-IN")}`;
+  const msg = `Hi ${data.passengerName}, your payment of ${amount} was received for booking ${data.bookingId}, but the booking could not be confirmed. Reason: ${reason}. A full refund has been initiated and will reflect within 5-7 business days. Support: ${APP_SUPPORT_PHONE}`;
+  const [emailRes, smsRes, waRes] = await Promise.allSettled([
+    sendBookingEmail(data),
+    data.passengerPhone ? sendRawSMS(data.passengerPhone, msg) : Promise.resolve({ sent: false, reason: "No phone" }),
+    data.passengerPhone ? sendRawWhatsApp2(data.passengerPhone, msg) : Promise.resolve({ sent: false, reason: "No phone" })
+  ]);
+  return {
+    email: emailRes.status === "fulfilled" ? emailRes.value : { sent: false, reason: String(emailRes.reason) },
+    sms: smsRes.status === "fulfilled" ? smsRes.value : { sent: false, reason: String(smsRes.reason) },
+    whatsapp: waRes.status === "fulfilled" ? waRes.value : { sent: false, reason: String(waRes.reason) }
+  };
+}
+async function sendRefundNotifications(data, refundStatus, refundId) {
+  logger.info(`[notification/refund] booking: ${data.bookingId}  status: ${refundStatus}`);
+  const amount = `Rs.${data.totalAmount.toLocaleString("en-IN")}`;
+  const ref = refundId ? ` (Ref: ${refundId})` : "";
+  const msg = refundStatus === "initiated" ? `Hi ${data.passengerName}, your refund of ${amount} for booking ${data.bookingId} has been initiated${ref}. It will reflect within 5-7 business days. Support: ${APP_SUPPORT_PHONE}` : refundStatus === "completed" ? `Hi ${data.passengerName}, your refund of ${amount} for booking ${data.bookingId} has been successfully processed${ref}. The amount will appear in your account shortly. Support: ${APP_SUPPORT_PHONE}` : `Hi ${data.passengerName}, we were unable to process your refund of ${amount} for booking ${data.bookingId}. Please contact our support: ${APP_SUPPORT_PHONE}`;
+  const [emailRes, smsRes, waRes] = await Promise.allSettled([
+    sendBookingEmail(data),
+    data.passengerPhone ? sendRawSMS(data.passengerPhone, msg) : Promise.resolve({ sent: false, reason: "No phone" }),
+    data.passengerPhone ? sendRawWhatsApp2(data.passengerPhone, msg) : Promise.resolve({ sent: false, reason: "No phone" })
+  ]);
+  return {
+    email: emailRes.status === "fulfilled" ? emailRes.value : { sent: false, reason: String(emailRes.reason) },
+    sms: smsRes.status === "fulfilled" ? smsRes.value : { sent: false, reason: String(smsRes.reason) },
+    whatsapp: waRes.status === "fulfilled" ? waRes.value : { sent: false, reason: String(waRes.reason) }
+  };
+}
 async function sendAllBookingNotifications(data) {
   logger.info(`[notification] Sending all channels \u2014 booking: ${data.bookingId}  type: ${data.bookingType}`);
   const [emailResult, smsResult, whatsappResult] = await Promise.allSettled([
@@ -160387,10 +160451,12 @@ function requireAdmin(req, res, next) {
 
 // src/routes/admin-bookings.ts
 var router22 = (0, import_express22.Router)();
-var ALLOWED_STATUSES = ["pending", "confirmed", "cancelled", "refunded"];
+var ALLOWED_STATUSES = ["pending", "confirmed", "cancelled", "refunded", "booking_failed"];
 function isAllowedStatus(s2) {
   return typeof s2 === "string" && ALLOWED_STATUSES.includes(s2);
 }
+var ALLOWED_BOOKING_STATUSES = ["pending", "processing", "confirmed", "failed"];
+var ALLOWED_PAYMENT_STATUSES = ["pending", "paid", "failed"];
 async function loadRefundsForBookings(bookingIds) {
   if (bookingIds.length === 0) return /* @__PURE__ */ new Map();
   const rows = await db.select().from(bookingRefundsTable).where(inArray(bookingRefundsTable.bookingId, bookingIds));
@@ -160415,6 +160481,9 @@ function shapeBooking(b, refund) {
     title: b.title,
     amount: Number(b.totalPrice),
     status: b.status,
+    bookingStatus: b.bookingStatus ?? "confirmed",
+    failureReason: b.failureReason ?? null,
+    failureCode: b.failureCode ?? null,
     paymentMethod: b.paymentMethod,
     paymentStatus: b.paymentStatus,
     paymentId: b.paymentId,
@@ -160429,7 +160498,9 @@ function shapeBooking(b, refund) {
       amount: Number(refund.amount),
       refundId: refund.refundId,
       errorMessage: refund.errorMessage,
-      createdAt: refund.createdAt.toISOString()
+      initiatedBy: refund.initiatedBy,
+      createdAt: refund.createdAt.toISOString(),
+      updatedAt: refund.updatedAt.toISOString()
     } : null
   };
 }
@@ -160472,11 +160543,19 @@ router22.get("/admin/bookings", requireAdmin, async (req, res) => {
     const search = req.query.search?.trim() ?? "";
     const status = req.query.status?.trim() ?? "";
     const type = req.query.type?.trim() ?? "";
+    const paymentFilter = req.query.paymentStatus?.trim() ?? "";
+    const bookingFilter = req.query.bookingStatus?.trim() ?? "";
     const limit = Math.min(Number(req.query.limit ?? 200), 500);
     const offset = Math.max(Number(req.query.offset ?? 0), 0);
     const where = [];
     if (status && status !== "all" && isAllowedStatus(status)) {
       where.push(eq(bookingsTable.status, status));
+    }
+    if (paymentFilter && paymentFilter !== "all" && ALLOWED_PAYMENT_STATUSES.includes(paymentFilter)) {
+      where.push(eq(bookingsTable.paymentStatus, paymentFilter));
+    }
+    if (bookingFilter && bookingFilter !== "all" && ALLOWED_BOOKING_STATUSES.includes(bookingFilter)) {
+      where.push(eq(bookingsTable.bookingStatus, bookingFilter));
     }
     if (type && type !== "all") {
       where.push(eq(bookingsTable.bookingType, type));
@@ -160716,6 +160795,138 @@ router22.post("/admin/bookings/:id/resend", requireAdmin, async (req, res) => {
   } catch (err) {
     logger.error({ err }, "[admin-bookings] resend failed");
     return res.status(500).json({ success: false, error: "Resend failed" });
+  }
+});
+router22.post("/admin/bookings/:id/mark-failed", requireAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ success: false, error: "Invalid booking id" });
+    const reason = String(req.body?.reason ?? "Booking failed").trim();
+    const code = String(req.body?.code ?? "api_error").trim();
+    const doRefund = req.body?.initiateRefund !== false;
+    const rows = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
+    if (rows.length === 0) return res.status(404).json({ success: false, error: "Booking not found" });
+    const booking = rows[0];
+    await db.update(bookingsTable).set({
+      status: "booking_failed",
+      bookingStatus: "failed",
+      failureReason: reason,
+      failureCode: code
+    }).where(eq(bookingsTable.id, id));
+    let refundResult = { initiated: false };
+    if (doRefund && booking.paymentStatus === "paid" && booking.paymentId) {
+      const totalPrice = Number(booking.totalPrice);
+      const [refundRow] = await db.insert(bookingRefundsTable).values({
+        bookingId: id,
+        paymentId: booking.paymentId,
+        amount: totalPrice.toFixed(2),
+        currency: "INR",
+        status: "processing",
+        initiatedBy: "admin_mark_failed"
+      }).returning();
+      const { keyId, keySecret } = await loadRazorpayCreds();
+      const isDemo = !keyId || !keySecret || booking.paymentId.startsWith("demo_");
+      let finalStatus = "completed";
+      let providerRefundId = null;
+      let errorMessage = null;
+      if (isDemo) {
+        providerRefundId = `rfnd_demo_${Date.now()}`;
+      } else {
+        try {
+          const auth = Buffer.from(`${keyId}:${keySecret}`).toString("base64");
+          const resp = await fetch(
+            `https://api.razorpay.com/v1/payments/${encodeURIComponent(booking.paymentId)}/refund`,
+            {
+              method: "POST",
+              headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/json" },
+              body: JSON.stringify({
+                amount: Math.round(totalPrice * 100),
+                speed: "normal",
+                notes: { booking_id: String(id), reason, initiated_by: "admin_mark_failed" }
+              })
+            }
+          );
+          const json3 = await resp.json().catch(() => ({}));
+          if (!resp.ok) {
+            const e2 = json3?.error ?? {};
+            errorMessage = e2?.description || `Razorpay error ${resp.status}`;
+            finalStatus = "failed";
+          } else {
+            providerRefundId = json3?.id ?? null;
+            finalStatus = json3?.status === "failed" ? "failed" : "completed";
+          }
+        } catch (err) {
+          errorMessage = err instanceof Error ? err.message : "Refund failed";
+          finalStatus = "failed";
+        }
+      }
+      await db.update(bookingRefundsTable).set({ status: finalStatus, refundId: providerRefundId, errorMessage, updatedAt: /* @__PURE__ */ new Date() }).where(eq(bookingRefundsTable.id, refundRow.id));
+      if (finalStatus === "completed") {
+        await db.update(bookingsTable).set({ status: "refunded" }).where(eq(bookingsTable.id, id));
+      }
+      refundResult = { initiated: finalStatus === "completed", refundId: providerRefundId ?? void 0, error: errorMessage ?? void 0 };
+      const notifData = buildNotificationData(booking);
+      sendBookingFailureNotifications(notifData, reason).catch(() => {
+      });
+      if (finalStatus === "completed") {
+        sendRefundNotifications(notifData, "initiated", providerRefundId ?? void 0).catch(() => {
+        });
+      }
+    }
+    const updated = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
+    const refundMap = await loadRefundsForBookings([id]);
+    logger.info({ id, reason, refundResult }, "[admin-bookings] mark-failed done");
+    return res.json({
+      success: true,
+      booking: shapeBooking(updated[0], refundMap.get(id)),
+      refund: refundResult
+    });
+  } catch (err) {
+    logger.error({ err }, "[admin-bookings] mark-failed failed");
+    return res.status(500).json({ success: false, error: "Failed to mark booking as failed" });
+  }
+});
+router22.get("/admin/refund-logs", requireAdmin, async (req, res) => {
+  try {
+    const limit = Math.min(Number(req.query.limit ?? 200), 500);
+    const offset = Math.max(Number(req.query.offset ?? 0), 0);
+    const statusFilter = req.query.status?.trim() ?? "";
+    let query = db.select().from(bookingRefundsTable).orderBy(desc(bookingRefundsTable.id)).limit(limit).offset(offset);
+    const rows = await (statusFilter && statusFilter !== "all" ? query.where(eq(bookingRefundsTable.status, statusFilter)) : query);
+    const bookingIds = [...new Set(rows.map((r2) => r2.bookingId).filter((x2) => x2 > 0))];
+    const bookingMap = /* @__PURE__ */ new Map();
+    if (bookingIds.length > 0) {
+      const bRows = await db.select().from(bookingsTable).where(inArray(bookingsTable.id, bookingIds));
+      for (const b of bRows) bookingMap.set(b.id, b);
+    }
+    const shaped = rows.map((r2) => {
+      const b = bookingMap.get(r2.bookingId);
+      return {
+        id: r2.id,
+        bookingId: r2.bookingId,
+        bookingRef: b?.bookingRef ?? null,
+        paymentId: r2.paymentId,
+        refundId: r2.refundId,
+        amount: Number(r2.amount),
+        currency: r2.currency,
+        status: r2.status,
+        errorMessage: r2.errorMessage,
+        initiatedBy: r2.initiatedBy,
+        createdAt: r2.createdAt.toISOString(),
+        updatedAt: r2.updatedAt.toISOString(),
+        // booking context
+        passengerName: b?.passengerName ?? null,
+        passengerEmail: b?.passengerEmail ?? null,
+        passengerPhone: b?.passengerPhone ?? null,
+        bookingType: b?.bookingType ?? null,
+        bookingAmount: b ? Number(b.totalPrice) : null,
+        paymentStatus: b?.paymentStatus ?? null
+      };
+    });
+    return res.json({ success: true, refundLogs: shaped, count: shaped.length });
+  } catch (err) {
+    logger.error({ err }, "[admin-bookings] refund-logs failed");
+    return res.status(500).json({ success: false, error: "Failed to load refund logs" });
   }
 });
 router22.post("/admin/bookings/:id/notes", requireAdmin, async (req, res) => {
@@ -165338,6 +165549,7 @@ router24.post("/book-flight", async (req, res) => {
       status: "confirmed",
       paymentStatus: "paid",
       paymentId,
+      bookingStatus: "confirmed",
       details: {
         ...typeof bookingMeta?.details === "object" && bookingMeta?.details !== null ? bookingMeta.details : {},
         paymentId,
@@ -165449,6 +165661,9 @@ router24.post("/book-flight", async (req, res) => {
     status: tjSuccess ? "confirmed" : "cancelled",
     paymentStatus: "paid",
     paymentId,
+    bookingStatus: tjSuccess ? "confirmed" : "failed",
+    failureReason: tjSuccess ? void 0 : tjError ?? "Ticket booking failed",
+    failureCode: tjSuccess ? void 0 : "api_error",
     details: bookingDetails
   }).returning();
   if (tjSuccess) {
@@ -165499,6 +165714,25 @@ router24.post("/book-flight", async (req, res) => {
     }
   } catch (refundErr) {
     logger.error({ paymentId, err: refundErr }, "[book-flight] refund threw");
+  }
+  const _failureNotif = {
+    bookingId: bookingRef,
+    bookingType: "flight",
+    passengerName,
+    passengerEmail: passengerEmail || void 0,
+    passengerPhone: passengerPhone || void 0,
+    travelDate,
+    totalAmount: totalPrice,
+    paymentId,
+    passengers: passengers.length
+  };
+  sendBookingFailureNotifications(_failureNotif, tjError ?? "Ticket booking failed").catch(
+    (e2) => logger.error({ err: e2?.message }, "[book-flight] failure notification error")
+  );
+  if (refundResult.initiated) {
+    sendRefundNotifications(_failureNotif, "initiated", refundResult.refundId).catch(
+      (e2) => logger.error({ err: e2?.message }, "[book-flight] refund notification error")
+    );
   }
   res.json({
     success: false,

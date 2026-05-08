@@ -217,14 +217,28 @@ export default function Bookings() {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'confirmed': 
+      case 'confirmed':
       case 'paid':
-        return <Badge className="bg-green-500 hover:bg-green-600">Confirmed</Badge>;
-      case 'pending': 
+        return <Badge className="bg-green-500 hover:bg-green-600">Ticket Confirmed</Badge>;
+      case 'pending':
         return <Badge variant="secondary" className="bg-yellow-500/20 text-yellow-700 hover:bg-yellow-500/30">Pending</Badge>;
-      case 'cancelled': 
+      case 'processing':
+        return <Badge variant="secondary" className="bg-blue-500/20 text-blue-700 hover:bg-blue-500/30">Booking in Progress</Badge>;
+      case 'booking_failed':
+      case 'failed':
+        return <Badge variant="destructive" className="bg-red-600">Booking Failed</Badge>;
+      case 'refund_initiated':
+      case 'refund_processing':
+        return <Badge className="bg-blue-600 hover:bg-blue-700">Refund Initiated</Badge>;
+      case 'refunded':
+        return <Badge className="bg-indigo-600 hover:bg-indigo-700">Refunded</Badge>;
+      case 'refund_failed':
+        return <Badge variant="destructive" className="bg-orange-600">Refund Failed</Badge>;
+      case 'payment_failed':
+        return <Badge variant="destructive" className="bg-red-700">Payment Failed</Badge>;
+      case 'cancelled':
         return <Badge variant="destructive">Cancelled</Badge>;
-      default: 
+      default:
         return <Badge variant="outline">{status}</Badge>;
     }
   };

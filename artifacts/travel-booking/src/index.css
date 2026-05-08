@@ -10,6 +10,17 @@
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+/* Hide number input spinner arrows (up/down controls) globally.
+   Keeps manual typing and numeric mobile keyboard intact. */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
 @plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));
