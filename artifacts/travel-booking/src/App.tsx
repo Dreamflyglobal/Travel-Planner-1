@@ -77,6 +77,7 @@ import AdminSupport from "@/pages/admin/support";
 import AdminStaffIncentives from "@/pages/admin/staff-incentives";
 import AdminSettings from "@/pages/admin/settings";
 import AdminBookingsManagement from "@/pages/admin/bookings-management";
+import AdminAgents from "@/pages/admin/agents";
 import StaffLogin from "@/pages/staff-login";
 import AgentSignup from "@/pages/agent-signup";
 import InvoiceView from "@/pages/invoice-view";
@@ -127,7 +128,7 @@ function Router() {
         <AdminGuard><AdminDashboard /></AdminGuard>
       </Route>
       <Route path="/master-admin/agents">
-        <AdminGuard><AdminDashboard /></AdminGuard>
+        <AdminGuard><AdminAgents /></AdminGuard>
       </Route>
       <Route path="/master-admin/revenue">
         <AdminGuard><AdminProfit /></AdminGuard>
