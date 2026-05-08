@@ -27,6 +27,7 @@ import tripjackRouter         from "./tripjack";
 import tripjackRoutesRouter   from "./tripjackRoutes";
 import tboRouter              from "./tbo";
 import testCommsRouter        from "./test-comms";
+import usersRouter             from "./users";
 
 const router: IRouter = Router();
 
@@ -58,5 +59,6 @@ router.use(tripjackRouter);
 router.use(tripjackRoutesRouter);
 router.use(tboRouter);
 router.use(testCommsRouter);
+router.use(usersRouter);
 
 export default router;

@@ -20905,27 +20905,27 @@ var require_router = __commonJS({
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var methods = METHODS.map((method) => method.toLowerCase());
-    module.exports = Router30;
+    module.exports = Router31;
     module.exports.Route = Route;
-    function Router30(options) {
-      if (!(this instanceof Router30)) {
-        return new Router30(options);
+    function Router31(options) {
+      if (!(this instanceof Router31)) {
+        return new Router31(options);
       }
       const opts = options || {};
-      function router30(req, res, next) {
-        router30.handle(req, res, next);
+      function router31(req, res, next) {
+        router31.handle(req, res, next);
       }
-      Object.setPrototypeOf(router30, this);
-      router30.caseSensitive = opts.caseSensitive;
-      router30.mergeParams = opts.mergeParams;
-      router30.params = {};
-      router30.strict = opts.strict;
-      router30.stack = [];
-      return router30;
+      Object.setPrototypeOf(router31, this);
+      router31.caseSensitive = opts.caseSensitive;
+      router31.mergeParams = opts.mergeParams;
+      router31.params = {};
+      router31.strict = opts.strict;
+      router31.stack = [];
+      return router31;
     }
-    Router30.prototype = function() {
+    Router31.prototype = function() {
     };
-    Router30.prototype.param = function param2(name2, fn) {
+    Router31.prototype.param = function param2(name2, fn) {
       if (!name2) {
         throw new TypeError("argument name is required");
       }
@@ -20945,7 +20945,7 @@ var require_router = __commonJS({
       params.push(fn);
       return this;
     };
-    Router30.prototype.handle = function handle(req, res, callback) {
+    Router31.prototype.handle = function handle(req, res, callback) {
       if (!callback) {
         throw new TypeError("argument callback is required");
       }
@@ -21072,7 +21072,7 @@ var require_router = __commonJS({
         }
       }
     };
-    Router30.prototype.use = function use(handler) {
+    Router31.prototype.use = function use(handler) {
       let offset = 0;
       let path = "/";
       if (typeof handler !== "function") {
@@ -21105,7 +21105,7 @@ var require_router = __commonJS({
       }
       return this;
     };
-    Router30.prototype.route = function route(path) {
+    Router31.prototype.route = function route(path) {
       const route2 = new Route(path);
       const layer = new Layer(path, {
         sensitive: this.caseSensitive,
@@ -21120,7 +21120,7 @@ var require_router = __commonJS({
       return route2;
     };
     methods.concat("all").forEach(function(method) {
-      Router30.prototype[method] = function(path) {
+      Router31.prototype[method] = function(path) {
         const route = this.route(path);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
@@ -21303,13 +21303,13 @@ var require_application = __commonJS({
     var compileTrust = require_utils3().compileTrust;
     var resolve2 = __require("node:path").resolve;
     var once = require_once();
-    var Router30 = require_router();
+    var Router31 = require_router();
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var app3 = exports = module.exports = {};
     var trustProxyDefaultSymbol = "@@symbol:trust_proxy_default";
     app3.init = function init() {
-      var router30 = null;
+      var router31 = null;
       this.cache = /* @__PURE__ */ Object.create(null);
       this.engines = /* @__PURE__ */ Object.create(null);
       this.settings = /* @__PURE__ */ Object.create(null);
@@ -21318,13 +21318,13 @@ var require_application = __commonJS({
         configurable: true,
         enumerable: true,
         get: function getrouter() {
-          if (router30 === null) {
-            router30 = new Router30({
+          if (router31 === null) {
+            router31 = new Router31({
               caseSensitive: this.enabled("case sensitive routing"),
               strict: this.enabled("strict routing")
             });
           }
-          return router30;
+          return router31;
         }
       });
     };
@@ -21395,15 +21395,15 @@ var require_application = __commonJS({
       if (fns.length === 0) {
         throw new TypeError("app.use() requires a middleware function");
       }
-      var router30 = this.router;
+      var router31 = this.router;
       fns.forEach(function(fn2) {
         if (!fn2 || !fn2.handle || !fn2.set) {
-          return router30.use(path, fn2);
+          return router31.use(path, fn2);
         }
         debug(".use app under %s", path);
         fn2.mountpath = path;
         fn2.parent = this;
-        router30.use(path, function mounted_app(req, res, next) {
+        router31.use(path, function mounted_app(req, res, next) {
           var orig = req.app;
           fn2.handle(req, res, function(err) {
             Object.setPrototypeOf(req, orig.request);
@@ -23976,7 +23976,7 @@ var require_express = __commonJS({
     var EventEmitter2 = __require("node:events").EventEmitter;
     var mixin = require_merge_descriptors();
     var proto = require_application();
-    var Router30 = require_router();
+    var Router31 = require_router();
     var req = require_request();
     var res = require_response();
     exports = module.exports = createApplication;
@@ -23998,8 +23998,8 @@ var require_express = __commonJS({
     exports.application = proto;
     exports.request = req;
     exports.response = res;
-    exports.Route = Router30.Route;
-    exports.Router = Router30;
+    exports.Route = Router31.Route;
+    exports.Router = Router31;
     exports.json = bodyParser.json;
     exports.raw = bodyParser.raw;
     exports.static = require_serve_static();
@@ -133609,7 +133609,7 @@ var require_mongoose2 = __commonJS({
 })();
 
 // src/app.ts
-var import_express30 = __toESM(require_express2(), 1);
+var import_express31 = __toESM(require_express2(), 1);
 var import_cors = __toESM(require_lib3(), 1);
 var import_cookie_parser = __toESM(require_cookie_parser(), 1);
 var import_pino_http = __toESM(require_logger(), 1);
@@ -133618,7 +133618,7 @@ import { dirname, resolve, join } from "node:path";
 import { existsSync } from "node:fs";
 
 // src/routes/index.ts
-var import_express29 = __toESM(require_express2(), 1);
+var import_express30 = __toESM(require_express2(), 1);
 
 // src/routes/health.ts
 var import_express = __toESM(require_express2(), 1);
@@ -165725,40 +165725,262 @@ _Sent at: ${(/* @__PURE__ */ new Date()).toLocaleString("en-IN", { timeZone: "As
 });
 var test_comms_default = router28;
 
-// src/routes/index.ts
+// src/routes/users.ts
+var import_express29 = __toESM(require_express2(), 1);
+init_drizzle_orm();
 var router29 = (0, import_express29.Router)();
-router29.use(health_default);
-router29.use(auth_default);
-router29.use(admin_default);
-router29.use(admin_notify_default);
-router29.use(flights_default);
-router29.use(buses_default);
-router29.use(hotels_default);
-router29.use(packages_default);
-router29.use(bookings_default);
-router29.use("/payments", payments_default);
-router29.use("/tickets", tickets_default);
-router29.use("/send-whatsapp", whatsapp_default);
-router29.use("/itinerary-pdf", itinerary_pdf_default);
-router29.use("/holiday-whatsapp", holiday_whatsapp_default);
-router29.use("/followup", followup_default);
-router29.use(leads_default);
-router29.use(holiday_packages_default);
-router29.use(enquiries_default);
-router29.use(push_default);
-router29.use(currency_default);
-router29.use(marketing_default);
-router29.use(admin_bookings_default);
-router29.use(book_flight_default);
-router29.use(verify_payment_default);
-router29.use(tripjack_default);
-router29.use(tripjackRoutes_default);
-router29.use(tbo_default);
-router29.use(test_comms_default);
-var routes_default = router29;
+router29.get("/users", async (_req, res) => {
+  try {
+    const [users, bookings] = await Promise.all([
+      db.select().from(usersTable).orderBy(desc(usersTable.createdAt)),
+      db.select({
+        id: bookingsTable.id,
+        userId: bookingsTable.userId,
+        passengerEmail: bookingsTable.passengerEmail,
+        passengerPhone: bookingsTable.passengerPhone,
+        bookingType: bookingsTable.bookingType,
+        totalPrice: bookingsTable.totalPrice,
+        status: bookingsTable.status,
+        paymentStatus: bookingsTable.paymentStatus,
+        createdAt: bookingsTable.createdAt,
+        bookingRef: bookingsTable.bookingRef,
+        title: bookingsTable.title,
+        travelDate: bookingsTable.travelDate
+      }).from(bookingsTable).orderBy(desc(bookingsTable.createdAt))
+    ]);
+    const isRealUserId = (uid) => !!uid && /^\d+$/.test(uid.trim()) && parseInt(uid, 10) > 0;
+    const bookingsByUserId = /* @__PURE__ */ new Map();
+    for (const b of bookings) {
+      if (!isRealUserId(b.userId)) continue;
+      const key = b.userId.trim();
+      if (!bookingsByUserId.has(key)) bookingsByUserId.set(key, []);
+      bookingsByUserId.get(key).push(b);
+    }
+    const bookingsByEmail = /* @__PURE__ */ new Map();
+    const bookingsByPhone = /* @__PURE__ */ new Map();
+    for (const b of bookings) {
+      if (isRealUserId(b.userId)) continue;
+      if (b.passengerEmail) {
+        const e2 = b.passengerEmail.toLowerCase();
+        if (!bookingsByEmail.has(e2)) bookingsByEmail.set(e2, []);
+        bookingsByEmail.get(e2).push(b);
+      }
+      if (b.passengerPhone) {
+        const p = b.passengerPhone.replace(/\D/g, "").slice(-10);
+        if (!bookingsByPhone.has(p)) bookingsByPhone.set(p, []);
+        bookingsByPhone.get(p).push(b);
+      }
+    }
+    const enriched = users.map((u) => {
+      const uid = String(u.id);
+      const seen = /* @__PURE__ */ new Set();
+      const userBks = [];
+      const addBooking = (b) => {
+        if (!seen.has(b.id)) {
+          seen.add(b.id);
+          userBks.push(b);
+        }
+      };
+      (bookingsByUserId.get(uid) || []).forEach(addBooking);
+      if (u.email) {
+        (bookingsByEmail.get(u.email.toLowerCase()) || []).forEach(addBooking);
+      }
+      if (u.phone) {
+        const p = u.phone.replace(/\D/g, "").slice(-10);
+        (bookingsByPhone.get(p) || []).forEach(addBooking);
+      }
+      const totalBookings = userBks.length;
+      const totalSpend = userBks.reduce((s2, b) => s2 + Number(b.totalPrice ?? 0), 0);
+      const lastBooking = userBks[0]?.createdAt?.toISOString() ?? null;
+      const bookingTypes = [...new Set(userBks.map((b) => b.bookingType).filter(Boolean))];
+      const recentBookings = userBks.slice(0, 20).map((b) => ({
+        id: b.id,
+        bookingRef: b.bookingRef,
+        bookingType: b.bookingType,
+        title: b.title,
+        totalPrice: Number(b.totalPrice ?? 0),
+        status: b.status,
+        paymentStatus: b.paymentStatus,
+        travelDate: b.travelDate,
+        createdAt: b.createdAt.toISOString()
+      }));
+      return {
+        id: u.id,
+        name: u.name,
+        email: u.email ?? null,
+        phone: u.phone ?? null,
+        role: u.role,
+        isApproved: u.isApproved,
+        walletBalance: Number(u.walletBalance ?? 0),
+        agentCode: u.agentCode ?? null,
+        agencyName: u.agencyName ?? null,
+        referralCode: u.referralCode ?? null,
+        otpUser: u.otpUser,
+        createdAt: u.createdAt.toISOString(),
+        updatedAt: u.updatedAt.toISOString(),
+        // Booking stats
+        totalBookings,
+        totalSpend,
+        lastBooking,
+        bookingTypes,
+        recentBookings
+      };
+    });
+    res.json(enriched);
+  } catch (err) {
+    logger.error({ err }, "Failed to fetch users");
+    res.status(500).json({ error: "Failed to fetch users" });
+  }
+});
+router29.post("/users/sync-from-bookings", async (_req, res) => {
+  try {
+    const allBookings = await db.select({
+      id: bookingsTable.id,
+      userId: bookingsTable.userId,
+      passengerName: bookingsTable.passengerName,
+      passengerEmail: bookingsTable.passengerEmail,
+      passengerPhone: bookingsTable.passengerPhone
+    }).from(bookingsTable);
+    const isRealId = (uid) => !!uid && /^\d+$/.test(uid.trim()) && parseInt(uid, 10) > 0;
+    const unlinked = allBookings.filter((b) => !isRealId(b.userId));
+    let created = 0, linked = 0, skipped = 0;
+    for (const booking of unlinked) {
+      const phone = booking.passengerPhone?.trim() || null;
+      const email3 = booking.passengerEmail?.trim().toLowerCase() || null;
+      const name2 = booking.passengerName || "Guest";
+      if (!phone && !email3) {
+        skipped++;
+        continue;
+      }
+      let userId = null;
+      if (phone) {
+        const [byPhone] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.phone, phone)).limit(1);
+        if (byPhone) userId = byPhone.id;
+      }
+      if (!userId && email3) {
+        const [byEmail] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, email3)).limit(1);
+        if (byEmail) userId = byEmail.id;
+      }
+      if (!userId) {
+        try {
+          const [newUser] = await db.insert(usersTable).values({ name: name2, phone, email: email3, role: "user", isApproved: false, otpUser: !!phone }).returning({ id: usersTable.id });
+          userId = newUser.id;
+          created++;
+        } catch {
+          skipped++;
+          continue;
+        }
+      } else {
+        linked++;
+      }
+      await db.update(bookingsTable).set({ userId: String(userId) }).where(eq(bookingsTable.id, booking.id));
+    }
+    logger.info({ created, linked, skipped, total: unlinked.length }, "sync-from-bookings complete");
+    res.json({ success: true, total: unlinked.length, created, linked, skipped });
+  } catch (err) {
+    logger.error({ err }, "sync-from-bookings failed");
+    res.status(500).json({ error: "Sync failed" });
+  }
+});
+router29.patch("/users/:id", async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid user ID" });
+    return;
+  }
+  const { name: name2, email: email3, phone, role, isApproved, walletBalance } = req.body;
+  const updates = { updatedAt: /* @__PURE__ */ new Date() };
+  if (name2 !== void 0) updates.name = name2;
+  if (email3 !== void 0) updates.email = email3 || null;
+  if (phone !== void 0) updates.phone = phone || null;
+  if (role !== void 0) updates.role = role;
+  if (isApproved !== void 0) updates.isApproved = isApproved;
+  if (walletBalance !== void 0) updates.walletBalance = String(walletBalance);
+  try {
+    const [updated] = await db.update(usersTable).set(updates).where(eq(usersTable.id, id)).returning();
+    if (!updated) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+    res.json({ success: true, user: { ...updated, walletBalance: Number(updated.walletBalance ?? 0) } });
+  } catch (err) {
+    logger.error({ err }, "Failed to update user");
+    res.status(500).json({ error: "Failed to update user" });
+  }
+});
+router29.get("/users/:id/bookings", async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid user ID" });
+    return;
+  }
+  try {
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, id)).limit(1);
+    if (!user) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+    const conditions = [];
+    conditions.push(eq(bookingsTable.userId, String(id)));
+    if (user.email) conditions.push(eq(bookingsTable.passengerEmail, user.email));
+    if (user.phone) conditions.push(eq(bookingsTable.passengerPhone, user.phone));
+    const bookings = await db.select().from(bookingsTable).where(or(...conditions)).orderBy(desc(bookingsTable.createdAt));
+    const mapped = bookings.map((b) => ({
+      ...b,
+      totalPrice: Number(b.totalPrice),
+      commissionEarned: b.commissionEarned ? Number(b.commissionEarned) : null,
+      createdAt: b.createdAt.toISOString(),
+      details: b.details ?? void 0
+    }));
+    const seen = /* @__PURE__ */ new Set();
+    const deduped = mapped.filter((b) => {
+      if (seen.has(b.id)) return false;
+      seen.add(b.id);
+      return true;
+    });
+    res.json(deduped);
+  } catch (err) {
+    logger.error({ err }, "Failed to fetch user bookings");
+    res.status(500).json({ error: "Failed to fetch user bookings" });
+  }
+});
+var users_default = router29;
+
+// src/routes/index.ts
+var router30 = (0, import_express30.Router)();
+router30.use(health_default);
+router30.use(auth_default);
+router30.use(admin_default);
+router30.use(admin_notify_default);
+router30.use(flights_default);
+router30.use(buses_default);
+router30.use(hotels_default);
+router30.use(packages_default);
+router30.use(bookings_default);
+router30.use("/payments", payments_default);
+router30.use("/tickets", tickets_default);
+router30.use("/send-whatsapp", whatsapp_default);
+router30.use("/itinerary-pdf", itinerary_pdf_default);
+router30.use("/holiday-whatsapp", holiday_whatsapp_default);
+router30.use("/followup", followup_default);
+router30.use(leads_default);
+router30.use(holiday_packages_default);
+router30.use(enquiries_default);
+router30.use(push_default);
+router30.use(currency_default);
+router30.use(marketing_default);
+router30.use(admin_bookings_default);
+router30.use(book_flight_default);
+router30.use(verify_payment_default);
+router30.use(tripjack_default);
+router30.use(tripjackRoutes_default);
+router30.use(tbo_default);
+router30.use(test_comms_default);
+router30.use(users_default);
+var routes_default = router30;
 
 // src/app.ts
-var app2 = (0, import_express30.default)();
+var app2 = (0, import_express31.default)();
 app2.use(
   (0, import_pino_http.default)({
     logger,
@@ -165785,15 +166007,15 @@ app2.use(
   })
 );
 app2.use((0, import_cookie_parser.default)());
-app2.use(import_express30.default.json());
-app2.use(import_express30.default.urlencoded({ extended: true }));
+app2.use(import_express31.default.json());
+app2.use(import_express31.default.urlencoded({ extended: true }));
 app2.use("/api", routes_default);
 if (process.env.NODE_ENV === "production") {
   const currentDir = dirname(fileURLToPath(import.meta.url));
   const staticDir = resolve(currentDir, "../../travel-booking/dist/public");
   if (existsSync(staticDir)) {
     logger.info({ staticDir }, "Serving frontend static files");
-    app2.use(import_express30.default.static(staticDir, { maxAge: "1d", index: false }));
+    app2.use(import_express31.default.static(staticDir, { maxAge: "1d", index: false }));
     app2.use((_req, res) => {
       res.sendFile(join(staticDir, "index.html"));
     });
