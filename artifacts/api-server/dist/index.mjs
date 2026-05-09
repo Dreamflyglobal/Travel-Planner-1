@@ -155007,6 +155007,7 @@ init_drizzle_orm();
 
 // src/lib/app-config.ts
 var APP_NAME = "Dream Fly Global";
+var APP_TAGLINE = "Explore the world";
 var APP_TAGLINE_LONG = "Explore the World";
 var APP_SUPPORT_PHONE = "+91 9000978856";
 var APP_SUPPORT_EMAIL = "support@dreamflyglobal.com";
@@ -157405,25 +157406,76 @@ router9.get("/invoice/:bookingRef", async (req, res) => {
   });
 });
 router9.get("/bookings/:id", async (req, res) => {
-  const params = GetBookingParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
+  const rawId = req.params.id?.trim();
+  if (!rawId) {
+    res.status(400).json({ error: "Booking id is required" });
     return;
   }
-  const [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, params.data.id));
+  let booking;
+  const numId = parseInt(rawId, 10);
+  if (!isNaN(numId) && String(numId) === rawId) {
+    [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, numId)).limit(1);
+  }
+  if (!booking) {
+    [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.bookingRef, rawId.toUpperCase())).limit(1);
+  }
   if (!booking) {
     res.status(404).json({ error: "Booking not found" });
     return;
   }
-  res.json(
-    GetBookingResponse.parse({
-      ...booking,
-      totalPrice: Number(booking.totalPrice),
-      createdAt: booking.createdAt.toISOString(),
-      passengerPhone: booking.passengerPhone ?? void 0,
-      details: booking.details ?? void 0
-    })
-  );
+  const d = booking.details ?? {};
+  const fi = d.flightInfo ?? {};
+  const bi = d.busInfo ?? {};
+  const hi = d.hotelInfo ?? {};
+  res.json({
+    id: booking.id,
+    bookingRef: booking.bookingRef || void 0,
+    bookingType: booking.bookingType,
+    referenceId: booking.referenceId,
+    status: booking.status,
+    paymentStatus: booking.paymentStatus || void 0,
+    paymentId: booking.paymentId || void 0,
+    paymentMethod: booking.paymentMethod || void 0,
+    title: booking.title || d.title || void 0,
+    passengerName: booking.passengerName,
+    passengerEmail: booking.passengerEmail,
+    passengerPhone: booking.passengerPhone ?? void 0,
+    passengers: booking.passengers,
+    travelDate: booking.travelDate,
+    createdAt: booking.createdAt.toISOString(),
+    totalPrice: Number(booking.totalPrice),
+    agentId: booking.agentId || void 0,
+    agentCode: booking.agentCode || void 0,
+    // Nested details (kept for backward compat)
+    details: booking.details ?? void 0,
+    // ── Flattened flight fields ────────────────────────────────────────────
+    flightAirline: fi.airline || void 0,
+    flightNumber: fi.flightNum || fi.flightNumber || void 0,
+    flightFrom: fi.from || fi.fromCity || void 0,
+    flightTo: fi.to || fi.toCity || void 0,
+    flightDeparture: fi.departure || void 0,
+    flightArrival: fi.arrival || void 0,
+    flightDuration: fi.duration || void 0,
+    // ── Flattened bus fields ───────────────────────────────────────────────
+    busOperator: bi.operator || void 0,
+    busType: bi.busType || void 0,
+    busFrom: bi.from || void 0,
+    busTo: bi.to || void 0,
+    busDeparture: bi.departure || void 0,
+    busArrival: bi.arrival || void 0,
+    busBoardingPoint: bi.boarding_point || bi.boardingPoint || void 0,
+    busDroppingPoint: bi.dropping_point || bi.droppingPoint || void 0,
+    // ── Flattened hotel fields ─────────────────────────────────────────────
+    hotelName: hi.hotel_name || hi.name || void 0,
+    hotelCity: hi.city || void 0,
+    hotelNights: hi.nights || void 0,
+    hotelRooms: hi.rooms || void 0,
+    hotelAdults: hi.guests || hi.adults || void 0,
+    checkoutDate: hi.checkout || void 0,
+    roomType: hi.room_type || void 0,
+    // ── Seat / misc ────────────────────────────────────────────────────────
+    selectedSeats: d.selectedSeats || bi.seats || void 0
+  });
 });
 router9.delete("/bookings/:id", async (req, res) => {
   const params = CancelBookingParams.safeParse(req.params);
@@ -157509,15 +157561,18 @@ import nodemailer2 from "nodemailer";
 function sanitizeLocation(raw) {
   if (!raw) return "";
   let s2 = String(raw).trim();
-  s2 = s2.replace(/!['\u2019\u0060\u0027;,\s]/g, " ");
+  s2 = s2.replace(/[\x00-\x1F\x7F\u00AD\u200B\u200C\u200D\u2028\u2029\uFEFF]/g, "");
+  s2 = s2.replace(/!['\u2019\u0060\u0027;]/g, " ");
   s2 = s2.replace(/[\u2018\u2019\u201c\u201d\uFFFD\u00e2\u0086\u0092]/g, "");
   s2 = s2.replace(/\u2192/g, " ");
   s2 = s2.replace(/&rarr;|&#8594;|&#x2192;/gi, " ");
   s2 = s2.replace(/\s*\([A-Z]{3,4}\)\s*/g, " ");
   s2 = s2.replace(/\s+[A-Z]{3}$/, "");
-  s2 = s2.replace(/[^\w\s,.\-]/g, " ");
   s2 = s2.replace(/\s+/g, " ").trim();
-  s2 = s2.split(" ").map((w) => w.length > 0 ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : "").join(" ");
+  const isAllCaps = s2 === s2.toUpperCase() && /[A-Z]/.test(s2);
+  if (isAllCaps) {
+    s2 = s2.split(" ").map((w) => w.length > 0 ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : "").join(" ");
+  }
   return s2;
 }
 
@@ -158492,6 +158547,14 @@ function labelValue(doc, x2, y, label, value, accentValue = false) {
   doc.font("Helvetica").fontSize(8).fillColor(GRAY).text(label.toUpperCase(), x2, y);
   doc.font("Helvetica-Bold").fontSize(11).fillColor(accentValue ? ACCENT : "#1E293B").text(value, x2, y + 13);
 }
+function cityFontSize(city) {
+  const len = city.length;
+  if (len <= 6) return 34;
+  if (len <= 8) return 30;
+  if (len <= 11) return 24;
+  if (len <= 14) return 20;
+  return 16;
+}
 function generateFlightTicketPDF(ticket) {
   return new Promise((resolve2, reject) => {
     const doc = new PDFDocument({ size: "A4", margin: 0 });
@@ -158509,20 +158572,24 @@ function generateFlightTicketPDF(ticket) {
     doc.font("Helvetica-Bold").fontSize(12).fillColor(WHITE).text("FLIGHT TICKET", W - 160, 24, { width: 110, align: "right" });
     doc.font("Helvetica").fontSize(9).fillColor("#93C5FD").text(`Booking ID: ${ticket.bookingId}`, W - 180, 44, { width: 130, align: "right" });
     doc.rect(0, 90, W, 110).fill(LIGHT);
-    const routeY = 110;
+    const routeY = 108;
     const col1 = margin;
-    const col3 = W - margin - 80;
-    doc.font("Helvetica-Bold").fontSize(36).fillColor(BLUE).text(fromCity, col1, routeY, { width: 140 });
-    doc.font("Helvetica").fontSize(9).fillColor(GRAY).text("ORIGIN", col1, routeY + 42);
-    doc.font("Helvetica-Bold").fontSize(13).fillColor("#1E293B").text(ticket.departure, col1, routeY + 56);
+    const col3 = W - margin - 165;
+    const fromFs = cityFontSize(fromCity);
+    const toFs = cityFontSize(toCity);
+    const fromY = routeY + Math.max(0, Math.round((34 - fromFs) * 0.4));
+    const toY = routeY + Math.max(0, Math.round((34 - toFs) * 0.4));
+    doc.font("Helvetica-Bold").fontSize(fromFs).fillColor(BLUE).text(fromCity, col1, fromY, { width: 165, lineBreak: false });
+    doc.font("Helvetica").fontSize(9).fillColor(GRAY).text("ORIGIN", col1, routeY + 46);
+    doc.font("Helvetica-Bold").fontSize(13).fillColor("#1E293B").text(ticket.departure, col1, routeY + 59);
     const midX = W / 2 - 50;
-    doc.font("Helvetica").fontSize(9).fillColor(GRAY).text(ticket.duration, midX, routeY + 14, { width: 100, align: "center" });
-    doc.moveTo(midX, routeY + 30).lineTo(midX + 100, routeY + 30).strokeColor(BLUE).lineWidth(1.5).stroke();
-    doc.moveTo(midX + 90, routeY + 25).lineTo(midX + 100, routeY + 30).lineTo(midX + 90, routeY + 35).strokeColor(BLUE).lineWidth(1.5).stroke();
-    doc.font("Helvetica").fontSize(9).fillColor(GRAY).text("NON-STOP", midX, routeY + 38, { width: 100, align: "center" });
-    doc.font("Helvetica-Bold").fontSize(36).fillColor(BLUE).text(toCity, col3, routeY, { width: 140, align: "right" });
-    doc.font("Helvetica").fontSize(9).fillColor(GRAY).text("DESTINATION", col3, routeY + 42, { width: 140, align: "right" });
-    doc.font("Helvetica-Bold").fontSize(13).fillColor("#1E293B").text(ticket.arrival, col3, routeY + 56, { width: 140, align: "right" });
+    doc.font("Helvetica").fontSize(9).fillColor(GRAY).text(ticket.duration, midX, routeY + 16, { width: 100, align: "center" });
+    doc.moveTo(midX, routeY + 32).lineTo(midX + 100, routeY + 32).strokeColor(BLUE).lineWidth(1.5).stroke();
+    doc.moveTo(midX + 90, routeY + 27).lineTo(midX + 100, routeY + 32).lineTo(midX + 90, routeY + 37).strokeColor(BLUE).lineWidth(1.5).stroke();
+    doc.font("Helvetica").fontSize(9).fillColor(GRAY).text("NON-STOP", midX, routeY + 40, { width: 100, align: "center" });
+    doc.font("Helvetica-Bold").fontSize(toFs).fillColor(BLUE).text(toCity, col3, toY, { width: 165, align: "right", lineBreak: false });
+    doc.font("Helvetica").fontSize(9).fillColor(GRAY).text("DESTINATION", col3, routeY + 46, { width: 165, align: "right" });
+    doc.font("Helvetica-Bold").fontSize(13).fillColor("#1E293B").text(ticket.arrival, col3, routeY + 59, { width: 165, align: "right" });
     let y = 222;
     doc.rect(0, 200, W, 2).fill(ACCENT);
     y = 220;
@@ -158559,12 +158626,12 @@ function generateFlightTicketPDF(ticket) {
     const footerY = 760;
     doc.rect(0, footerY, W, 82).fill(BLUE);
     doc.font("Helvetica").fontSize(8).fillColor("#93C5FD").text(
-      "This is an electronically generated ticket. Please carry a valid photo ID at the airport. Check-in closes 45 minutes before departure for domestic flights. For assistance call ${APP_NAME} Support.",
+      `This is an electronically generated ticket. Please carry a valid photo ID at the airport. Check-in closes 45 minutes before departure for domestic flights. For assistance contact ${APP_NAME} Support.`,
       margin,
       footerY + 16,
       { width: W - margin * 2, align: "center" }
     );
-    doc.font("Helvetica-Bold").fontSize(9).fillColor(WHITE).text("${APP_NAME} \u2014 ${APP_TAGLINE}", margin, footerY + 52, { width: W - margin * 2, align: "center" });
+    doc.font("Helvetica-Bold").fontSize(9).fillColor(WHITE).text(`${APP_NAME} \u2014 ${APP_TAGLINE}`, margin, footerY + 52, { width: W - margin * 2, align: "center" });
     doc.end();
   });
 }

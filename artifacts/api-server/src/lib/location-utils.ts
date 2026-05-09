@@ -2,6 +2,7 @@
  * Location / route string sanitization utilities — backend (Node.js)
  *
  * Fixes:
+ *   - Zero-width characters that cause "H y d e r a b a d" letter-spacing
  *   - Encoding artifacts where → (U+2192) appears as !' or similar garbled text
  *   - IATA airport codes in parentheses: "Hyderabad (HYD)" → "Hyderabad"
  *   - ALL_CAPS city names: "BENGALURU" → "Bengaluru"
@@ -16,10 +17,15 @@ export function sanitizeLocation(raw: string | null | undefined): string {
   if (!raw) return "";
   let s = String(raw).trim();
 
+  // ── Remove zero-width / invisible characters (PRIMARY cause of "H y d e r a b a d") ──
+  // Zero-width space U+200B, ZWNJ U+200C, ZWJ U+200D, BOM U+FEFF,
+  // soft hyphen U+00AD, null bytes, ASCII control chars, line/paragraph separators
+  s = s.replace(/[\x00-\x1F\x7F\u00AD\u200B\u200C\u200D\u2028\u2029\uFEFF]/g, "");
+
   // ── Remove common encoding corruption artifacts ───────────────────────────
   // These appear when the → (U+2192) arrow is mis-encoded or mis-decoded.
-  // Common patterns: !' !; !` !  (byte-sequence corruption of 0xE2 0x86 0x92)
-  s = s.replace(/!['\u2019\u0060\u0027;,\s]/g, " ");
+  // Common patterns: !' !; !` (byte-sequence corruption of 0xE2 0x86 0x92)
+  s = s.replace(/!['\u2019\u0060\u0027;]/g, " ");
   // Right/left smart quotes, replacement character (U+FFFD)
   s = s.replace(/[\u2018\u2019\u201c\u201d\uFFFD\u00e2\u0086\u0092]/g, "");
   // Remove the actual → character (will be re-added as separator by formatRoute)
@@ -33,19 +39,19 @@ export function sanitizeLocation(raw: string | null | undefined): string {
   // Standalone 3-letter IATA codes at end of string after space: "Hyderabad HYD"
   s = s.replace(/\s+[A-Z]{3}$/, "");
 
-  // ── Remove non-alphanumeric characters (keep spaces, hyphens, commas) ────
-  // Use a simple ASCII-safe approach compatible with all Node versions
-  s = s.replace(/[^\w\s,.\-]/g, " ");
-
   // ── Normalise whitespace ──────────────────────────────────────────────────
   s = s.replace(/\s+/g, " ").trim();
 
   // ── Title-case ────────────────────────────────────────────────────────────
-  // Always title-case for consistency (handles all-caps and all-lowercase input)
-  s = s
-    .split(" ")
-    .map((w) => (w.length > 0 ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : ""))
-    .join(" ");
+  // Only title-case if the whole string is uppercase (e.g. API returns "HYDERABAD")
+  // Preserve mixed-case city names (e.g. "New Delhi", "McLeod Ganj")
+  const isAllCaps = s === s.toUpperCase() && /[A-Z]/.test(s);
+  if (isAllCaps) {
+    s = s
+      .split(" ")
+      .map((w) => (w.length > 0 ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : ""))
+      .join(" ");
+  }
 
   return s;
 }

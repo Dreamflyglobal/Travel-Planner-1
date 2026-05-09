@@ -344,31 +344,93 @@ router.get("/invoice/:bookingRef", async (req, res): Promise<void> => {
 });
 
 router.get("/bookings/:id", async (req, res): Promise<void> => {
-  const params = GetBookingParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
+  const rawId = req.params.id?.trim();
+  if (!rawId) {
+    res.status(400).json({ error: "Booking id is required" });
     return;
   }
 
-  const [booking] = await db
-    .select()
-    .from(bookingsTable)
-    .where(eq(bookingsTable.id, params.data.id));
+  let booking;
+
+  // Try numeric DB id first
+  const numId = parseInt(rawId, 10);
+  if (!isNaN(numId) && String(numId) === rawId) {
+    [booking] = await db
+      .select()
+      .from(bookingsTable)
+      .where(eq(bookingsTable.id, numId))
+      .limit(1);
+  }
+
+  // Fall back to bookingRef string (e.g. "BKG-3", "BK-1A2B3C4D")
+  if (!booking) {
+    [booking] = await db
+      .select()
+      .from(bookingsTable)
+      .where(eq(bookingsTable.bookingRef, rawId.toUpperCase()))
+      .limit(1);
+  }
 
   if (!booking) {
     res.status(404).json({ error: "Booking not found" });
     return;
   }
 
-  res.json(
-    GetBookingResponse.parse({
-      ...booking,
-      totalPrice: Number(booking.totalPrice),
-      createdAt: booking.createdAt.toISOString(),
-      passengerPhone: booking.passengerPhone ?? undefined,
-      details: booking.details ?? undefined,
-    })
-  );
+  // Flatten the JSONB details so the frontend can access route/hotel/bus fields directly
+  const d  = (booking.details as Record<string, any>) ?? {};
+  const fi = (d.flightInfo  as Record<string, any>) ?? {};
+  const bi = (d.busInfo     as Record<string, any>) ?? {};
+  const hi = (d.hotelInfo   as Record<string, any>) ?? {};
+
+  res.json({
+    id:             booking.id,
+    bookingRef:     booking.bookingRef || undefined,
+    bookingType:    booking.bookingType,
+    referenceId:    booking.referenceId,
+    status:         booking.status,
+    paymentStatus:  booking.paymentStatus || undefined,
+    paymentId:      booking.paymentId     || undefined,
+    paymentMethod:  booking.paymentMethod || undefined,
+    title:          booking.title || d.title || undefined,
+    passengerName:  booking.passengerName,
+    passengerEmail: booking.passengerEmail,
+    passengerPhone: booking.passengerPhone ?? undefined,
+    passengers:     booking.passengers,
+    travelDate:     booking.travelDate,
+    createdAt:      booking.createdAt.toISOString(),
+    totalPrice:     Number(booking.totalPrice),
+    agentId:        booking.agentId    || undefined,
+    agentCode:      booking.agentCode  || undefined,
+    // Nested details (kept for backward compat)
+    details:        booking.details ?? undefined,
+    // ── Flattened flight fields ────────────────────────────────────────────
+    flightAirline:    fi.airline    || undefined,
+    flightNumber:     fi.flightNum  || fi.flightNumber || undefined,
+    flightFrom:       fi.from       || fi.fromCity     || undefined,
+    flightTo:         fi.to         || fi.toCity       || undefined,
+    flightDeparture:  fi.departure  || undefined,
+    flightArrival:    fi.arrival    || undefined,
+    flightDuration:   fi.duration   || undefined,
+    // ── Flattened bus fields ───────────────────────────────────────────────
+    busOperator:      bi.operator        || undefined,
+    busType:          bi.busType         || undefined,
+    busFrom:          bi.from            || undefined,
+    busTo:            bi.to              || undefined,
+    busDeparture:     bi.departure       || undefined,
+    busArrival:       bi.arrival         || undefined,
+    busBoardingPoint: bi.boarding_point  || bi.boardingPoint || undefined,
+    busDroppingPoint: bi.dropping_point  || bi.droppingPoint || undefined,
+    // ── Flattened hotel fields ─────────────────────────────────────────────
+    hotelName:   hi.hotel_name || hi.name  || undefined,
+    hotelCity:   hi.city                   || undefined,
+    hotelNights: hi.nights                 || undefined,
+    hotelRooms:  hi.rooms                  || undefined,
+    hotelAdults: hi.guests || hi.adults    || undefined,
+    checkoutDate:hi.checkout               || undefined,
+    roomType:    hi.room_type              || undefined,
+    // ── Seat / misc ────────────────────────────────────────────────────────
+    selectedSeats: d.selectedSeats || bi.seats || undefined,
+  });
 });
 
 router.delete("/bookings/:id", async (req, res): Promise<void> => {

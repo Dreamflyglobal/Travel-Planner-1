@@ -2,6 +2,7 @@
  * Location / route string sanitization utilities — frontend (React/Vite)
  *
  * Fixes:
+ *   - Zero-width characters that cause "H y d e r a b a d" letter-spacing
  *   - Encoding artifacts where → (U+2192) appears as !' or similar garbled text
  *   - IATA airport codes in parentheses: "Hyderabad (HYD)" → "Hyderabad"
  *   - ALL_CAPS city names: "BENGALURU" → "Bengaluru"
@@ -16,9 +17,15 @@ export function sanitizeLocation(raw: string | null | undefined): string {
   if (!raw) return "";
   let s = String(raw).trim();
 
+  // ── Remove zero-width / invisible characters (PRIMARY cause of "H y d e r a b a d") ──
+  // Zero-width space U+200B, ZWNJ U+200C, ZWJ U+200D, BOM U+FEFF,
+  // soft hyphen U+00AD, null bytes, ASCII control chars, line/paragraph separators
+  s = s.replace(/[\x00-\x1F\x7F\u00AD\u200B\u200C\u200D\u2028\u2029\uFEFF]/g, "");
+
   // ── Remove common encoding corruption artifacts ───────────────────────────
   // These appear when the → (U+2192) arrow is mis-encoded or mis-decoded.
-  s = s.replace(/!['\u2019\u0060\u0027;,\s]/g, " ");
+  // Common patterns: !' !; !`  (byte-sequence corruption of 0xE2 0x86 0x92)
+  s = s.replace(/!['\u2019\u0060\u0027;]/g, " ");
   // Smart quotes, replacement character
   s = s.replace(/[\u2018\u2019\u201c\u201d\uFFFD]/g, "");
   // Remove the actual → character (will be re-added by formatRoute)
@@ -32,17 +39,18 @@ export function sanitizeLocation(raw: string | null | undefined): string {
   // Standalone 3-letter IATA codes at end: "Hyderabad HYD" → "Hyderabad"
   s = s.replace(/\s+[A-Z]{3}$/, "");
 
-  // ── Remove non-alphanumeric characters (keep spaces, hyphens, commas) ────
-  s = s.replace(/[^\w\s,.\-]/g, " ");
-
   // ── Normalise whitespace ──────────────────────────────────────────────────
   s = s.replace(/\s+/g, " ").trim();
 
-  // ── Title-case ────────────────────────────────────────────────────────────
-  s = s
-    .split(" ")
-    .map((w) => (w.length > 0 ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : ""))
-    .join(" ");
+  // ── Title-case only if entire string is all-caps (API returns "HYDERABAD") ──
+  // Preserves mixed-case names like "New Delhi", "McLeod Ganj"
+  const isAllCaps = s === s.toUpperCase() && /[A-Z]/.test(s);
+  if (isAllCaps) {
+    s = s
+      .split(" ")
+      .map((w) => (w.length > 0 ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : ""))
+      .join(" ");
+  }
 
   return s;
 }

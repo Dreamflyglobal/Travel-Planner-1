@@ -24,6 +24,8 @@ import {
   MapPin,
   Clock,
   BedDouble,
+  Loader2,
+  Send,
 } from "lucide-react";
 import { generateInvoicePDF } from "@/lib/invoice";
 import { sanitizeLocation, formatRoute } from "@/lib/location-utils";
@@ -81,11 +83,9 @@ interface BookingDetail {
   bookingDate?: string;
   createdAt?: string;
   title?: string;
-  details?: {
-    title?: string;
-    passengers?: number;
-    pricePerUnit?: number;
-  };
+  bookingRef?: string;
+  details?: Record<string, any>;
+  checkoutDate?: string;
   emiDetails?: {
     tenure?: number;
     monthlyAmount?: number;
@@ -122,29 +122,100 @@ export default function BookingDetail() {
   const [, setLocation] = useLocation();
   const [booking, setBooking] = useState<BookingDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [resending, setResending] = useState<string | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
     window.scrollTo(0, 0);
     const fetchBooking = async () => {
       try {
+        // ── 1. Try the primary API endpoint (numeric id or bookingRef) ────────
         const response = await fetch(`/api/bookings/${id}`);
         if (response.ok) {
-          const data = await response.json();
-          setBooking(data);
-        } else {
-          const bookingsStr = localStorage.getItem("bookings");
-          if (bookingsStr) {
-            const bookings: BookingDetail[] = JSON.parse(bookingsStr);
-            const found = bookings.find(b =>
-              b.bookingId === id ||
-              b.id?.toString() === id ||
-              (b as any).id === id
-            );
-            if (found) setBooking(found);
-          }
+          const raw = await response.json();
+          // Flatten nested JSONB details so the template can access flight/bus/hotel fields
+          const d  = (raw.details  as Record<string, any>) ?? {};
+          const fi = (d.flightInfo as Record<string, any>) ?? {};
+          const bi = (d.busInfo    as Record<string, any>) ?? {};
+          const hi = (d.hotelInfo  as Record<string, any>) ?? {};
+
+          const merged: BookingDetail = {
+            ...raw,
+            // Resolve title from multiple fallback keys
+            title:           raw.title           || d.title,
+            // ── Flight ──────────────────────────────────────────────────────
+            flightAirline:   raw.flightAirline   || fi.airline,
+            flightNumber:    raw.flightNumber    || fi.flightNum    || fi.flightNumber,
+            flightFrom:      raw.flightFrom      || fi.from         || fi.fromCity,
+            flightTo:        raw.flightTo        || fi.to           || fi.toCity,
+            flightDeparture: raw.flightDeparture || fi.departure,
+            flightArrival:   raw.flightArrival   || fi.arrival,
+            flightDuration:  raw.flightDuration  || fi.duration,
+            // ── Bus ─────────────────────────────────────────────────────────
+            busOperator:      raw.busOperator      || bi.operator,
+            busType:          raw.busType          || bi.busType,
+            busFrom:          raw.busFrom          || bi.from,
+            busTo:            raw.busTo            || bi.to,
+            busBoardingPoint: raw.busBoardingPoint || bi.boarding_point || bi.boardingPoint,
+            busDroppingPoint: raw.busDroppingPoint || bi.dropping_point || bi.droppingPoint,
+            busDeparture:     raw.busDeparture     || bi.departure,
+            busArrival:       raw.busArrival       || bi.arrival,
+            // ── Hotel ───────────────────────────────────────────────────────
+            hotelName:   raw.hotelName   || hi.hotel_name || hi.name,
+            hotelCity:   raw.hotelCity   || hi.city,
+            hotelNights: raw.hotelNights || hi.nights,
+            hotelRooms:  raw.hotelRooms  || hi.rooms,
+            hotelAdults: raw.hotelAdults || hi.guests || hi.adults,
+            checkoutDate:raw.checkoutDate|| hi.checkout,
+            roomType:    raw.roomType    || hi.room_type,
+            // ── Seats / payment ─────────────────────────────────────────────
+            selectedSeats: raw.selectedSeats || d.selectedSeats || bi.seats,
+            totalAmount:   raw.totalAmount   || raw.totalPrice,
+          };
+          setBooking(merged);
+          return;
         }
-      } catch (error) {
+
+        // ── 2. Try the invoice endpoint (supports bookingRef strings) ─────────
+        if (id && !/^\d+$/.test(id)) {
+          try {
+            const invRes = await fetch(`/api/invoice/${id.toUpperCase()}`);
+            if (invRes.ok) {
+              const invData = await invRes.json();
+              setBooking({
+                ...invData,
+                totalAmount: invData.totalAmount || invData.totalPrice,
+                type: invData.bookingType,
+              } as BookingDetail);
+              return;
+            }
+          } catch { /* silent */ }
+        }
+
+        // ── 3. Fallback to localStorage (various storage keys used historically) ─
+        const lsKeys = ["travel_bookings", "bookings", "lastSuccessfulBooking"];
+        for (const key of lsKeys) {
+          const stored = localStorage.getItem(key);
+          if (!stored) continue;
+          try {
+            const parsed = JSON.parse(stored);
+            const arr: BookingDetail[] = Array.isArray(parsed) ? parsed : [parsed];
+            const found = arr.find((b: any) =>
+              String(b.id)          === id ||
+              b.bookingId           === id ||
+              b.bookingRef          === id ||
+              b.bookingRef          === id?.toUpperCase() ||
+              b.referenceId?.toString() === id
+            );
+            if (found) {
+              setBooking(found);
+              return;
+            }
+          } catch { /* ignore corrupt storage */ }
+        }
+
+      } catch (err) {
+        console.error("Failed to fetch booking:", err);
       } finally {
         setIsLoading(false);
       }
@@ -170,11 +241,26 @@ export default function BookingDetail() {
   if (!booking) {
     return (
       <Layout>
-        <div className="container mx-auto px-4 py-24 text-center">
-          <h2 className="text-2xl font-bold mb-4">Booking not found</h2>
-          <Button asChild>
-            <Link href="/bookings">Back to my bookings</Link>
-          </Button>
+        <div className="container mx-auto px-4 py-24 text-center max-w-md">
+          <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-red-100 flex items-center justify-center">
+            <AlertCircle className="w-10 h-10 text-red-500" />
+          </div>
+          <h2 className="text-2xl font-bold mb-2">Booking not found</h2>
+          <p className="text-muted-foreground mb-2">
+            We couldn't find a booking with ID: <span className="font-mono font-semibold">{id}</span>
+          </p>
+          <p className="text-sm text-muted-foreground mb-8">
+            This booking may have been made without an account, or the link may be incorrect.
+            Try checking your confirmation email for the correct booking reference.
+          </p>
+          <div className="flex gap-3 justify-center">
+            <Button asChild variant="outline">
+              <Link href="/bookings">My Bookings</Link>
+            </Button>
+            <Button onClick={() => window.location.reload()}>
+              Retry
+            </Button>
+          </div>
         </div>
       </Layout>
     );
@@ -187,7 +273,7 @@ export default function BookingDetail() {
   const bookingStatus = booking.status || booking.paymentStatus || "confirmed";
   const isCancelled = bookingStatus === "cancelled";
   const totalAmount = booking.totalAmount || booking.amount || booking.totalPrice || 0;
-  const bookingId = String(booking.bookingId || booking.id || "N/A");
+  const bookingId = String(booking.bookingRef || booking.bookingId || booking.id || "N/A");
 
   const getIcon = () => {
     if (isFlight) return <Plane className="w-7 h-7" />;
@@ -268,6 +354,58 @@ export default function BookingDetail() {
     }
   };
 
+  const handleResend = async (channel: "email" | "sms" | "whatsapp" | "all") => {
+    if (!booking) return;
+    setResending(channel);
+    try {
+      const res = await fetch("/api/payments/notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bookingContext: {
+            bookingId,
+            bookingType,
+            passengerName:  booking.passengerName  || booking.customerName  || "Traveller",
+            passengerEmail: booking.passengerEmail || booking.customerEmail,
+            phone:          booking.passengerPhone || booking.customerPhone,
+            travelDate:     booking.travelDate,
+            totalAmount,
+            paymentId:      booking.paymentId || booking.orderId,
+            passengers:     booking.passengers || 1,
+            title:          booking.title,
+            flightFrom:     booking.flightFrom,
+            flightTo:       booking.flightTo,
+            busFrom:        booking.busFrom,
+            busTo:          booking.busTo,
+            hotelCity:      booking.hotelCity,
+            flightAirline:  booking.flightAirline,
+            flightNumber:   booking.flightNumber,
+            flightDeparture:booking.flightDeparture,
+            flightArrival:  booking.flightArrival,
+            flightDuration: booking.flightDuration,
+            busOperator:    booking.busOperator,
+            busType:        booking.busType,
+            busBoardingPoint: booking.busBoardingPoint,
+            busDroppingPoint: booking.busDroppingPoint,
+            hotelName:      booking.hotelName,
+            hotelNights:    booking.hotelNights,
+          },
+          channel,
+        }),
+      });
+      const channelLabel = channel === "all" ? "Email, SMS & WhatsApp" : channel.toUpperCase();
+      if (res.ok) {
+        toast({ title: "Notification Sent", description: `${channelLabel} confirmation resent successfully.` });
+      } else {
+        toast({ variant: "destructive", title: "Send Failed", description: `Could not resend ${channelLabel}. Please try again.` });
+      }
+    } catch {
+      toast({ variant: "destructive", title: "Error", description: "Network error. Please try again." });
+    } finally {
+      setResending(null);
+    }
+  };
+
   const invoiceUrl = `/invoice/${bookingId}`;
   const dateStr = (d: string) => {
     try { return format(new Date(d), "dd MMM yyyy"); } catch { return d; }
@@ -328,6 +466,50 @@ export default function BookingDetail() {
                 <a href={invoiceUrl} target="_blank" rel="noopener noreferrer">
                   <ExternalLink className="w-4 h-4 mr-1.5" /> View Invoice
                 </a>
+              </Button>
+              {/* Resend Email */}
+              <Button
+                size="sm"
+                variant="secondary"
+                className="bg-white/20 text-white hover:bg-white/30 border-0"
+                disabled={!!resending}
+                onClick={() => handleResend("email")}
+              >
+                {resending === "email" ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Mail className="w-4 h-4 mr-1.5" />}
+                Email
+              </Button>
+              {/* Resend SMS */}
+              <Button
+                size="sm"
+                variant="secondary"
+                className="bg-white/20 text-white hover:bg-white/30 border-0"
+                disabled={!!resending}
+                onClick={() => handleResend("sms")}
+              >
+                {resending === "sms" ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Phone className="w-4 h-4 mr-1.5" />}
+                SMS
+              </Button>
+              {/* Resend WhatsApp */}
+              <Button
+                size="sm"
+                variant="secondary"
+                className="bg-white/20 text-white hover:bg-white/30 border-0"
+                disabled={!!resending}
+                onClick={() => handleResend("whatsapp")}
+              >
+                {resending === "whatsapp" ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <MessageCircle className="w-4 h-4 mr-1.5" />}
+                WhatsApp
+              </Button>
+              {/* Resend All */}
+              <Button
+                size="sm"
+                variant="secondary"
+                className="bg-white/20 text-white hover:bg-white/30 border-0"
+                disabled={!!resending}
+                onClick={() => handleResend("all")}
+              >
+                {resending === "all" ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Send className="w-4 h-4 mr-1.5" />}
+                Resend All
               </Button>
               {!isCancelled && (
                 <AlertDialog>

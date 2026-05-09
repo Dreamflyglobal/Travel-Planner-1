@@ -1,6 +1,6 @@
 import { APP_NAME, APP_TAGLINE } from "./app-config.js";
 import PDFDocument from "pdfkit";
-import { sanitizeLocation, formatRoutePdfSafe } from "./location-utils.js";
+import { sanitizeLocation } from "./location-utils.js";
 
 export interface FlightTicketData {
   bookingId:     string;
@@ -49,6 +49,20 @@ function labelValue(doc: PDFKit.PDFDocument, x: number, y: number, label: string
     .text(value, x, y + 13);
 }
 
+/**
+ * Choose font size for a city name to ensure it fits in the route hero section.
+ * PDFKit Helvetica-Bold: ~0.6× ratio means a 36pt char is ~21.6pt wide.
+ * Available width per city = 165pt.
+ */
+function cityFontSize(city: string): number {
+  const len = city.length;
+  if (len <= 6)  return 34;
+  if (len <= 8)  return 30;
+  if (len <= 11) return 24;
+  if (len <= 14) return 20;
+  return 16;
+}
+
 export function generateFlightTicketPDF(ticket: FlightTicketData): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: "A4", margin: 0 });
@@ -95,41 +109,77 @@ export function generateFlightTicketPDF(ticket: FlightTicketData): Promise<Buffe
     // ── Route hero ──────────────────────────────────────────────────────────
     doc.rect(0, 90, W, 110).fill(LIGHT);
 
-    const routeY = 110;
+    const routeY = 108;
     const col1 = margin;
-    const col3 = W - margin - 80;
+    const col3 = W - margin - 165;   // right-column start so text fits in 165pt
 
-    // FROM — use sanitized city name
-    doc.font("Helvetica-Bold").fontSize(36).fillColor(BLUE).text(fromCity, col1, routeY, { width: 140 });
-    doc.font("Helvetica").fontSize(9).fillColor(GRAY).text("ORIGIN", col1, routeY + 42);
+    const fromFs = cityFontSize(fromCity);
+    const toFs   = cityFontSize(toCity);
 
-    // departure time
-    doc.font("Helvetica-Bold").fontSize(13).fillColor("#1E293B").text(ticket.departure, col1, routeY + 56);
+    // Vertically center smaller fonts in the 44pt tall zone
+    const fromY = routeY + Math.max(0, Math.round((34 - fromFs) * 0.4));
+    const toY   = routeY + Math.max(0, Math.round((34 - toFs)   * 0.4));
+
+    // FROM — use sanitized city name, no line-break to prevent word-wrapping
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(fromFs)
+      .fillColor(BLUE)
+      .text(fromCity, col1, fromY, { width: 165, lineBreak: false });
+    doc
+      .font("Helvetica")
+      .fontSize(9)
+      .fillColor(GRAY)
+      .text("ORIGIN", col1, routeY + 46);
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(13)
+      .fillColor("#1E293B")
+      .text(ticket.departure, col1, routeY + 59);
 
     // Arrow + duration (drawn as lines — no Unicode issues)
     const midX = W / 2 - 50;
-    doc.font("Helvetica").fontSize(9).fillColor(GRAY).text(ticket.duration, midX, routeY + 14, { width: 100, align: "center" });
     doc
-      .moveTo(midX, routeY + 30)
-      .lineTo(midX + 100, routeY + 30)
+      .font("Helvetica")
+      .fontSize(9)
+      .fillColor(GRAY)
+      .text(ticket.duration, midX, routeY + 16, { width: 100, align: "center" });
+    doc
+      .moveTo(midX, routeY + 32)
+      .lineTo(midX + 100, routeY + 32)
       .strokeColor(BLUE)
       .lineWidth(1.5)
       .stroke();
     // Arrow head
     doc
-      .moveTo(midX + 90, routeY + 25)
-      .lineTo(midX + 100, routeY + 30)
-      .lineTo(midX + 90, routeY + 35)
+      .moveTo(midX + 90, routeY + 27)
+      .lineTo(midX + 100, routeY + 32)
+      .lineTo(midX + 90, routeY + 37)
       .strokeColor(BLUE)
       .lineWidth(1.5)
       .stroke();
+    doc
+      .font("Helvetica")
+      .fontSize(9)
+      .fillColor(GRAY)
+      .text("NON-STOP", midX, routeY + 40, { width: 100, align: "center" });
 
-    doc.font("Helvetica").fontSize(9).fillColor(GRAY).text("NON-STOP", midX, routeY + 38, { width: 100, align: "center" });
-
-    // TO — use sanitized city name
-    doc.font("Helvetica-Bold").fontSize(36).fillColor(BLUE).text(toCity, col3, routeY, { width: 140, align: "right" });
-    doc.font("Helvetica").fontSize(9).fillColor(GRAY).text("DESTINATION", col3, routeY + 42, { width: 140, align: "right" });
-    doc.font("Helvetica-Bold").fontSize(13).fillColor("#1E293B").text(ticket.arrival, col3, routeY + 56, { width: 140, align: "right" });
+    // TO — use sanitized city name, right-aligned
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(toFs)
+      .fillColor(BLUE)
+      .text(toCity, col3, toY, { width: 165, align: "right", lineBreak: false });
+    doc
+      .font("Helvetica")
+      .fontSize(9)
+      .fillColor(GRAY)
+      .text("DESTINATION", col3, routeY + 46, { width: 165, align: "right" });
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(13)
+      .fillColor("#1E293B")
+      .text(ticket.arrival, col3, routeY + 59, { width: 165, align: "right" });
 
     // ── Passenger info ──────────────────────────────────────────────────────
     let y = 222;
@@ -187,7 +237,7 @@ export function generateFlightTicketPDF(ticket: FlightTicketData): Promise<Buffe
       .fillColor("#1E293B")
       .text(ticket.bookingId, stripeX, barcodeY + 72, { width: 140, align: "center" });
 
-    // Stub text — use ASCII-safe route (PDFKit standard fonts don't support →)
+    // Stub text — use ASCII-safe "to" separator (PDFKit standard fonts don't support →)
     doc
       .font("Helvetica-Bold")
       .fontSize(14)
@@ -212,9 +262,9 @@ export function generateFlightTicketPDF(ticket: FlightTicketData): Promise<Buffe
       .fontSize(8)
       .fillColor("#93C5FD")
       .text(
-        "This is an electronically generated ticket. Please carry a valid photo ID at the airport. " +
-        "Check-in closes 45 minutes before departure for domestic flights. " +
-        "For assistance call ${APP_NAME} Support.",
+        `This is an electronically generated ticket. Please carry a valid photo ID at the airport. ` +
+        `Check-in closes 45 minutes before departure for domestic flights. ` +
+        `For assistance contact ${APP_NAME} Support.`,
         margin,
         footerY + 16,
         { width: W - margin * 2, align: "center" }
@@ -223,7 +273,7 @@ export function generateFlightTicketPDF(ticket: FlightTicketData): Promise<Buffe
       .font("Helvetica-Bold")
       .fontSize(9)
       .fillColor(WHITE)
-      .text("${APP_NAME} — ${APP_TAGLINE}", margin, footerY + 52, { width: W - margin * 2, align: "center" });
+      .text(`${APP_NAME} — ${APP_TAGLINE}`, margin, footerY + 52, { width: W - margin * 2, align: "center" });
 
     doc.end();
   });
