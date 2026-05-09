@@ -69,9 +69,9 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
   }
 
   return (
-    <div className="flex flex-col h-full bg-slate-900 w-64 p-4">
-      {/* Logo */}
-      <div className="flex items-center justify-between mb-8 px-1">
+    <div className="flex flex-col h-full min-h-0 bg-slate-900 w-64">
+      {/* Logo — fixed at top, never scrolls */}
+      <div className="flex items-center justify-between shrink-0 px-5 py-4 border-b border-white/10">
         <div className="flex items-center gap-2.5">
           {branding.logoUrl ? (
             <img
@@ -91,22 +91,22 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
           </div>
         </div>
         {onClose && (
-          <button onClick={onClose} className="text-slate-500 hover:text-white transition-colors p-1">
+          <button onClick={onClose} className="text-slate-500 hover:text-white transition-colors p-1 ml-2">
             <X className="w-4 h-4" />
           </button>
         )}
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 space-y-1">
+      {/* Nav — scrollable, takes all remaining space between header and footer */}
+      <nav className="flex-1 min-h-0 overflow-y-auto py-3 px-3 space-y-0.5">
         {NAV_ITEMS.map((item) => (
           <SidebarLink key={item.label} item={item} active={location === item.href} onClick={onClose} />
         ))}
       </nav>
 
-      {/* Footer: user + logout */}
-      <div className="mt-4 pt-4 border-t border-white/10">
-        <div className="flex items-center gap-2.5 px-3 py-2 mb-2">
+      {/* Footer: user + logout — fixed at bottom, never scrolls away */}
+      <div className="shrink-0 px-3 py-3 border-t border-white/10">
+        <div className="flex items-center gap-2.5 px-3 py-2 mb-1">
           <div className="w-7 h-7 rounded-full bg-purple-700 flex items-center justify-center text-xs font-bold text-white shrink-0">
             {user?.name?.charAt(0)?.toUpperCase() ?? "A"}
           </div>
