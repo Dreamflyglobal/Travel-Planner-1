@@ -259,6 +259,8 @@ export default function BookingPayment() {
   const [useCredits,      setUseCredits]      = useState(false);
   const [autoCouponDone,  setAutoCouponDone]  = useState(false);
 
+  const COUPON_SS_KEY = "ww_coupon_code";
+
   const paymentDoneRef = useRef(false);
 
   useEffect(() => {
@@ -272,10 +274,18 @@ export default function BookingPayment() {
 
   useEffect(() => {
     if (!session || autoCouponDone || couponStatus === "valid") return;
+
+    // 1. Restore previously applied coupon from sessionStorage (highest priority)
+    const savedCode = sessionStorage.getItem(COUPON_SS_KEY);
+    if (savedCode) {
+      setTimeout(() => applyCoupon(savedCode), 300);
+      setAutoCouponDone(true);
+      return;
+    }
+
+    // 2. Auto-apply best public coupon
     const base = session.totalBase;
-    const svcType = session.type === "flight" ? "flights"
-      : session.type === "bus" ? "buses"
-      : "hotels";
+    const svcType = session.type; // "flight" | "bus" | "hotel" — matches coupon service_type
     const phone = session.type === "hotel" ? session.guest?.phone ?? ""
       : (session as any).passengers?.[0]?.phone ?? "";
     const ctx = { phone, userBookingsCount: 0, service_type: svcType as any };
@@ -309,9 +319,7 @@ export default function BookingPayment() {
   const creditApplied  = useCredits && canUseCredits ? Math.min(walletBalance, totalAfterCoupon) : 0;
   const netPayable     = totalAfterCoupon - creditApplied;
 
-  const serviceType = session?.type === "flight" ? "flights"
-    : session?.type === "bus" ? "buses"
-    : "hotels";
+  const serviceType = session?.type ?? "flight"; // "flight" | "bus" | "hotel" — matches coupon service_type
 
   const couponContext = useMemo(() => {
     const phone = user?.phone ?? (session?.type === "flight" ? session.passengers[0]?.phone
@@ -334,17 +342,20 @@ export default function BookingPayment() {
       setDiscount(result.discountAmount);
       setAppliedCoupon(result.coupon);
       setCouponStatus("valid");
+      try { sessionStorage.setItem(COUPON_SS_KEY, code); } catch { /* ignore */ }
       toast({ title: "Coupon applied!", description: `₹${result.discountAmount.toLocaleString("en-IN")} off` });
     } else {
       setDiscount(0);
       setAppliedCoupon(null);
       setCouponStatus("invalid");
+      try { sessionStorage.removeItem(COUPON_SS_KEY); } catch { /* ignore */ }
       toast({ variant: "destructive", title: result.error, description: `Code: "${code}"` });
     }
   }
 
   function removeCoupon() {
     setCouponInput(""); setCouponStatus("idle"); setDiscount(0); setAppliedCoupon(null);
+    try { sessionStorage.removeItem(COUPON_SS_KEY); } catch { /* ignore */ }
   }
 
   function buildFlightBooking(s: FlightBookingSession, paymentId: string, bookingRef: string, userId: string) {
@@ -388,6 +399,7 @@ export default function BookingPayment() {
         baseAmount:      s.baseFare * s.travelers,
         convenienceFee,
         discountAmount:  discount || undefined,
+        couponCode:      appliedCoupon?.code || undefined,
         creditApplied:   creditApplied || undefined,
         paymentMethod:   paymentId.startsWith("wallet") ? "wallet" : creditApplied > 0 ? "credits+razorpay" : "razorpay",
         paymentId, bookingRef, createdAt: new Date().toISOString(),
@@ -438,6 +450,7 @@ export default function BookingPayment() {
         baseAmount:      s.baseFare * s.seatCount,
         convenienceFee,
         discountAmount:  discount || undefined,
+        couponCode:      appliedCoupon?.code || undefined,
         creditApplied:   creditApplied || undefined,
         paymentMethod:   paymentId.startsWith("wallet") ? "wallet" : creditApplied > 0 ? "credits+razorpay" : "razorpay",
         paymentId, bookingRef, createdAt: new Date().toISOString(),
@@ -482,6 +495,7 @@ export default function BookingPayment() {
         baseAmount:    s.baseFare,
         convenienceFee,
         discountAmount:  discount || undefined,
+        couponCode:      appliedCoupon?.code || undefined,
         creditApplied:   creditApplied || undefined,
         paymentMethod:   paymentId.startsWith("wallet") ? "wallet" : creditApplied > 0 ? "credits+razorpay" : "razorpay",
         paymentId, bookingRef, createdAt: new Date().toISOString(),
@@ -703,6 +717,7 @@ export default function BookingPayment() {
     if (wTjResult?.tjBookingRef) (wLastSuccessful as any).tjBookingRef = wTjResult.tjBookingRef;
     localStorage.setItem("lastSuccessfulBooking", JSON.stringify(wLastSuccessful));
     paymentDoneRef.current = true;
+    try { sessionStorage.removeItem(COUPON_SS_KEY); } catch { /* ignore */ }
     clearBookingSession();
     refreshUser();
     setWalletPaying(false);
@@ -829,6 +844,7 @@ export default function BookingPayment() {
       if (cTjResult?.tjBookingRef) (cLastSuccessful as any).tjBookingRef = cTjResult.tjBookingRef;
       localStorage.setItem("lastSuccessfulBooking", JSON.stringify(cLastSuccessful));
       paymentDoneRef.current = true;
+      try { sessionStorage.removeItem(COUPON_SS_KEY); } catch { /* ignore */ }
       clearBookingSession();
       refreshUser();
       setProcessing(false);
@@ -1182,6 +1198,7 @@ export default function BookingPayment() {
         if (flightBookResult?.tjBookingRef) (lastSuccessful as any).tjBookingRef = flightBookResult.tjBookingRef;
         localStorage.setItem("lastSuccessfulBooking", JSON.stringify(lastSuccessful));
         paymentDoneRef.current = true;
+        try { sessionStorage.removeItem(COUPON_SS_KEY); } catch { /* ignore */ }
         clearBookingSession();
         refreshUser();
         setProcessing(false);

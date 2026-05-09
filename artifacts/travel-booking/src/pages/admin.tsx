@@ -153,6 +153,15 @@ export default function AdminDashboard() {
   });
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [couponToDelete, setCouponToDelete] = useState<string | null>(null);
+  const [couponUsageCounts, setCouponUsageCounts] = useState<Record<string, number>>(() => {
+    try {
+      const raw: Array<{ code: string }> = JSON.parse(localStorage.getItem("coupon_usage") ?? "[]");
+      return raw.reduce<Record<string, number>>((acc, u) => {
+        acc[u.code] = (acc[u.code] ?? 0) + 1;
+        return acc;
+      }, {});
+    } catch { return {}; }
+  });
 
   // Package state
   const [packages, setPackages] = useState<Array<{
@@ -185,6 +194,14 @@ export default function AdminDashboard() {
         setCoupons([]);
       }
     }
+    // Refresh coupon usage counts on mount
+    try {
+      const raw: Array<{ code: string }> = JSON.parse(localStorage.getItem("coupon_usage") ?? "[]");
+      setCouponUsageCounts(raw.reduce<Record<string, number>>((acc, u) => {
+        acc[u.code] = (acc[u.code] ?? 0) + 1;
+        return acc;
+      }, {}));
+    } catch { /* ignore */ }
 
     const savedPackages = localStorage.getItem("packages");
     if (savedPackages) {
@@ -1900,6 +1917,24 @@ export default function AdminDashboard() {
                                     {coupon.description}
                                   </div>
                                 )}
+                                {/* Usage count */}
+                                {(() => {
+                                  const count = couponUsageCounts[coupon.code] ?? 0;
+                                  const limit = coupon.usageLimit ?? 0;
+                                  return (
+                                    <div className="flex items-center gap-1 text-xs font-medium mt-1">
+                                      {count > 0 ? (
+                                        <span className="flex items-center gap-1 text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">
+                                          <CheckCircle className="w-3 h-3" />
+                                          {count} redemption{count !== 1 ? "s" : ""}
+                                          {limit > 0 && ` / ${limit}`}
+                                        </span>
+                                      ) : (
+                                        <span className="text-slate-400 italic">Not used yet</span>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
                                 {expired && (
                                   <div className="flex items-center gap-1 text-xs text-destructive">
                                     <XCircle className="w-3 h-3" />
