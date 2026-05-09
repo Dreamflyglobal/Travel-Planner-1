@@ -166610,20 +166610,34 @@ var users_default = router29;
 var import_express30 = __toESM(require_express2(), 1);
 init_drizzle_orm();
 var router30 = (0, import_express30.Router)();
+function normalizeServiceType(raw) {
+  if (!raw) return void 0;
+  const v = raw.toLowerCase().trim();
+  if (v === "flight" || v === "flights") return "flight";
+  if (v === "bus" || v === "buses") return "bus";
+  if (v === "hotel" || v === "hotels") return "hotel";
+  if (v === "holiday" || v === "holidays" || v === "package" || v === "packages") return "holiday";
+  return void 0;
+}
+function normalizeCouponType(raw) {
+  if (raw === "welcome" || raw === "first_time" || raw === "firsttime") return "welcome";
+  if (raw === "user_specific" || raw === "user-specific" || raw === "personal") return "user_specific";
+  return "public";
+}
 function rowToCoupon(row) {
   return {
-    code: row.code,
+    code: row.code.toUpperCase(),
     discount: Number(row.discount),
-    discountType: row.discountType,
-    type: row.type,
-    allowed_phone: row.allowedPhone ?? void 0,
+    discountType: row.discountType === "percentage" ? "percentage" : "fixed",
+    type: normalizeCouponType(row.type),
+    allowed_phone: row.allowedPhone ? row.allowedPhone.trim() : void 0,
     validUntil: row.validUntil,
     usageLimit: row.usageLimit ?? 0,
     minBookingAmount: Number(row.minBookingAmount ?? 0),
-    service_type: row.serviceType ?? void 0,
-    flight_type: row.flightType ?? void 0,
-    airline: row.airline ?? void 0,
-    description: row.description ?? void 0,
+    service_type: normalizeServiceType(row.serviceType),
+    flight_type: row.flightType === "domestic" || row.flightType === "international" ? row.flightType : void 0,
+    airline: row.airline ? row.airline.trim() : void 0,
+    description: row.description ? row.description.trim() : void 0,
     used_by: []
     // populated by client from usage records
   };
@@ -166664,13 +166678,13 @@ router30.post("/coupons", async (req, res) => {
       code,
       discount: String(discount),
       discountType: b.discountType === "percentage" ? "percentage" : "fixed",
-      type: ["public", "welcome", "user_specific"].includes(b.type) ? b.type : "public",
-      allowedPhone: b.allowed_phone ? String(b.allowed_phone).trim() : null,
+      type: normalizeCouponType(b.type),
+      allowedPhone: b.allowed_phone ? String(b.allowed_phone).replace(/\D/g, "").slice(-10) : null,
       validUntil,
       usageLimit: Number(b.usageLimit ?? 0) || 0,
       minBookingAmount: String(Number(b.minBookingAmount ?? 0) || 0),
-      serviceType: b.service_type ? String(b.service_type) : null,
-      flightType: b.flight_type ? String(b.flight_type) : null,
+      serviceType: normalizeServiceType(b.service_type) ?? null,
+      flightType: b.flight_type === "domestic" || b.flight_type === "international" ? b.flight_type : null,
       airline: b.airline ? String(b.airline).trim() : null,
       description: b.description ? String(b.description).trim() : null
     }).returning();

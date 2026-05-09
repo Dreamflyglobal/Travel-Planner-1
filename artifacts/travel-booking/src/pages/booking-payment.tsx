@@ -279,10 +279,16 @@ export default function BookingPayment() {
     setSession(s);
   }, []);
 
-  // Fetch coupons from API on mount (cross-device, server-backed)
+  // Fetch coupons from API on mount + whenever the tab regains focus
   useEffect(() => {
-    apiFetchCoupons().then(setAllCoupons).catch(() => {});
-    apiFetchCouponUsage().then(setCouponUsageRecs).catch(() => {});
+    const fetchCoupons = () => {
+      apiFetchCoupons().then(setAllCoupons).catch(() => {});
+      apiFetchCouponUsage().then(setCouponUsageRecs).catch(() => {});
+    };
+    fetchCoupons();
+    const onFocus = () => { if (document.visibilityState === "visible") fetchCoupons(); };
+    document.addEventListener("visibilitychange", onFocus);
+    return () => document.removeEventListener("visibilitychange", onFocus);
   }, []);
 
   useEffect(() => {

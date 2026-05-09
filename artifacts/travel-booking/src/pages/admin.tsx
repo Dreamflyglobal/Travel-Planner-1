@@ -1841,7 +1841,9 @@ export default function AdminDashboard() {
                                   </span>
                                 </div>
                                 {(() => {
-                                  const t = coupon.type ?? (coupon.firstTimeOnly ? "welcome" : "public");
+                                  const t = coupon.type === "welcome" ? "welcome"
+                                          : coupon.type === "user_specific" ? "user_specific"
+                                          : (coupon as any).firstTimeOnly ? "welcome" : "public";
                                   if (t === "welcome") return (
                                     <div className="flex items-center gap-1 text-xs text-amber-600 font-medium">
                                       <ShieldAlert className="w-3 h-3" />

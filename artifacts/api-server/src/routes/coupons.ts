@@ -7,21 +7,40 @@ const router: IRouter = Router();
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
+/** Canonical service_type values — normalises legacy data in the DB */
+function normalizeServiceType(raw: string | null | undefined): string | undefined {
+  if (!raw) return undefined;
+  const v = raw.toLowerCase().trim();
+  if (v === "flight" || v === "flights") return "flight";
+  if (v === "bus"    || v === "buses")   return "bus";
+  if (v === "hotel"  || v === "hotels")  return "hotel";
+  if (v === "holiday"|| v === "holidays" || v === "package" || v === "packages") return "holiday";
+  return undefined;
+}
+
+/** Canonical coupon type — backwards-compat with old DB / localStorage records */
+function normalizeCouponType(raw: string | null | undefined): "public" | "welcome" | "user_specific" {
+  if (raw === "welcome" || raw === "first_time" || raw === "firsttime") return "welcome";
+  if (raw === "user_specific" || raw === "user-specific" || raw === "personal") return "user_specific";
+  return "public";
+}
+
 function rowToCoupon(row: typeof couponsTable.$inferSelect) {
   return {
-    code:             row.code,
+    code:             row.code.toUpperCase(),
     discount:         Number(row.discount),
-    discountType:     row.discountType as "fixed" | "percentage",
-    type:             row.type as "public" | "welcome" | "user_specific",
-    allowed_phone:    row.allowedPhone  ?? undefined,
+    discountType:     row.discountType === "percentage" ? "percentage" : "fixed" as "fixed" | "percentage",
+    type:             normalizeCouponType(row.type),
+    allowed_phone:    row.allowedPhone  ? row.allowedPhone.trim() : undefined,
     validUntil:       row.validUntil,
     usageLimit:       row.usageLimit    ?? 0,
     minBookingAmount: Number(row.minBookingAmount ?? 0),
-    service_type:     (row.serviceType  ?? undefined) as any,
-    flight_type:      (row.flightType   ?? undefined) as any,
-    airline:          row.airline       ?? undefined,
-    description:      row.description   ?? undefined,
-    used_by:          [],               // populated by client from usage records
+    service_type:     normalizeServiceType(row.serviceType),
+    flight_type:      (row.flightType === "domestic" || row.flightType === "international")
+                        ? row.flightType : undefined,
+    airline:          row.airline       ? row.airline.trim() : undefined,
+    description:      row.description   ? row.description.trim() : undefined,
+    used_by:          [] as string[],   // populated by client from usage records
   };
 }
 
@@ -60,13 +79,14 @@ router.post("/coupons", async (req, res): Promise<void> => {
       code,
       discount:         String(discount),
       discountType:     b.discountType === "percentage" ? "percentage" : "fixed",
-      type:             ["public","welcome","user_specific"].includes(b.type) ? b.type : "public",
-      allowedPhone:     b.allowed_phone  ? String(b.allowed_phone).trim()  : null,
+      type:             normalizeCouponType(b.type),
+      allowedPhone:     b.allowed_phone  ? String(b.allowed_phone).replace(/\D/g, "").slice(-10) : null,
       validUntil,
       usageLimit:       Number(b.usageLimit ?? 0)        || 0,
       minBookingAmount: String(Number(b.minBookingAmount ?? 0) || 0),
-      serviceType:      b.service_type   ? String(b.service_type)          : null,
-      flightType:       b.flight_type    ? String(b.flight_type)           : null,
+      serviceType:      normalizeServiceType(b.service_type) ?? null,
+      flightType:       (b.flight_type === "domestic" || b.flight_type === "international")
+                          ? b.flight_type : null,
       airline:          b.airline        ? String(b.airline).trim()        : null,
       description:      b.description    ? String(b.description).trim()    : null,
     }).returning();
