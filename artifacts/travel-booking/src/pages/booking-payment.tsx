@@ -330,9 +330,11 @@ export default function BookingPayment() {
     return { phone, userBookingsCount, service_type: serviceType };
   }, [user, session, serviceType]);
 
-  function applyCoupon() {
-    const code = couponInput.trim().toUpperCase();
+  function applyCoupon(codeOverride?: string) {
+    const code = (codeOverride ?? couponInput).trim().toUpperCase();
     if (!code) return;
+    // When called from the available-offers list, also fill the input box
+    if (codeOverride) setCouponInput(codeOverride);
     const result = validateCouponFromList(code, totalBase, couponContext, allCoupons, couponUsageRecs);
     if (result.ok) {
       setDiscount(result.discountAmount);
