@@ -377,7 +377,7 @@ export function BookingForm({ bookingType, referenceId, pricePerUnit, title }: B
                       <FormItem>
                         <FormLabel>Full Name</FormLabel>
                         <FormControl>
-                          <Input placeholder="John Doe" {...field} />
+                          <Input placeholder="Enter full name" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -434,7 +434,7 @@ export function BookingForm({ bookingType, referenceId, pricePerUnit, title }: B
                       <FormItem>
                         <FormLabel>Email</FormLabel>
                         <FormControl>
-                          <Input type="email" placeholder="john@example.com" {...field} />
+                          <Input type="email" placeholder="Enter email address" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>

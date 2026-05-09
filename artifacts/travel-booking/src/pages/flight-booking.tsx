@@ -628,7 +628,7 @@ export default function FlightBooking() {
                         Email Address <span className="text-red-500">*</span>
                       </label>
                       <Input
-                        type="email" placeholder="passenger@email.com"
+                        type="email" placeholder="Enter email address"
                         value={passengers[i].email}
                         onChange={(e) => updatePassenger(i, "email", e.target.value)}
                         className={cn("h-11", errors[i]?.email && "border-red-400")}

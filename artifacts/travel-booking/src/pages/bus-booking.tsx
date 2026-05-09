@@ -297,7 +297,7 @@ export default function BusBooking() {
                     <div>
                       <label className="text-sm font-semibold text-slate-700 block mb-1.5">Email Address <span className="text-red-500">*</span></label>
                       <Input
-                        type="email" placeholder="your@email.com"
+                        type="email" placeholder="Enter email address"
                         value={passengers[i].email}
                         onChange={(e) => updatePassenger(i, "email", e.target.value)}
                         className={cn("h-11", errors[i]?.email && "border-red-400")}

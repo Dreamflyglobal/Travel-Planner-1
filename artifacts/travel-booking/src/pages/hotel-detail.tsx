@@ -566,7 +566,7 @@ export default function HotelDetail() {
                           <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                           <Input
                             id="firstName"
-                            placeholder="John"
+                            placeholder="Enter first name"
                             value={passenger.firstName}
                             onChange={(e) => {
                               setPassenger((prev) => ({ ...prev, firstName: e.target.value }));
@@ -589,7 +589,7 @@ export default function HotelDetail() {
                           <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                           <Input
                             id="lastName"
-                            placeholder="Doe"
+                            placeholder="Enter last name"
                             value={passenger.lastName}
                             onChange={(e) => {
                               setPassenger((prev) => ({ ...prev, lastName: e.target.value }));
@@ -613,7 +613,7 @@ export default function HotelDetail() {
                           <Input
                             id="email"
                             type="email"
-                            placeholder="john@example.com"
+                            placeholder="Enter email address"
                             value={passenger.email}
                             onChange={(e) => {
                               setPassenger((prev) => ({ ...prev, email: e.target.value }));
@@ -637,7 +637,7 @@ export default function HotelDetail() {
                           <Input
                             id="phone"
                             type="tel"
-                            placeholder="9876543210"
+                            placeholder="Enter mobile number"
                             value={passenger.phone}
                             onChange={(e) => {
                               setPassenger((prev) => ({

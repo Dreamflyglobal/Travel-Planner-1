@@ -191,40 +191,6 @@ const IMPORTANT_NOTES: Record<BookingInvoice["bookingType"], string[]> = {
 function findInvoice(bookingId: string): BookingInvoice | null {
   const id = bookingId.toUpperCase();
 
-  const DEMO: Record<string, BookingInvoice> = {
-    "DEMO-FLIGHT": {
-      bookingId: "DEMO-FLIGHT", bookingType: "flight",
-      passengerName: "Arjun Sharma", passengerEmail: "arjun@gmail.com", passengerPhone: "+91 9876543210",
-      passengers: 2, travelDate: "2026-05-10", totalAmount: 18750, paymentId: "pay_DEMOxxx111",
-      paymentStatus: "paid", timestamp: new Date().toISOString(), title: "IndiGo · HYD → BOM",
-      selectedSeats: ["14A", "14B"], discount: 500,
-      flightAirline: "IndiGo", flightNumber: "6E-2041", flightFrom: "HYD", flightTo: "BOM",
-      flightDeparture: "06:30 AM", flightArrival: "08:10 AM", flightDuration: "1h 40m",
-      flightBaseFare: 16400, flightConvFee: 350, flightBaggageKg: 15, flightBaggageCost: 2000,
-    },
-    "DEMO-HOTEL": {
-      bookingId: "DEMO-HOTEL", bookingType: "hotel",
-      passengerName: "Priya Nair", passengerEmail: "priya@gmail.com", passengerPhone: "+91 9123456789",
-      passengers: 2, travelDate: "2026-06-15", checkoutDate: "2026-06-18", totalAmount: 12600,
-      paymentId: "pay_DEMOyyy222", paymentStatus: "paid", timestamp: new Date().toISOString(),
-      title: "The Leela Palace", roomType: "Deluxe King",
-      hotelName: "The Leela Palace", hotelCity: "Bengaluru", hotelNights: 3, hotelRooms: 1, hotelAdults: 2,
-    },
-    "DEMO-BUS": {
-      bookingId: "DEMO-BUS", bookingType: "bus",
-      passengerName: "Ravi Kumar", passengerEmail: "ravi@gmail.com", passengerPhone: "+91 9000111222",
-      passengers: 2, travelDate: "2026-04-25", totalAmount: 3900, paymentId: "pay_DEMOzzz333",
-      paymentStatus: "paid", timestamp: new Date().toISOString(), title: "Orange Travels · HYD → BLR",
-      selectedSeats: ["5", "6"],
-      busOperator: "Orange Travels", busType: "AC Sleeper",
-      busFrom: "Hyderabad", busTo: "Bangalore",
-      busBoardingPoint: "Ameerpet", busDroppingPoint: "Majestic",
-      busDeparture: "7:00 PM", busArrival: "5:30 AM",
-      busBaseFare: 3400, busConvFee: 500,
-    },
-  };
-  if (DEMO[id]) return DEMO[id];
-
   try {
     const stored = JSON.parse(localStorage.getItem("ww_invoices") || "[]") as BookingInvoice[];
     const found = stored.find((i) => i.bookingId.toUpperCase() === id);

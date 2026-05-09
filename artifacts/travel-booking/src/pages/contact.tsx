@@ -172,7 +172,7 @@ export default function Contact() {
               <input
                 name="email"
                 type="email"
-                placeholder="you@email.com"
+                placeholder="Enter email address"
                 className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary bg-white"
               />
             </div>

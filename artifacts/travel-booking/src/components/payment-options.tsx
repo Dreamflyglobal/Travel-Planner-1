@@ -172,7 +172,7 @@ export function PaymentOptions({ userId, totalAmount, onPaymentSelect, className
                       <Label htmlFor="cardName" className="text-sm">Cardholder Name</Label>
                       <Input
                         id="cardName"
-                        placeholder="JOHN DOE"
+                        placeholder="CARDHOLDER NAME"
                         value={cardName}
                         onChange={(e) => setCardName(e.target.value.toUpperCase())}
                         onClick={(e) => e.stopPropagation()}

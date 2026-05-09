@@ -248,7 +248,7 @@ export default function Profile() {
                             const PHONE_RE = /^[6-9][0-9]{9}$/;
                             setPhoneError(digits.length > 0 && !PHONE_RE.test(digits) ? "Enter valid 10-digit mobile number" : "");
                           }}
-                          placeholder="9876543210"
+                          placeholder="Enter mobile number"
                           maxLength={10}
                           inputMode="numeric"
                           className={phoneError ? "border-red-500 focus-visible:ring-red-500" : ""}

@@ -141,7 +141,7 @@ export default function Signup() {
                 <Label htmlFor="name">Full Name *</Label>
                 <Input
                   id="name"
-                  placeholder="John Doe"
+                  placeholder="Enter full name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
@@ -165,7 +165,7 @@ export default function Signup() {
                 <Input
                   id="phone"
                   type="tel"
-                  placeholder="9876543210"
+                  placeholder="Enter 10-digit mobile number"
                   value={phone}
                   onChange={(e) => handlePhoneChange(e.target.value)}
                   maxLength={10}

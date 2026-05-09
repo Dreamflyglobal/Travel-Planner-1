@@ -494,7 +494,7 @@ export default function Login() {
                         <Input
                           id="login-input"
                           type="text"
-                          placeholder="your@email.com or 9876543210"
+                          placeholder="Email address or mobile number"
                           value={loginInput}
                           onChange={(e) => handleLoginInputChange(e.target.value)}
                           className="pl-10 h-11"
@@ -588,7 +588,7 @@ export default function Login() {
                       <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input
                         id="su-name"
-                        placeholder="John Doe"
+                        placeholder="Enter full name"
                         value={signupName}
                         onChange={(e) => setSignupName(e.target.value)}
                         className="pl-10 h-11"
@@ -605,7 +605,7 @@ export default function Login() {
                       <Input
                         id="su-email"
                         type="email"
-                        placeholder="your@email.com"
+                        placeholder="Enter email address"
                         value={signupEmail}
                         onChange={(e) => setSignupEmail(e.target.value)}
                         className="pl-10 h-11"
@@ -623,7 +623,7 @@ export default function Login() {
                         id="su-phone"
                         type="tel"
                         inputMode="numeric"
-                        placeholder="9876543210"
+                        placeholder="Enter 10-digit mobile number"
                         value={signupPhone}
                         onChange={(e) => handleSignupPhoneChange(e.target.value)}
                         className={cn("pl-10 h-11", signupPhoneError && "border-red-500 focus-visible:ring-red-500")}
@@ -634,7 +634,7 @@ export default function Login() {
                     {signupPhoneError ? (
                       <p className="text-xs text-red-500 font-medium">{signupPhoneError}</p>
                     ) : (
-                      <p className="text-xs text-muted-foreground">10 digits, numbers only (e.g. 9876543210)</p>
+                      <p className="text-xs text-muted-foreground">10 digits, numbers only</p>
                     )}
                   </div>
 

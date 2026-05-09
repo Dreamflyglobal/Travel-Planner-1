@@ -238,7 +238,7 @@ export default function HotelBooking() {
                     <div>
                       <label className="text-sm font-semibold text-slate-700 block mb-1.5">Email <span className="text-red-500">*</span></label>
                       <Input
-                        type="email" placeholder="your@email.com"
+                        type="email" placeholder="Enter email address"
                         value={guest.email}
                         onChange={(e) => updateField("email", e.target.value)}
                         className={cn("h-11", fieldErrors.email && "border-red-400")}

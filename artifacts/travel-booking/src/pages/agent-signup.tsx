@@ -161,7 +161,7 @@ export default function AgentSignup() {
                 <Input
                   id="phone"
                   type="tel"
-                  placeholder="9876543210"
+                  placeholder="Enter 10-digit mobile number"
                   value={phone}
                   onChange={(e) => handlePhoneChange(e.target.value)}
                   maxLength={10}

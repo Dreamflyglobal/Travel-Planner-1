@@ -359,7 +359,7 @@ export default function PackageBooking() {
                   <label className="text-sm font-semibold text-slate-700 block mb-1.5">Email <span className="text-red-500">*</span></label>
                   <Input
                     type="email"
-                    placeholder="your@email.com"
+                    placeholder="Enter email address"
                     value={email}
                     onChange={(e) => { setEmail(e.target.value); setErrors((p) => ({ ...p, email: "" })); }}
                     className={cn("h-11", errors.email && "border-red-400")}
