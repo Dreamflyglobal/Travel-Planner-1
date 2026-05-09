@@ -1,5 +1,5 @@
-import { APP_NAME } from "@/lib/app-config";
 import { useState, useRef, useEffect } from "react";
+import { useBranding } from "@/contexts/branding-context";
 import { useLocation, useSearch } from "wouter";
 import { Layout } from "@/components/layout";
 import { PageHero } from "@/components/page-hero";
@@ -72,6 +72,7 @@ const AUDIENCE_OPTIONS = [
 export default function Packages() {
   const [, setLocation] = useLocation();
   const searchString = useSearch();
+  const { branding } = useBranding();
   const initDest = new URLSearchParams(searchString).get("destination") || "";
 
   const [allPackages, setAllPackages] = useState<DbPackage[]>([]);
@@ -405,7 +406,7 @@ export default function Packages() {
 
       {/* ── Why Dream Fly Global ── */}
       <section className="container mx-auto px-4 py-14">
-        <h2 className="text-2xl font-extrabold text-slate-900 text-center mb-8">The {APP_NAME} Advantage</h2>
+        <h2 className="text-2xl font-extrabold text-slate-900 text-center mb-8">The {branding.companyName} Advantage</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {[
             { icon: "🧳", title: "All-Inclusive Packages", desc: "Hotels, transfers, and sightseeing — all bundled." },

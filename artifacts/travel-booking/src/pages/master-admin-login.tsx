@@ -1,4 +1,3 @@
-import { APP_NAME } from "@/lib/app-config";
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/auth-context";
@@ -7,10 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { ShieldCheck, Eye, EyeOff, Lock, Mail, AlertCircle } from "lucide-react";
+import { useBranding } from "@/contexts/branding-context";
+import { SiteLogo } from "@/components/brand-logo";
 
 export default function MasterAdminLogin() {
   const [, setLocation] = useLocation();
   const { isAdmin, isAuthenticated, loginAdmin } = useAuth();
+  const { branding } = useBranding();
 
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
@@ -65,10 +67,13 @@ export default function MasterAdminLogin() {
         {/* Badge */}
         <div className="flex justify-center mb-8">
           <div className="flex items-center gap-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full px-5 py-2.5">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-lg">
-              <ShieldCheck className="w-4 h-4 text-white" />
-            </div>
-            <span className="text-white font-bold text-sm tracking-wide">{APP_NAME} · Master Admin</span>
+            <SiteLogo
+              logoUrl={branding.logoUrl}
+              companyName={branding.companyName}
+              containerClass="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-lg"
+              iconClass="w-4 h-4 text-white"
+            />
+            <span className="text-white font-bold text-sm tracking-wide">{branding.companyName} · Master Admin</span>
           </div>
         </div>
 
@@ -160,7 +165,7 @@ export default function MasterAdminLogin() {
 
             <div className="mt-6 pt-5 border-t border-slate-100 text-center">
               <p className="text-xs text-muted-foreground">
-                🔒 This area is restricted to {APP_NAME} administrators.<br />
+                🔒 This area is restricted to {branding.companyName} administrators.<br />
                 Unauthorised access attempts are logged.
               </p>
             </div>
@@ -168,7 +173,7 @@ export default function MasterAdminLogin() {
         </Card>
 
         <p className="text-center text-xs text-white/40 mt-6">
-          © {new Date().getFullYear()} {APP_NAME} · All rights reserved
+          © {new Date().getFullYear()} {branding.companyName} · All rights reserved
         </p>
       </div>
     </div>

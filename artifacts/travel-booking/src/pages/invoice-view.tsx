@@ -1,5 +1,5 @@
-import { APP_NAME } from "@/lib/app-config";
 import { useEffect, useState } from "react";
+import { useBranding } from "@/contexts/branding-context";
 import { useRoute, Link } from "wouter";
 import {
   Printer, Download, ArrowLeft, CheckCircle, Plane, Bus,
@@ -77,8 +77,8 @@ interface BookingInvoice {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const COMPANY = {
-  name:    APP_NAME,
-  brand:   APP_NAME,
+  name:    "Dream Fly Global",
+  brand:   "Dream Fly Global",
   tagline: "Your Ultimate Travel Companion",
   phone:   "+91 9000978856",
   email:   "support@dreamflyglobal.com",
@@ -348,6 +348,8 @@ export default function InvoiceView() {
   const bookingId = params?.bookingId ?? "";
   const [invoice, setInvoice] = useState<BookingInvoice | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const { branding } = useBranding();
+  const company = { ...COMPANY, name: branding.companyName, brand: branding.companyName };
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -374,7 +376,7 @@ export default function InvoiceView() {
   const handleEmail    = () => {
     if (!invoice) return;
     const sub = `Your ${typeLabel(invoice.bookingType)} Confirmation — ${invoice.bookingId}`;
-    const body = `Hi,\n\nYour booking is confirmed!\n\nBooking ID: ${invoice.bookingId}\nView Invoice: ${window.location.href}\n\nThank you for booking with ${APP_NAME}.`;
+    const body = `Hi,\n\nYour booking is confirmed!\n\nBooking ID: ${invoice.bookingId}\nView Invoice: ${window.location.href}\n\nThank you for booking with ${company.name}.`;
     window.location.href = `mailto:?subject=${encodeURIComponent(sub)}&body=${encodeURIComponent(body)}`;
   };
 
@@ -432,7 +434,7 @@ export default function InvoiceView() {
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-2 flex-wrap">
           <Link href="/">
             <button className="flex items-center gap-2 text-slate-600 hover:text-slate-900 text-sm font-medium transition-colors">
-              <ArrowLeft className="w-4 h-4" /> Back to {APP_NAME}
+              <ArrowLeft className="w-4 h-4" /> Back to {company.name}
             </button>
           </Link>
           <div className="flex items-center gap-2">
@@ -477,15 +479,15 @@ export default function InvoiceView() {
                   <span className="text-white font-black text-xl tracking-tighter">WW</span>
                 </div>
                 <div>
-                  <h1 className="text-white text-2xl font-black tracking-tight leading-none">{COMPANY.name}</h1>
-                  <p className="text-orange-300 text-xs font-semibold mt-1">{COMPANY.brand}</p>
-                  <p className="text-slate-400 text-xs mt-1">{COMPANY.tagline}</p>
+                  <h1 className="text-white text-2xl font-black tracking-tight leading-none">{company.name}</h1>
+                  <p className="text-orange-300 text-xs font-semibold mt-1">{company.brand}</p>
+                  <p className="text-slate-400 text-xs mt-1">{company.tagline}</p>
                   <div className="flex flex-wrap items-center gap-3 mt-2">
                     <span className="flex items-center gap-1 text-slate-400 text-xs">
-                      <Phone className="w-3 h-3" /> {COMPANY.phone}
+                      <Phone className="w-3 h-3" /> {company.phone}
                     </span>
                     <span className="flex items-center gap-1 text-slate-400 text-xs">
-                      <Mail className="w-3 h-3" /> {COMPANY.email}
+                      <Mail className="w-3 h-3" /> {company.email}
                     </span>
                   </div>
                 </div>
@@ -860,7 +862,7 @@ export default function InvoiceView() {
               </div>
             ))}
             <div className="pt-2 border-t border-amber-200 flex items-center gap-2 text-amber-700 text-xs font-semibold">
-              <Phone className="w-3.5 h-3.5" /> Need help? Call {COMPANY.phone}
+              <Phone className="w-3.5 h-3.5" /> Need help? Call {company.phone}
             </div>
           </div>
         </div>
@@ -908,15 +910,15 @@ export default function InvoiceView() {
               <span className="text-white font-black text-lg">WW</span>
             </div>
             <p className="text-white font-bold text-lg mb-1">Thank you for booking with Dream Fly! ✈️</p>
-            <p className="text-orange-300 text-sm font-semibold mb-4">{COMPANY.brand} — {COMPANY.tagline}</p>
+            <p className="text-orange-300 text-sm font-semibold mb-4">{company.brand} — {company.tagline}</p>
             <div className="flex flex-wrap items-center justify-center gap-4 text-slate-400 text-xs mb-4">
-              <span className="flex items-center gap-1.5"><Globe className="w-3 h-3" /> {COMPANY.website}</span>
-              <span className="flex items-center gap-1.5"><Mail  className="w-3 h-3" /> {COMPANY.email}</span>
-              <span className="flex items-center gap-1.5"><Phone className="w-3 h-3" /> {COMPANY.phone}</span>
+              <span className="flex items-center gap-1.5"><Globe className="w-3 h-3" /> {company.website}</span>
+              <span className="flex items-center gap-1.5"><Mail  className="w-3 h-3" /> {company.email}</span>
+              <span className="flex items-center gap-1.5"><Phone className="w-3 h-3" /> {company.phone}</span>
             </div>
             <div className="border-t border-white border-opacity-10 pt-4">
               <p className="text-slate-600 text-xs">
-                Invoice: {invoiceNo} · Generated: {fmtDt(genDate)} · {COMPANY.gst}
+                Invoice: {invoiceNo} · Generated: {fmtDt(genDate)} · {company.gst}
               </p>
               <p className="text-slate-700 text-xs mt-1">
                 This is a computer-generated invoice and does not require a physical signature.

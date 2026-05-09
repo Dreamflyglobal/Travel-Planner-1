@@ -1,16 +1,18 @@
-import { APP_NAME } from "@/lib/app-config";
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/auth-context";
-import { Eye, EyeOff, ShieldCheck, Users, BarChart2, MessageCircle } from "lucide-react";
+import { Eye, EyeOff, Users, BarChart2, MessageCircle } from "lucide-react";
+import { useBranding } from "@/contexts/branding-context";
+import { SiteLogo } from "@/components/brand-logo";
 
 export default function StaffLogin() {
   const [, setLocation] = useLocation();
   const { login, user }  = useAuth();
   const { toast }        = useToast();
+  const { branding }     = useBranding();
 
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
@@ -49,11 +51,14 @@ export default function StaffLogin() {
       {/* Left panel */}
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-slate-800 via-slate-900 to-gray-900 text-white flex-col justify-between p-12">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center">
-            <ShieldCheck className="w-5 h-5 text-white" />
-          </div>
+          <SiteLogo
+            logoUrl={branding.logoUrl}
+            companyName={branding.companyName}
+            containerClass="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center"
+            iconClass="w-5 h-5 text-white"
+          />
           <div>
-            <p className="font-bold text-white text-sm tracking-wide">{APP_NAME}</p>
+            <p className="font-bold text-white text-sm tracking-wide">{branding.companyName}</p>
             <p className="text-slate-400 text-xs uppercase tracking-widest">Staff Portal</p>
           </div>
         </div>
@@ -97,11 +102,14 @@ export default function StaffLogin() {
         <div className="w-full max-w-sm">
           {/* Mobile logo */}
           <div className="flex items-center gap-2 mb-8 lg:hidden">
-            <div className="w-8 h-8 bg-slate-800 rounded-lg flex items-center justify-center">
-              <ShieldCheck className="w-4 h-4 text-white" />
-            </div>
+            <SiteLogo
+              logoUrl={branding.logoUrl}
+              companyName={branding.companyName}
+              containerClass="w-8 h-8 bg-slate-800 rounded-lg flex items-center justify-center"
+              iconClass="w-4 h-4 text-white"
+            />
             <div>
-              <p className="font-bold text-slate-900 text-sm">{APP_NAME}</p>
+              <p className="font-bold text-slate-900 text-sm">{branding.companyName}</p>
               <p className="text-xs text-slate-400 uppercase tracking-widest">Staff Portal</p>
             </div>
           </div>

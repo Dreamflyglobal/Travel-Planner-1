@@ -1,4 +1,3 @@
-import { APP_NAME } from "@/lib/app-config";
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/auth-context";
@@ -10,12 +9,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
-  Sparkles, Mail, Lock, User, Phone, ArrowRight,
+  Mail, Lock, User, Phone, ArrowRight,
   CheckCircle2, AlertTriangle, Building2, MessageSquare,
   RefreshCw, Eye, EyeOff, ShieldCheck,
 } from "lucide-react";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
+import { useBranding } from "@/contexts/branding-context";
+import { SiteLogo } from "@/components/brand-logo";
 
 const BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 
@@ -25,6 +26,7 @@ type OtpStep  = "send" | "verify";
 export default function Login() {
   const [, setLocation] = useLocation();
   const { login, loginWithOTP, signup, logout, isAuthenticated } = useAuth();
+  const { branding } = useBranding();
 
   const returnTo = new URLSearchParams(window.location.search).get("returnTo") || "/";
 
@@ -256,14 +258,17 @@ export default function Login() {
         <div className="hidden lg:flex flex-col justify-center p-12">
           <div className="mb-8">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center shadow-lg">
-                <Sparkles className="w-10 h-10 text-white" />
-              </div>
+              <SiteLogo
+                logoUrl={branding.logoUrl}
+                companyName={branding.companyName}
+                containerClass="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center shadow-lg"
+                iconClass="w-10 h-10 text-white"
+              />
               <div>
                 <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                  {APP_NAME}
+                  {branding.companyName}
                 </h1>
-                <p className="text-muted-foreground">Explore the world with us</p>
+                <p className="text-muted-foreground">{branding.tagline}</p>
               </div>
             </div>
             <h2 className="text-4xl font-bold mb-4">
@@ -310,11 +315,14 @@ export default function Login() {
         <Card className="shadow-2xl border-0">
           <CardHeader className="space-y-1 pb-6">
             <div className="lg:hidden flex items-center justify-center gap-2 mb-4">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center">
-                <Sparkles className="w-7 h-7 text-white" />
-              </div>
+              <SiteLogo
+                logoUrl={branding.logoUrl}
+                companyName={branding.companyName}
+                containerClass="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center"
+                iconClass="w-7 h-7 text-white"
+              />
               <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                {APP_NAME}
+                {branding.companyName}
               </span>
             </div>
             <CardTitle className="text-2xl text-center">Customer Login</CardTitle>

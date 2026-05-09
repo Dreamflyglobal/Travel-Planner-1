@@ -1,20 +1,22 @@
 import { useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { useAuth } from "@/contexts/auth-context";
-import { APP_NAME } from "@/lib/app-config";
 import { findUserByReferralCode } from "@/lib/referral";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Plane, Eye, EyeOff, User, Building2, ArrowRight, Gift, CheckCircle2, XCircle } from "lucide-react";
+import { Eye, EyeOff, User, Building2, ArrowRight, Gift, CheckCircle2, XCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useBranding } from "@/contexts/branding-context";
+import { SiteLogo } from "@/components/brand-logo";
 
 export default function Signup() {
   const [, setLocation] = useLocation();
   const searchStr = useSearch();
   const { signup } = useAuth();
   const { toast } = useToast();
+  const { branding } = useBranding();
 
   // Pre-fill referral code from URL ?ref=WWXXXXX
   const prefilledRef = new URLSearchParams(searchStr).get("ref") ?? "";
@@ -83,7 +85,7 @@ export default function Signup() {
             description: "₹50 has been added to your Travel Credits wallet!",
           });
         } else {
-          toast({ title: "Account Created!", description: `Welcome to ${APP_NAME}!` });
+          toast({ title: "Account Created!", description: `Welcome to ${branding.companyName}!` });
         }
         setLocation("/bookings");
       } else if (result.error === "duplicate_email") {
@@ -109,10 +111,13 @@ export default function Signup() {
         <div className="text-center mb-8">
           <Link href="/">
             <div className="inline-flex items-center gap-2 mb-4 cursor-pointer hover:opacity-80 transition-opacity">
-              <div className="bg-primary text-primary-foreground p-2 rounded-lg">
-                <Plane className="w-6 h-6" />
-              </div>
-              <span className="text-2xl font-bold">{APP_NAME}</span>
+              <SiteLogo
+                logoUrl={branding.logoUrl}
+                companyName={branding.companyName}
+                containerClass="w-10 h-10 rounded-lg bg-primary flex items-center justify-center"
+                iconClass="w-6 h-6 text-primary-foreground"
+              />
+              <span className="text-2xl font-bold">{branding.companyName}</span>
             </div>
           </Link>
           <h1 className="text-3xl font-bold mb-2">Create Account</h1>

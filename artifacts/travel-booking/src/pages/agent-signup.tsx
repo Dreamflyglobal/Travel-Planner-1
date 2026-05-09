@@ -1,4 +1,5 @@
-import { APP_NAME } from "@/lib/app-config";
+import { useBranding } from "@/contexts/branding-context";
+import { SiteLogo } from "@/components/brand-logo";
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/contexts/auth-context";
@@ -6,13 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Building2, Eye, EyeOff, Plane } from "lucide-react";
+import { Building2, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function AgentSignup() {
   const [, setLocation] = useLocation();
   const { signup } = useAuth();
   const { toast } = useToast();
+  const { branding } = useBranding();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -95,10 +97,13 @@ export default function AgentSignup() {
         <div className="text-center mb-8">
           <Link href="/">
             <div className="inline-flex items-center gap-2 mb-4 cursor-pointer hover:opacity-80 transition-opacity">
-              <div className="bg-blue-600 text-white p-2 rounded-lg">
-                <Plane className="w-6 h-6" />
-              </div>
-              <span className="text-2xl font-bold">{APP_NAME}</span>
+              <SiteLogo
+                logoUrl={branding.logoUrl}
+                companyName={branding.companyName}
+                containerClass="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center"
+                iconClass="w-6 h-6 text-white"
+              />
+              <span className="text-2xl font-bold">{branding.companyName}</span>
             </div>
           </Link>
           <h1 className="text-3xl font-bold mb-2">Agent Registration</h1>

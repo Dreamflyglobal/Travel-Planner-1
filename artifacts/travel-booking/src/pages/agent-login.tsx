@@ -1,4 +1,3 @@
-import { APP_NAME } from "@/lib/app-config";
 import { useState } from "react";
 import { useLocation, Link } from "wouter";
 import { useAuth } from "@/contexts/auth-context";
@@ -14,16 +13,18 @@ import {
   BadgeCheck,
   TrendingUp,
   Wallet,
-  Globe,
   ShieldCheck,
   Eye,
   EyeOff,
   User,
 } from "lucide-react";
+import { useBranding } from "@/contexts/branding-context";
+import { SiteLogo } from "@/components/brand-logo";
 
 export default function AgentLogin() {
   const [, setLocation] = useLocation();
   const { loginAgent, isAuthenticated, user } = useAuth();
+  const { branding } = useBranding();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -74,11 +75,14 @@ export default function AgentLogin() {
 
         {/* Logo */}
         <div className="relative flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center backdrop-blur-sm">
-            <Globe className="w-7 h-7 text-white" />
-          </div>
+          <SiteLogo
+            logoUrl={branding.logoUrl}
+            companyName={branding.companyName}
+            containerClass="w-12 h-12 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center backdrop-blur-sm"
+            iconClass="w-7 h-7 text-white"
+          />
           <div>
-            <p className="text-xl font-bold tracking-tight">{APP_NAME}</p>
+            <p className="text-xl font-bold tracking-tight">{branding.companyName}</p>
             <p className="text-blue-300 text-xs font-medium uppercase tracking-widest">B2B Agent Portal</p>
           </div>
         </div>
@@ -93,7 +97,7 @@ export default function AgentLogin() {
               </span>
             </h1>
             <p className="text-blue-200 text-lg leading-relaxed">
-              Access exclusive B2B rates, track your commissions, and grow your travel business with {APP_NAME}.
+              Access exclusive B2B rates, track your commissions, and grow your travel business with {branding.companyName}.
             </p>
           </div>
 
@@ -134,11 +138,14 @@ export default function AgentLogin() {
         <div className="w-full max-w-md">
           {/* Mobile logo */}
           <div className="lg:hidden flex items-center gap-2 mb-8 justify-center">
-            <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
-              <Globe className="w-6 h-6 text-white" />
-            </div>
+            <SiteLogo
+              logoUrl={branding.logoUrl}
+              companyName={branding.companyName}
+              containerClass="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center"
+              iconClass="w-6 h-6 text-white"
+            />
             <div>
-              <p className="text-white font-bold text-lg">{APP_NAME}</p>
+              <p className="text-white font-bold text-lg">{branding.companyName}</p>
               <p className="text-blue-300 text-[10px] font-medium uppercase tracking-widest">B2B Agent Portal</p>
             </div>
           </div>

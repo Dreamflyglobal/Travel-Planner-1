@@ -1,5 +1,5 @@
-import { APP_NAME } from "@/lib/app-config";
 import { useState } from "react";
+import { useBranding } from "@/contexts/branding-context";
 import { useLocation } from "wouter";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ const POPULAR_CITIES = [
 
 export default function Hotels() {
   const [, setLocation] = useLocation();
+  const { branding } = useBranding();
   const today = new Date().toISOString().split("T")[0];
   const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
 
@@ -183,7 +184,7 @@ export default function Hotels() {
       {/* Why Dream Fly Global */}
       <section className="bg-blue-50 border-y">
         <div className="container mx-auto px-4 py-12">
-          <h2 className="text-2xl font-extrabold text-slate-900 text-center mb-8">Why Book with {APP_NAME}?</h2>
+          <h2 className="text-2xl font-extrabold text-slate-900 text-center mb-8">Why Book with {branding.companyName}?</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
               { icon: Star,     title: "Best Price Guarantee",  desc: "Find a lower price? We'll match it." },
