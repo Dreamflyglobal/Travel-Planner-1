@@ -143192,6 +143192,7 @@ function drizzle(...params) {
 var schema_exports = {};
 __export(schema_exports, {
   apiKeysTable: () => apiKeysTable,
+  bookingCountersTable: () => bookingCountersTable,
   bookingRefundsTable: () => bookingRefundsTable,
   bookingsTable: () => bookingsTable,
   busesTable: () => busesTable,
@@ -154701,6 +154702,11 @@ var packagesTable = pgTable("packages", {
 var insertPackageSchema = createInsertSchema(packagesTable).omit({ id: true, createdAt: true });
 
 // ../../lib/db/src/schema/bookings.ts
+var bookingCountersTable = pgTable("booking_counters", {
+  type: text("type").primaryKey(),
+  // "FLY", "BUS", "HOT", …
+  counter: integer("counter").notNull().default(0)
+});
 var bookingsTable = pgTable("bookings", {
   id: serial("id").primaryKey(),
   bookingRef: text("booking_ref"),
@@ -157173,6 +157179,37 @@ var packages_default = router8;
 // src/routes/bookings.ts
 var import_express9 = __toESM(require_express2(), 1);
 init_drizzle_orm();
+
+// src/lib/booking-id.ts
+init_drizzle_orm();
+var TYPE_PREFIX = {
+  flight: "FLY",
+  bus: "BUS",
+  hotel: "HOT",
+  package: "HOL",
+  holiday: "HOL",
+  activity: "ACT",
+  activities: "ACT",
+  visa: "VISA",
+  insurance: "INS",
+  car: "CAR",
+  cars: "CAR"
+};
+async function nextBookingRef(bookingType) {
+  const prefix = TYPE_PREFIX[bookingType.toLowerCase()] ?? "BKG";
+  const result = await db.execute(sql`
+    INSERT INTO booking_counters (type, counter)
+    VALUES (${prefix}, 1)
+    ON CONFLICT (type) DO UPDATE
+    SET counter = booking_counters.counter + 1
+    RETURNING counter
+  `);
+  const counter = Number(result.rows[0].counter);
+  const padded = String(counter).padStart(5, "0");
+  return `${prefix}${padded}`;
+}
+
+// src/routes/bookings.ts
 var router9 = (0, import_express9.Router)();
 async function findOrCreateUser(phone, email3, name2) {
   const cleanPhone = phone?.trim() || null;
@@ -157281,7 +157318,9 @@ router9.post("/bookings", async (req, res) => {
         created ? `\u{1F195} Booking: auto-created user ${userId} for phone=${passengerPhone} email=${passengerEmail}` : `\u2705 Booking: found existing user ${userId} for phone=${passengerPhone} email=${passengerEmail}`
       );
     }
-    const bookingRef = details.bookingRef || bookingData.bookingRef || null;
+    const incomingRef = details.bookingRef || bookingData.bookingRef || null;
+    const bookingType_str = bookingData.bookingType || "flight";
+    const bookingRef = incomingRef && incomingRef.trim() !== "" ? incomingRef.trim() : await nextBookingRef(bookingType_str);
     const title = bookingData.title || details.title || null;
     const referenceId = parseInt(String(bookingData.referenceId || 0), 10) || 0;
     const totalPrice = String(details.amount || bookingData.totalPrice || 0);
@@ -160742,7 +160781,9 @@ router22.get("/admin/bookings", requireAdmin, async (req, res) => {
         ilike(bookingsTable.bookingRef, pattern),
         ilike(bookingsTable.passengerEmail, pattern),
         ilike(bookingsTable.passengerName, pattern),
-        ilike(bookingsTable.passengerPhone, pattern)
+        ilike(bookingsTable.passengerPhone, pattern),
+        ilike(bookingsTable.paymentId, pattern),
+        ilike(bookingsTable.razorpayOrderId, pattern)
       );
       if (searchPredicate) where.push(searchPredicate);
     }

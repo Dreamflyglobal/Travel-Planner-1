@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { logger } from "../lib/logger.js";
 import { eq, desc, or } from "drizzle-orm";
 import { db, bookingsTable, usersTable } from "@workspace/db";
+import { nextBookingRef } from "../lib/booking-id.js";
 import {
   ListBookingsResponse,
   CreateBookingBody,
@@ -195,7 +196,12 @@ router.post("/bookings", async (req, res): Promise<void> => {
     }
     // ─────────────────────────────────────────────────────────────────────────
 
-    const bookingRef = (details.bookingRef || bookingData.bookingRef || null) as string | null;
+    // Generate sequential readable booking reference if not already provided by the frontend
+    const incomingRef = (details.bookingRef || bookingData.bookingRef || null) as string | null;
+    const bookingType_str = (bookingData.bookingType || "flight") as string;
+    const bookingRef = incomingRef && incomingRef.trim() !== ""
+      ? incomingRef.trim()
+      : await nextBookingRef(bookingType_str);
     const title = (bookingData.title || details.title || null) as string | null;
     const referenceId = parseInt(String(bookingData.referenceId || 0), 10) || 0;
     const totalPrice = String(details.amount || bookingData.totalPrice || 0);

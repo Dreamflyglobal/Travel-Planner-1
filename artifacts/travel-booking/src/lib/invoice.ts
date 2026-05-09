@@ -86,8 +86,25 @@ function storeInvoice(inv: StoredInvoice) {
   localStorage.setItem(LS_KEY, JSON.stringify(list));
 }
 
-export function invoiceNumber(bookingId: string) {
-  return `DFG-INV-${bookingId.replace(/[^A-Z0-9]/gi, "").toUpperCase().slice(-8)}`;
+/**
+ * Derive a professional invoice number from a booking reference.
+ *
+ * New sequential IDs:
+ *   FLY00001  → DFG-FLY-INV-00001
+ *   BUS00042  → DFG-BUS-INV-00042
+ *   HOT00003  → DFG-HOT-INV-00003
+ *   HOL00001  → DFG-HOL-INV-00001
+ *
+ * Legacy random IDs (backward-compat):
+ *   BK-M0TSAIDR → DFG-INV-M0TSAIDR
+ */
+export function invoiceNumber(bookingId: string): string {
+  const newFmt = bookingId.match(/^(FLY|BUS|HOT|HOL|ACT|VISA|INS|CAR)(\d+)$/i);
+  if (newFmt) {
+    return `DFG-${newFmt[1].toUpperCase()}-INV-${newFmt[2]}`;
+  }
+  const stripped = bookingId.replace(/[^A-Z0-9]/gi, "").toUpperCase().slice(-8);
+  return `DFG-INV-${stripped}`;
 }
 
 // ─── Colour palette ───────────────────────────────────────────────────────────
@@ -149,33 +166,46 @@ export function generateInvoicePDF(data: InvoiceData): void {
 
   // ── Invoice meta bar ──────────────────────────────────────────────────────
   doc.setFillColor(...C.bg);
-  doc.rect(0, 42, W, 22, "F");
+  doc.rect(0, 42, W, 28, "F");
 
   const leftX = 14;
-  const col2 = 80, col3 = 140;
-  const metaY = 50;
+  const col2 = 85, col3 = 152;
+  const metaY = 52;
 
   doc.setTextColor(...C.mid);
   doc.setFontSize(7);
   doc.setFont("helvetica", "normal");
-  doc.text("INVOICE NUMBER", leftX, metaY - 3);
-  doc.text("BOOKING ID", col2, metaY - 3);
-  doc.text("INVOICE DATE", col3, metaY - 3);
+  doc.text("INVOICE NUMBER", leftX, metaY - 5);
+  doc.text("BOOKING ID", col2, metaY - 5);
+  doc.text("INVOICE DATE", col3, metaY - 5);
+
+  // Highlight boxes for Booking ID and Invoice Number
+  doc.setFillColor(...C.primary);
+  doc.roundedRect(leftX - 1, metaY - 1, 65, 9, 1.5, 1.5, "F");
+  doc.setTextColor(...C.white);
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.text(invNum, leftX + 2, metaY + 5.5);
+
+  doc.setFillColor(30, 64, 175); // blue-800
+  doc.roundedRect(col2 - 1, metaY - 1, 55, 9, 1.5, 1.5, "F");
+  doc.setTextColor(...C.white);
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "bold");
+  doc.text(data.bookingId, col2 + 2, metaY + 5.5);
 
   doc.setTextColor(...C.dark);
   doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
-  doc.text(invNum, leftX, metaY + 2);
-  doc.text(data.bookingId, col2, metaY + 2);
-  doc.text(new Date(generatedAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }), col3, metaY + 2);
+  doc.text(new Date(generatedAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }), col3, metaY + 5);
 
   // Divider
   doc.setDrawColor(...C.divider);
   doc.setLineWidth(0.3);
-  doc.line(0, 64, W, 64);
+  doc.line(0, 70, W, 70);
 
   // ── Two-column: Bill To + Service Details ────────────────────────────────
-  let y = 74;
+  let y = 80;
 
   // Bill To
   doc.setFontSize(7);
@@ -390,8 +420,8 @@ export function generateInvoicePDF(data: InvoiceData): void {
   const notes = [
     "Please carry a valid government-issued photo ID during your journey.",
     "Check-in opens 2 hours before departure for flights.",
-    "For cancellations or changes, contact us at " + COMPANY.phone,
-    "This is a ${APP_NAME} branded invoice. Provider details are not disclosed.",
+    `For cancellations or changes, contact us at ${COMPANY.phone}`,
+    `This is a ${APP_NAME} branded invoice. Provider details are not disclosed.`,
   ];
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.5);
@@ -407,7 +437,7 @@ export function generateInvoicePDF(data: InvoiceData): void {
   doc.setTextColor(...C.white);
   doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
-  doc.text("Thank you for choosing ${APP_NAME}!", W / 2, 280, { align: "center" });
+  doc.text(`Thank you for choosing ${APP_NAME}!`, W / 2, 280, { align: "center" });
 
   doc.setFontSize(7);
   doc.setFont("helvetica", "normal");

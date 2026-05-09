@@ -173,6 +173,8 @@ router.get("/admin/bookings", requireAdmin, async (req, res) => {
         ilike(bookingsTable.passengerEmail, pattern),
         ilike(bookingsTable.passengerName, pattern),
         ilike(bookingsTable.passengerPhone, pattern),
+        ilike(bookingsTable.paymentId, pattern),
+        ilike(bookingsTable.razorpayOrderId, pattern),
       );
       if (searchPredicate) where.push(searchPredicate as never);
     }

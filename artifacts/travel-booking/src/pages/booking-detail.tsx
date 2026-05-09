@@ -598,21 +598,57 @@ export default function BookingDetail() {
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-5 space-y-4">
+              {/* Booking ID — prominent */}
               <div>
-                <p className="text-xs text-muted-foreground mb-1">Booking ID</p>
-                <p className="font-mono font-bold text-base bg-muted px-3 py-1.5 rounded inline-block">{bookingId}</p>
+                <p className="text-xs text-muted-foreground mb-1.5 uppercase tracking-wide font-semibold">Booking ID</p>
+                <p className={`font-mono font-extrabold text-xl tracking-widest ${accent.text} bg-muted px-3 py-2 rounded-lg inline-block`}>{bookingId}</p>
               </div>
+              {/* Invoice Number */}
               <div>
-                <p className="text-xs text-muted-foreground mb-1">Payment ID</p>
-                <p className="font-mono text-sm text-muted-foreground">{booking.paymentId || booking.orderId || "—"}</p>
+                <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide font-semibold">Invoice Number</p>
+                <p className="font-mono text-sm font-bold text-slate-700">{(() => {
+                  const newFmt = bookingId.match(/^(FLY|BUS|HOT|HOL|ACT|VISA|INS|CAR)(\d+)$/i);
+                  if (newFmt) return `DFG-${newFmt[1].toUpperCase()}-INV-${newFmt[2]}`;
+                  const s = bookingId.replace(/[^A-Z0-9]/gi, "").toUpperCase().slice(-8);
+                  return `DFG-INV-${s}`;
+                })()}</p>
               </div>
+              {/* Payment ID */}
               <div>
-                <p className="text-xs text-muted-foreground mb-1">Booked On</p>
-                <p className="font-semibold text-sm">
-                  {booking.bookingDate || booking.timestamp || booking.createdAt
-                    ? dateStr(booking.bookingDate || booking.timestamp || booking.createdAt || "")
-                    : "—"}
-                </p>
+                <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide font-semibold">Payment ID</p>
+                <p className="font-mono text-xs text-muted-foreground break-all">{booking.paymentId || booking.orderId || "—"}</p>
+              </div>
+              {/* Service & Date row */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide font-semibold">Service</p>
+                  <p className="font-semibold text-sm capitalize">{bookingType}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide font-semibold">Booked On</p>
+                  <p className="font-semibold text-sm">
+                    {booking.bookingDate || booking.timestamp || booking.createdAt
+                      ? dateStr(booking.bookingDate || booking.timestamp || booking.createdAt || "")
+                      : "—"}
+                  </p>
+                </div>
+              </div>
+              {/* Payment status */}
+              <div>
+                <p className="text-xs text-muted-foreground mb-1.5 uppercase tracking-wide font-semibold">Payment Status</p>
+                <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full border ${
+                  (booking.paymentStatus || "paid") === "paid"
+                    ? "bg-green-50 text-green-700 border-green-200"
+                    : (booking.paymentStatus === "failed"
+                      ? "bg-red-50 text-red-700 border-red-200"
+                      : "bg-amber-50 text-amber-700 border-amber-200")
+                }`}>
+                  {(booking.paymentStatus || "paid") === "paid" && <CheckCircle2 className="w-3 h-3" />}
+                  {booking.paymentStatus === "failed" && <XCircle className="w-3 h-3" />}
+                  {(booking.paymentStatus === "pending" || !booking.paymentStatus) && <AlertCircle className="w-3 h-3" />}
+                  {booking.paymentStatus === "paid" ? "Payment Confirmed" :
+                   booking.paymentStatus === "failed" ? "Payment Failed" : "Payment Pending"}
+                </span>
               </div>
               <div className="pt-2 border-t">
                 <div className="flex justify-between items-center">
@@ -625,7 +661,7 @@ export default function BookingDetail() {
                 </div>
                 <div className={`flex justify-between items-center mt-3 pt-3 border-t font-bold text-lg`}>
                   <span>Total Paid</span>
-                  <span className={accent.text}>₹{totalAmount.toFixed(2)}</span>
+                  <span className={accent.text}>₹{totalAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
                 </div>
               </div>
             </CardContent>

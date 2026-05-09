@@ -11,6 +11,15 @@ import { createInsertSchema } from "drizzle-zod";
 import { number } from "zod";
 import { z } from "zod/v4";
 
+/**
+ * booking_counters — one row per service prefix, atomically incremented on
+ * every new booking to generate sequential readable IDs (FLY00001, BUS00001…).
+ */
+export const bookingCountersTable = pgTable("booking_counters", {
+  type:    text("type").primaryKey(),          // "FLY", "BUS", "HOT", …
+  counter: integer("counter").notNull().default(0),
+});
+
 export const bookingsTable = pgTable("bookings", {
   id: serial("id").primaryKey(),
   bookingRef: text("booking_ref"),
