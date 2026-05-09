@@ -11,16 +11,19 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 }
 
 const ALLOWED_MIME: Record<string, string> = {
-  "image/png":  ".png",
-  "image/jpeg": ".jpg",
-  "image/jpg":  ".jpg",
-  "image/webp": ".webp",
-  "image/svg+xml": ".svg",
-  "image/gif":  ".gif",
+  "image/png":                  ".png",
+  "image/jpeg":                 ".jpg",
+  "image/jpg":                  ".jpg",
+  "image/webp":                 ".webp",
+  "image/svg+xml":              ".svg",
+  "image/gif":                  ".gif",
+  "image/x-icon":               ".ico",
+  "image/vnd.microsoft.icon":   ".ico",
 };
 
-const MAX_LOGO_BYTES    = 5 * 1024 * 1024;
-const MAX_FAVICON_BYTES = 1 * 1024 * 1024;
+const MAX_LOGO_BYTES    = 5  * 1024 * 1024;
+const MAX_FAVICON_BYTES = 2  * 1024 * 1024;
+const RAW_CAP_BYTES     = 20 * 1024 * 1024;
 
 function makeStorage(prefix: string) {
   return multer.diskStorage({
@@ -41,19 +44,19 @@ function fileFilter(
   if (ALLOWED_MIME[file.mimetype]) {
     cb(null, true);
   } else {
-    cb(new Error(`Unsupported file type: ${file.mimetype}. Allowed: PNG, JPG, WEBP, SVG.`));
+    cb(new Error(`Unsupported file type: ${file.mimetype}. Allowed: PNG, JPG, WEBP, SVG, ICO.`));
   }
 }
 
 const uploadLogo = multer({
   storage: makeStorage("logo"),
-  limits:  { fileSize: MAX_LOGO_BYTES },
+  limits:  { fileSize: Math.min(MAX_LOGO_BYTES, RAW_CAP_BYTES) },
   fileFilter,
 });
 
 const uploadFavicon = multer({
   storage: makeStorage("favicon"),
-  limits:  { fileSize: MAX_FAVICON_BYTES },
+  limits:  { fileSize: Math.min(MAX_FAVICON_BYTES, RAW_CAP_BYTES) },
   fileFilter,
 });
 
@@ -80,7 +83,7 @@ router.post("/upload/favicon", uploadFavicon.single("file"), (req, res) => {
 router.use(
   (err: any, _req: Express.Request, res: Express.Response, _next: Express.NextFunction) => {
     if (err?.code === "LIMIT_FILE_SIZE") {
-      res.status(413).json({ error: "File too large." });
+      res.status(413).json({ error: "File too large. Please compress the image and try again." });
       return;
     }
     res.status(400).json({ error: err?.message ?? "Upload failed." });

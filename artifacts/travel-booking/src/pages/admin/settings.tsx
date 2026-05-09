@@ -57,10 +57,62 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-const MAX_LOGO_BYTES    = 5 * 1024 * 1024;
-const MAX_FAVICON_BYTES = 1 * 1024 * 1024;
+const MAX_LOGO_BYTES    = 5  * 1024 * 1024;
+const MAX_FAVICON_BYTES = 2  * 1024 * 1024;
 
-const ALLOWED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp", "image/svg+xml", "image/gif"];
+const ALLOWED_IMAGE_TYPES = [
+  "image/png", "image/jpeg", "image/jpg", "image/webp",
+  "image/svg+xml", "image/gif", "image/x-icon", "image/vnd.microsoft.icon",
+];
+
+const PASSTHROUGH_TYPES = new Set(["image/svg+xml", "image/x-icon", "image/vnd.microsoft.icon"]);
+
+async function compressImage(
+  file: File,
+  maxDimension: number,
+  targetBytes: number,
+): Promise<File> {
+  if (PASSTHROUGH_TYPES.has(file.type)) return file;
+  if (file.size <= targetBytes) {
+    let bitmap: ImageBitmap;
+    try { bitmap = await createImageBitmap(file); } catch { return file; }
+    if (bitmap.width <= maxDimension && bitmap.height <= maxDimension) {
+      bitmap.close();
+      return file;
+    }
+    bitmap.close();
+  }
+
+  let bitmap: ImageBitmap;
+  try { bitmap = await createImageBitmap(file); } catch { return file; }
+
+  const { width, height } = bitmap;
+  const scale = Math.min(1, maxDimension / width, maxDimension / height);
+  const canvas = document.createElement("canvas");
+  canvas.width  = Math.round(width  * scale);
+  canvas.height = Math.round(height * scale);
+  const ctx = canvas.getContext("2d")!;
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+
+  const outputType = file.type === "image/png" ? "image/png" : "image/jpeg";
+  let quality = 0.88;
+  let blob: Blob | null = null;
+
+  for (let attempt = 0; attempt < 6; attempt++) {
+    blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, outputType, quality),
+    );
+    if (!blob || blob.size <= targetBytes) break;
+    quality -= 0.1;
+    if (quality < 0.3) break;
+  }
+
+  if (!blob) return file;
+  const ext  = outputType === "image/jpeg" ? ".jpg" : ".png";
+  const name = file.name.replace(/\.[^.]+$/, "") + ext;
+  return new File([blob], name, { type: outputType });
+}
 
 const CURRENCIES: { value: Currency; label: string }[] = [
   { value: "INR", label: "₹ INR — Indian Rupee" },
@@ -125,27 +177,32 @@ export default function AdminSettings() {
     if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
       toast({
         title: "Unsupported file type",
-        description: "Allowed formats: PNG, JPG, JPEG, WEBP, SVG, GIF.",
+        description: "Allowed formats: PNG, JPG, JPEG, WEBP, SVG, ICO.",
         variant: "destructive",
       });
       return;
     }
 
-    const limit = kind === "logo" ? MAX_LOGO_BYTES : MAX_FAVICON_BYTES;
-    if (file.size > limit) {
-      toast({
-        title: "File too large",
-        description: `${kind === "logo" ? "Logo" : "Favicon"} must be smaller than ${(limit / 1_048_576).toFixed(0)} MB.`,
-        variant: "destructive",
-      });
-      return;
-    }
+    const limit      = kind === "logo" ? MAX_LOGO_BYTES : MAX_FAVICON_BYTES;
+    const maxDim     = kind === "logo" ? 1200 : 256;
+    const targetSize = kind === "logo" ? 4 * 1024 * 1024 : 1.5 * 1024 * 1024;
 
     if (kind === "logo") setUploadingLogo(true);
     else setUploadingFavicon(true);
 
     try {
-      const url = await uploadImageFile(file, kind);
+      const processed = await compressImage(file, maxDim, targetSize);
+
+      if (processed.size > limit) {
+        toast({
+          title: "File too large",
+          description: `${kind === "logo" ? "Logo" : "Favicon"} must be under ${(limit / 1_048_576).toFixed(0)} MB even after compression. Please use a smaller image.`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const url = await uploadImageFile(processed, kind);
       if (kind === "logo") patchBranding({ logoUrl: url });
       else patchBranding({ faviconUrl: url });
       toast({
@@ -305,7 +362,7 @@ export default function AdminSettings() {
               Header Logo
             </CardTitle>
             <CardDescription>
-              PNG, JPG, SVG, or WebP — under 1.5&nbsp;MB. Shows in the top-left corner of every page.
+              PNG, JPG, WEBP, SVG, or ICO — up to 5&nbsp;MB (auto-compressed if needed). Shows in the top-left corner of every page.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -318,7 +375,7 @@ export default function AdminSettings() {
                 <input
                   ref={logoInputRef}
                   type="file"
-                  accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                  accept="image/png,image/jpeg,image/webp,image/svg+xml,image/x-icon,image/vnd.microsoft.icon"
                   className="hidden"
                   onChange={(e) => handleFileSelect(e, "logo")}
                   data-testid="input-file-logo"
@@ -354,7 +411,7 @@ export default function AdminSettings() {
               Browser Tab Favicon
             </CardTitle>
             <CardDescription>
-              PNG, ICO, SVG, or WebP — under 500&nbsp;KB. Square 32×32 or 64×64 recommended.
+              PNG, ICO, SVG, or WEBP — up to 2&nbsp;MB (auto-compressed if needed). Square 32×32 or 64×64 recommended.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -364,7 +421,7 @@ export default function AdminSettings() {
                 <input
                   ref={faviconInputRef}
                   type="file"
-                  accept="image/png,image/x-icon,image/vnd.microsoft.icon,image/svg+xml,image/webp"
+                  accept="image/png,image/jpeg,image/webp,image/x-icon,image/vnd.microsoft.icon,image/svg+xml"
                   className="hidden"
                   onChange={(e) => handleFileSelect(e, "favicon")}
                   data-testid="input-file-favicon"

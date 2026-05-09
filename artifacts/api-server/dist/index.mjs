@@ -174805,10 +174805,13 @@ var ALLOWED_MIME = {
   "image/jpg": ".jpg",
   "image/webp": ".webp",
   "image/svg+xml": ".svg",
-  "image/gif": ".gif"
+  "image/gif": ".gif",
+  "image/x-icon": ".ico",
+  "image/vnd.microsoft.icon": ".ico"
 };
 var MAX_LOGO_BYTES = 5 * 1024 * 1024;
-var MAX_FAVICON_BYTES = 1 * 1024 * 1024;
+var MAX_FAVICON_BYTES = 2 * 1024 * 1024;
+var RAW_CAP_BYTES = 20 * 1024 * 1024;
 function makeStorage(prefix) {
   return import_multer.default.diskStorage({
     destination: (_req, _file2, cb) => cb(null, UPLOADS_DIR),
@@ -174823,17 +174826,17 @@ function fileFilter(_req, file2, cb) {
   if (ALLOWED_MIME[file2.mimetype]) {
     cb(null, true);
   } else {
-    cb(new Error(`Unsupported file type: ${file2.mimetype}. Allowed: PNG, JPG, WEBP, SVG.`));
+    cb(new Error(`Unsupported file type: ${file2.mimetype}. Allowed: PNG, JPG, WEBP, SVG, ICO.`));
   }
 }
 var uploadLogo = (0, import_multer.default)({
   storage: makeStorage("logo"),
-  limits: { fileSize: MAX_LOGO_BYTES },
+  limits: { fileSize: Math.min(MAX_LOGO_BYTES, RAW_CAP_BYTES) },
   fileFilter
 });
 var uploadFavicon = (0, import_multer.default)({
   storage: makeStorage("favicon"),
-  limits: { fileSize: MAX_FAVICON_BYTES },
+  limits: { fileSize: Math.min(MAX_FAVICON_BYTES, RAW_CAP_BYTES) },
   fileFilter
 });
 var router32 = (0, import_express32.Router)();
@@ -174856,7 +174859,7 @@ router32.post("/upload/favicon", uploadFavicon.single("file"), (req, res) => {
 router32.use(
   (err, _req, res, _next) => {
     if (err?.code === "LIMIT_FILE_SIZE") {
-      res.status(413).json({ error: "File too large." });
+      res.status(413).json({ error: "File too large. Please compress the image and try again." });
       return;
     }
     res.status(400).json({ error: err?.message ?? "Upload failed." });
