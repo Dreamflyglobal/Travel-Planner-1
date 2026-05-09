@@ -242,8 +242,8 @@ function FlightDetails({ d }: { d: Record<string, any> }) {
         <Field label="Arrival" value={d.arrivalTime || d.arrival?.time || d.arrival} />
         <Field label="Duration" value={d.duration} />
         <Field label="Class" value={d.cabinClass || d.class || d.fareClass} />
-        <Field label="PNR / Ticket No." value={d.pnr || d.ticketNumber || d.bookingCode} mono />
-        <Field label="Airline PNR" value={d.airlinePnr || d.providerPnr} mono />
+        <Field label="PNR / Ticket No." value={d.pnr || d.ticketNumber || d.bookingCode || "PNR Pending"} mono />
+        <Field label="Airline PNR" value={d.airlinePnr || d.providerPnr || "PNR Pending"} mono />
         <Field label="From City" value={d.from || d.origin} />
         <Field label="To City" value={d.to || d.destination} />
       </div>
@@ -353,7 +353,7 @@ function BusDetails({ d }: { d: Record<string, any> }) {
         <Field label="Seat Numbers" value={Array.isArray(d.seatNumbers) ? d.seatNumbers.join(", ") : d.seatNumbers} />
         <Field label="Boarding Point" value={d.boardingPoint} icon={<MapPin className="w-3 h-3" />} />
         <Field label="Dropping Point" value={d.droppingPoint} icon={<MapPin className="w-3 h-3" />} />
-        <Field label="Ticket No." value={d.ticketNumber || d.pnr} mono />
+        <Field label="Ticket No." value={d.ticketNumber || d.pnr || "PNR Pending"} mono />
         <Field label="Bus Type" value={d.busType} />
       </div>
       {Array.isArray(d.passengers) && d.passengers.length > 0 && (

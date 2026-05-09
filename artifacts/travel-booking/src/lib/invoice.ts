@@ -90,18 +90,27 @@ function storeInvoice(inv: StoredInvoice) {
  * Derive a professional invoice number from a booking reference.
  *
  * New sequential IDs:
+ *   FLT-BK-000001  → FLT-INV-000001
+ *   BUS-BK-000042  → BUS-INV-000042
+ *   HTL-BK-000003  → HTL-INV-000003
+ *   HLD-BK-000001  → HLD-INV-000001
+ *
+ * Legacy sequential IDs (backward-compat):
  *   FLY00001  → DFG-FLY-INV-00001
- *   BUS00042  → DFG-BUS-INV-00042
- *   HOT00003  → DFG-HOT-INV-00003
- *   HOL00001  → DFG-HOL-INV-00001
  *
  * Legacy random IDs (backward-compat):
  *   BK-M0TSAIDR → DFG-INV-M0TSAIDR
  */
 export function invoiceNumber(bookingId: string): string {
-  const newFmt = bookingId.match(/^(FLY|BUS|HOT|HOL|ACT|VISA|INS|CAR)(\d+)$/i);
+  // New format: FLT-BK-000001 → FLT-INV-000001
+  const newFmt = bookingId.match(/^(FLT|BUS|HTL|HLD|ACT|VISA|INS|CAR)-BK-(\d+)$/i);
   if (newFmt) {
-    return `DFG-${newFmt[1].toUpperCase()}-INV-${newFmt[2]}`;
+    return `${newFmt[1].toUpperCase()}-INV-${newFmt[2]}`;
+  }
+  // Legacy sequential: FLY00001 → DFG-FLY-INV-00001
+  const legacyFmt = bookingId.match(/^(FLY|BUS|HOT|HOL|ACT|VISA|INS|CAR)(\d+)$/i);
+  if (legacyFmt) {
+    return `DFG-${legacyFmt[1].toUpperCase()}-INV-${legacyFmt[2]}`;
   }
   const stripped = bookingId.replace(/[^A-Z0-9]/gi, "").toUpperCase().slice(-8);
   return `DFG-INV-${stripped}`;

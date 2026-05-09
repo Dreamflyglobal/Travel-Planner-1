@@ -43,6 +43,7 @@ interface BookingInvoice {
   invoiceNumber?: string;
   generatedAt?: string;
   discount?: number;
+  pnr?: string;
   // Hotel
   hotelName?: string;
   hotelCity?: string;
@@ -87,6 +88,12 @@ const COMPANY = {
 };
 
 function invNum(id: string) {
+  // New format: FLT-BK-000001 → FLT-INV-000001
+  const newFmt = id.match(/^(FLT|BUS|HTL|HLD|ACT|VISA|INS|CAR)-BK-(\d+)$/i);
+  if (newFmt) return `${newFmt[1].toUpperCase()}-INV-${newFmt[2]}`;
+  // Legacy: FLY00001 → DFG-FLY-INV-00001
+  const legacyFmt = id.match(/^(FLY|BUS|HOT|HOL)(\d+)$/i);
+  if (legacyFmt) return `DFG-${legacyFmt[1].toUpperCase()}-INV-${legacyFmt[2]}`;
   return `DFG-INV-${id.replace(/[^A-Z0-9]/gi, "").toUpperCase().slice(-8)}`;
 }
 
@@ -423,8 +430,8 @@ export default function InvoiceView() {
   const baggageCost = (invoice.flightBaggageKg ?? 0) > 0 ? (invoice.flightBaggageCost ?? 0) : 0;
   const discount    = invoice.discount || 0;
 
-  // PNR: derive from paymentId tail
-  const pnr = invoice.bookingId.replace(/[^A-Z0-9]/gi, "").toUpperCase().slice(-6);
+  // PNR: use real API PNR only — never derive a fake one
+  const pnr = invoice.pnr || undefined;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-100 to-slate-200 print:bg-white">
@@ -613,7 +620,7 @@ export default function InvoiceView() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-12 gap-y-0">
               <Row label="Travel Date"   value={fmt(invoice.travelDate)}          icon={<Calendar  className="w-3.5 h-3.5" />} />
               <Row label="Passengers"    value={`${invoice.passengers || 1} Pax`} icon={<Users     className="w-3.5 h-3.5" />} />
-              <Row label="PNR / Ref No." value={pnr}                              icon={<Hash      className="w-3.5 h-3.5" />} mono />
+              <Row label="PNR / Ref No." value={pnr || "PNR Pending"}              icon={<Hash      className="w-3.5 h-3.5" />} mono />
               {invoice.selectedSeats?.length ? (
                 <Row label="Seat Numbers" value={invoice.selectedSeats.join(", ")} icon={<Star className="w-3.5 h-3.5" />} />
               ) : null}
@@ -684,7 +691,7 @@ export default function InvoiceView() {
               {invoice.selectedSeats?.length ? (
                 <Row label="Seat Numbers" value={formatSeats(invoice.selectedSeats)} icon={<Star className="w-3.5 h-3.5" />} />
               ) : null}
-              <Row label="PNR / Ref No." value={pnr} icon={<Hash className="w-3.5 h-3.5" />} mono />
+              <Row label="PNR / Ref No." value={pnr || "PNR Pending"} icon={<Hash className="w-3.5 h-3.5" />} mono />
             </div>
           </div>
         )}

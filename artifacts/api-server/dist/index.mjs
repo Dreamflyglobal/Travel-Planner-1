@@ -165189,11 +165189,11 @@ init_drizzle_orm();
 // src/lib/booking-id.ts
 init_drizzle_orm();
 var TYPE_PREFIX = {
-  flight: "FLY",
+  flight: "FLT",
   bus: "BUS",
-  hotel: "HOT",
-  package: "HOL",
-  holiday: "HOL",
+  hotel: "HTL",
+  package: "HLD",
+  holiday: "HLD",
   activity: "ACT",
   activities: "ACT",
   visa: "VISA",
@@ -165211,12 +165211,48 @@ async function nextBookingRef(bookingType) {
     RETURNING counter
   `);
   const counter = Number(result.rows[0].counter);
-  const padded = String(counter).padStart(5, "0");
-  return `${prefix}${padded}`;
+  const padded = String(counter).padStart(6, "0");
+  return `${prefix}-BK-${padded}`;
+}
+
+// src/lib/location-utils.ts
+function sanitizeLocation(raw) {
+  if (!raw) return "";
+  let s2 = String(raw).trim();
+  s2 = s2.replace(/[\x00-\x1F\x7F\u00AD\u200B\u200C\u200D\u2028\u2029\uFEFF]/g, "");
+  s2 = s2.replace(/!['\u2019\u0060\u0027;]/g, " ");
+  s2 = s2.replace(/[\u2018\u2019\u201c\u201d\uFFFD\u00e2\u0086\u0092]/g, "");
+  s2 = s2.replace(/\u2192/g, " ");
+  s2 = s2.replace(/&rarr;|&#8594;|&#x2192;/gi, " ");
+  s2 = s2.replace(/\s*\([A-Z]{3,4}\)\s*/g, " ");
+  s2 = s2.replace(/\s+[A-Z]{3}$/, "");
+  s2 = s2.replace(/\s+/g, " ").trim();
+  const isAllCaps = s2 === s2.toUpperCase() && /[A-Z]/.test(s2);
+  if (isAllCaps) {
+    s2 = s2.split(" ").map((w) => w.length > 0 ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : "").join(" ");
+  }
+  return s2;
+}
+function formatRoute(from, to, separator = " \u2192 ") {
+  const f3 = sanitizeLocation(from);
+  const t2 = sanitizeLocation(to);
+  if (!f3 && !t2) return "";
+  if (!f3) return t2;
+  if (!t2) return f3;
+  return `${f3}${separator}${t2}`;
 }
 
 // src/routes/bookings.ts
 var router9 = (0, import_express9.Router)();
+function sanitizeTitle(raw) {
+  if (!raw) return null;
+  const s2 = String(raw).trim();
+  const parts = s2.split(/\s*(?:\u2192|!['`'\u2019\u0060;])\s*/);
+  if (parts.length === 2 && parts[0].trim() && parts[1].trim()) {
+    return formatRoute(parts[0], parts[1]);
+  }
+  return s2.replace(/!['\u2019\u0060\u0027;]/g, " ").replace(/\u2192/g, "").replace(/[\u200B\u200C\u200D\uFEFF]/g, "").replace(/\s+/g, " ").trim() || null;
+}
 async function findOrCreateUser(phone, email3, name2) {
   const cleanPhone = phone?.trim() || null;
   const cleanEmail = email3?.trim().toLowerCase() || null;
@@ -165327,7 +165363,7 @@ router9.post("/bookings", async (req, res) => {
     const incomingRef = details.bookingRef || bookingData.bookingRef || null;
     const bookingType_str = bookingData.bookingType || "flight";
     const bookingRef = incomingRef && incomingRef.trim() !== "" ? incomingRef.trim() : await nextBookingRef(bookingType_str);
-    const title = bookingData.title || details.title || null;
+    const title = sanitizeTitle(bookingData.title || details.title || null);
     const referenceId = parseInt(String(bookingData.referenceId || 0), 10) || 0;
     const totalPrice = String(details.amount || bookingData.totalPrice || 0);
     const paymentId = details.paymentId || bookingData.paymentId || null;
@@ -165419,6 +165455,7 @@ router9.get("/invoice/:bookingRef", async (req, res) => {
     selectedSeats: d.selectedSeats || bi.seats || void 0,
     discount: d.discountAmount || void 0,
     roomType: hi.room_type || void 0,
+    pnr: d.pnr || d.pnrNumber || fi.pnr || void 0,
     // Flight
     flightAirline: fi.airline || void 0,
     flightNumber: fi.flightNum || void 0,
@@ -165601,27 +165638,6 @@ import twilio4 from "twilio";
 
 // src/lib/email-service.ts
 import nodemailer2 from "nodemailer";
-
-// src/lib/location-utils.ts
-function sanitizeLocation(raw) {
-  if (!raw) return "";
-  let s2 = String(raw).trim();
-  s2 = s2.replace(/[\x00-\x1F\x7F\u00AD\u200B\u200C\u200D\u2028\u2029\uFEFF]/g, "");
-  s2 = s2.replace(/!['\u2019\u0060\u0027;]/g, " ");
-  s2 = s2.replace(/[\u2018\u2019\u201c\u201d\uFFFD\u00e2\u0086\u0092]/g, "");
-  s2 = s2.replace(/\u2192/g, " ");
-  s2 = s2.replace(/&rarr;|&#8594;|&#x2192;/gi, " ");
-  s2 = s2.replace(/\s*\([A-Z]{3,4}\)\s*/g, " ");
-  s2 = s2.replace(/\s+[A-Z]{3}$/, "");
-  s2 = s2.replace(/\s+/g, " ").trim();
-  const isAllCaps = s2 === s2.toUpperCase() && /[A-Z]/.test(s2);
-  if (isAllCaps) {
-    s2 = s2.split(" ").map((w) => w.length > 0 ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : "").join(" ");
-  }
-  return s2;
-}
-
-// src/lib/email-service.ts
 function createTransport() {
   const user = (process.env.SMTP_USER || "").trim();
   const pass = (process.env.SMTP_PASS || "").trim();

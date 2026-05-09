@@ -3,6 +3,7 @@ import { logger } from "../lib/logger.js";
 import { eq, desc, or } from "drizzle-orm";
 import { db, bookingsTable, usersTable } from "@workspace/db";
 import { nextBookingRef } from "../lib/booking-id.js";
+import { sanitizeLocation, formatRoute } from "../lib/location-utils.js";
 import {
   ListBookingsResponse,
   CreateBookingBody,
@@ -16,6 +17,27 @@ import {
 const router: IRouter = Router();
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
+
+/**
+ * Sanitize a booking title before storing in DB.
+ * Handles route-style titles ("Hyderabad !' Goa" or "Hyderabad → Goa") and plain names.
+ */
+function sanitizeTitle(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const s = String(raw).trim();
+  // Detect route-style titles: split on → or common corruption artifacts
+  const parts = s.split(/\s*(?:\u2192|!['`'\u2019\u0060;])\s*/);
+  if (parts.length === 2 && parts[0].trim() && parts[1].trim()) {
+    return formatRoute(parts[0], parts[1]);
+  }
+  // Non-route title — strip only the corruption artifacts, preserve the rest
+  return s
+    .replace(/!['\u2019\u0060\u0027;]/g, " ")
+    .replace(/\u2192/g, "")
+    .replace(/[\u200B\u200C\u200D\uFEFF]/g, "")
+    .replace(/\s+/g, " ")
+    .trim() || null;
+}
 
 /**
  * Find an existing user by phone or email.
@@ -202,7 +224,7 @@ router.post("/bookings", async (req, res): Promise<void> => {
     const bookingRef = incomingRef && incomingRef.trim() !== ""
       ? incomingRef.trim()
       : await nextBookingRef(bookingType_str);
-    const title = (bookingData.title || details.title || null) as string | null;
+    const title = sanitizeTitle((bookingData.title || details.title || null) as string | null);
     const referenceId = parseInt(String(bookingData.referenceId || 0), 10) || 0;
     const totalPrice = String(details.amount || bookingData.totalPrice || 0);
     const paymentId = (details.paymentId || bookingData.paymentId || null) as string | null;
@@ -317,6 +339,7 @@ router.get("/invoice/:bookingRef", async (req, res): Promise<void> => {
     selectedSeats:  d.selectedSeats || bi.seats || undefined,
     discount:       d.discountAmount || undefined,
     roomType:       hi.room_type || undefined,
+    pnr:            (d.pnr || d.pnrNumber || fi.pnr) || undefined,
     // Flight
     flightAirline:    fi.airline    || undefined,
     flightNumber:     fi.flightNum  || undefined,

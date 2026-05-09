@@ -3214,7 +3214,7 @@ function AdminBookingDetailSheet({
                     <div>
                       <p className="text-xs text-muted-foreground">PNR</p>
                       <p className="font-mono font-bold text-primary">
-                        {d.pnr || fi.pnr || "—"}
+                        {d.pnr || fi.pnr || "PNR Pending"}
                       </p>
                     </div>
                     <div>

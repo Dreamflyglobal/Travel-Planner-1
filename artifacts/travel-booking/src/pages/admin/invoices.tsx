@@ -688,7 +688,7 @@ export default function AdminInvoices() {
             <CardContent className="p-4 text-xs text-slate-400 space-y-1">
               <p className="font-semibold text-slate-500">About Invoices</p>
               <p>• Invoices are auto-generated from every confirmed booking stored in the database.</p>
-              <p>• Invoice numbers follow the format <code className="bg-slate-100 px-1 rounded">DFG-INV-XXXXXXXX</code> derived from the booking reference.</p>
+              <p>• Invoice numbers follow the format <code className="bg-slate-100 px-1 rounded">FLT-INV-000001</code> (flights), <code className="bg-slate-100 px-1 rounded">BUS-INV-000001</code> (buses), <code className="bg-slate-100 px-1 rounded">HTL-INV-000001</code> (hotels), derived from the booking reference.</p>
               <p>• GST (5%) is applicable on the convenience fee component. Full GSTIN details will be updated once registration is complete.</p>
               <p>• For support: {APP_SUPPORT_PHONE} · {APP_SUPPORT_EMAIL}</p>
             </CardContent>
