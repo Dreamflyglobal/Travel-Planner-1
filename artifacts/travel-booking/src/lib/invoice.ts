@@ -101,21 +101,34 @@ function storeInvoice(inv: StoredInvoice) {
  *   FLY00001  → DFG-FLY-INV-00001
  *
  * Legacy random IDs (backward-compat):
- *   BK-M0TSAIDR → DFG-INV-M0TSAIDR
+ *   BK-M0TSAIDR + bookingType "bus" → BUS-INV-M0TSAIDR
+ *   BK-M0TSAIDR (no type)           → DFG-INV-M0TSAIDR
+ *
+ * @param bookingId    The booking reference string.
+ * @param bookingType  Optional booking type used to choose a better prefix for legacy IDs.
  */
-export function invoiceNumber(bookingId: string): string {
+export function invoiceNumber(bookingId: string, bookingType?: string): string {
   // New format: FLT-BK-000001 → FLT-INV-000001
   const newFmt = bookingId.match(/^(FLT|BUS|HTL|HLD|ACT|VISA|INS|CAR)-BK-(\d+)$/i);
   if (newFmt) {
     return `${newFmt[1].toUpperCase()}-INV-${newFmt[2]}`;
+  }
+  // New FLY variant: FLY-BK-000001 → FLY-INV-000001
+  const flyFmt = bookingId.match(/^FLY-BK-(\d+)$/i);
+  if (flyFmt) {
+    return `FLY-INV-${flyFmt[1]}`;
   }
   // Legacy sequential: FLY00001 → DFG-FLY-INV-00001
   const legacyFmt = bookingId.match(/^(FLY|BUS|HOT|HOL|ACT|VISA|INS|CAR)(\d+)$/i);
   if (legacyFmt) {
     return `DFG-${legacyFmt[1].toUpperCase()}-INV-${legacyFmt[2]}`;
   }
+  // For all other formats, use booking type prefix if available
   const stripped = bookingId.replace(/[^A-Z0-9]/gi, "").toUpperCase().slice(-8);
-  return `DFG-INV-${stripped}`;
+  const typePrefix = bookingType
+    ? (({ flight: "FLT", bus: "BUS", hotel: "HTL", package: "HLD" } as Record<string, string>)[bookingType] ?? "DFG")
+    : "DFG";
+  return `${typePrefix}-INV-${stripped}`;
 }
 
 // ─── Colour palette ───────────────────────────────────────────────────────────
@@ -133,31 +146,56 @@ const C = {
 
 // ─── Main generator ───────────────────────────────────────────────────────────
 
-export function generateInvoicePDF(data: InvoiceData): void {
+/**
+ * Converts any logo URL (data URL, absolute URL, or /uploads/ path) into a
+ * base64 data URL suitable for jsPDF addImage. Returns null on failure.
+ */
+async function resolveLogoDataUrl(logoUrl: string | null | undefined): Promise<string | null> {
+  if (!logoUrl) return null;
+  // Already a data URL — use directly
+  if (logoUrl.startsWith("data:")) return logoUrl;
+  // URL or path — fetch and convert to base64
+  try {
+    const res = await fetch(logoUrl);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload  = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+export async function generateInvoicePDF(data: InvoiceData): Promise<void> {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const W = 210;
-  const invNum = invoiceNumber(data.bookingId);
+  const invNum = invoiceNumber(data.bookingId, data.bookingType);
   const generatedAt = new Date().toISOString();
 
-  // ── Sanitize title: fix !' corruption and reformat routes ─────────────────
+  // ── Sanitize title: fix !' corruption, letter-by-letter spacing, reformat routes ──
   const cleanTitle = sanitizeBookingTitle(data.title) || data.title;
 
   // ── Store for admin ──────────────────────────────────────────────────────
   storeInvoice({ ...data, title: cleanTitle, invoiceNumber: invNum, generatedAt });
 
+  // ── Resolve logo to a data URL (fetch from URL if necessary) ─────────────
+  const logoDataUrl = await resolveLogoDataUrl(data.logoDataUrl);
+
   // ── Header strip ─────────────────────────────────────────────────────────
   doc.setFillColor(...C.dark);
   doc.rect(0, 0, W, 42, "F");
 
-  // Logo: use uploaded branding logo if provided, else fall back to initials circle
-  if (data.logoDataUrl && data.logoDataUrl.startsWith("data:")) {
+  // Logo: use uploaded branding logo if resolved, else fall back to initials circle
+  if (logoDataUrl) {
     try {
-      // Detect format from data URL (image/png, image/jpeg, etc.)
-      const mimeMatch = data.logoDataUrl.match(/^data:image\/(\w+);/);
+      const mimeMatch = logoDataUrl.match(/^data:image\/(\w+);/);
       const fmt = mimeMatch ? mimeMatch[1].toUpperCase() : "PNG";
-      doc.addImage(data.logoDataUrl, fmt === "JPG" ? "JPEG" : fmt, 10, 7, 22, 22);
+      doc.addImage(logoDataUrl, fmt === "JPG" ? "JPEG" : fmt, 10, 7, 22, 22);
     } catch {
-      // Fallback to initials circle if image fails
       doc.setFillColor(...C.primary);
       doc.circle(22, 18, 9, "F");
       doc.setTextColor(...C.white);

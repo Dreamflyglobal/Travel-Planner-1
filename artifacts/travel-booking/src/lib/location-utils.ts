@@ -3,6 +3,7 @@
  *
  * Fixes:
  *   - Zero-width characters that cause "H y d e r a b a d" letter-spacing
+ *   - Visible letter-by-letter spacing "V i j a y a w a d a" (regular spaces between chars)
  *   - Encoding artifacts where → (U+2192) appears as !' or similar garbled text
  *   - IATA airport codes in parentheses: "Hyderabad (HYD)" → "Hyderabad"
  *   - ALL_CAPS city names: "BENGALURU" → "Bengaluru"
@@ -42,6 +43,16 @@ export function sanitizeLocation(raw: string | null | undefined): string {
   // ── Normalise whitespace ──────────────────────────────────────────────────
   s = s.replace(/\s+/g, " ").trim();
 
+  // ── Detect and fix letter-by-letter spacing ───────────────────────────────
+  // e.g. "V i j a y a w a d a" → "Vijayawada"
+  // This happens when API data embeds zero-width chars that jsPDF renders as spaces,
+  // or when titles are stored character-by-character with space separators.
+  // Rule: if ALL space-separated tokens are single letters and there are 4+, collapse them.
+  const tokens = s.split(" ").filter(Boolean);
+  if (tokens.length >= 4 && tokens.every((t) => /^[A-Za-z]$/.test(t))) {
+    s = tokens.join("");
+  }
+
   // ── Title-case if entirely all-caps ("HYDERABAD") or all-lowercase ("visakhapatnam") ──
   // Preserves correctly mixed-case names like "New Delhi", "McLeod Ganj"
   const isAllCaps  = s === s.toUpperCase() && /[A-Z]/.test(s);
@@ -74,12 +85,14 @@ export function formatRoute(
 }
 
 /**
- * Sanitizes a booking title that may contain route corruption artifacts.
+ * Sanitizes a booking title that may contain route corruption artifacts
+ * or letter-by-letter spacing from API data.
  *
  * Handles:
- *   "visakhapatnam !' tirupati"  →  "Visakhapatnam → Tirupati"
- *   "Hyderabad → Goa"            →  "Hyderabad → Goa"  (passthrough)
- *   "Hotel Grand Palace"         →  "Hotel Grand Palace"  (non-route, passthrough)
+ *   "V i j a y a w a d a !' C h e n n a i" → "Vijayawada → Chennai"
+ *   "visakhapatnam !' tirupati"              → "Visakhapatnam → Tirupati"
+ *   "Hyderabad → Goa"                        → "Hyderabad → Goa"  (passthrough, re-sanitized)
+ *   "Hotel Grand Palace"                     → "Hotel Grand Palace"  (passthrough)
  */
 export function sanitizeBookingTitle(raw: string | null | undefined): string {
   if (!raw) return "";
@@ -87,20 +100,35 @@ export function sanitizeBookingTitle(raw: string | null | undefined): string {
   // Strip zero-width / invisible characters first
   let s = String(raw).replace(/[\x00-\x1F\x7F\u00AD\u200B\u200C\u200D\u2028\u2029\uFEFF]/g, "").trim();
 
-  // If the title contains a corruption artifact (!' or similar), treat it as a route
+  // Helper: sanitize one route segment, handling "Operator · City" sub-format.
+  // e.g. "Patel Travels · vijayawada" → "Patel Travels · Vijayawada"
+  const sanitizeSegment = (seg: string): string => {
+    const t = seg.trim();
+    // Middle dot (U+00B7) or bullet (U+2022) used as operator · city separator
+    if (/[\u00B7\u2022]/.test(t)) {
+      return t
+        .split(/\s*[\u00B7\u2022]\s*/)
+        .map((sp) => sanitizeLocation(sp.trim()))
+        .filter(Boolean)
+        .join(" \u00B7 ");
+    }
+    return sanitizeLocation(t);
+  };
+
+  // If the title contains a corruption artifact (!' or similar), treat as a route
   const corruptionPattern = /!['\u2019\u0060\u0027;]/;
   if (corruptionPattern.test(s)) {
-    const parts = s.split(corruptionPattern).map((p) => sanitizeLocation(p.trim())).filter(Boolean);
+    const parts = s.split(corruptionPattern).map(sanitizeSegment).filter(Boolean);
     if (parts.length >= 2) return parts.join(" \u2192 ");
     if (parts.length === 1) return parts[0];
   }
 
-  // If already contains →, re-sanitize each segment
+  // If already contains →, re-sanitize each segment (fixes letter-spacing in each city)
   if (s.includes("\u2192")) {
-    const parts = s.split("\u2192").map((p) => sanitizeLocation(p.trim())).filter(Boolean);
+    const parts = s.split("\u2192").map(sanitizeSegment).filter(Boolean);
     if (parts.length >= 2) return parts.join(" \u2192 ");
   }
 
-  // Not a route title — return as-is (hotel name, package name, etc.)
-  return s;
+  // Final pass: run through sanitizeSegment to fix any remaining issues
+  return sanitizeSegment(s);
 }

@@ -100,7 +100,7 @@ function bookingToInvoiceData(b: ApiBooking, logoDataUrl?: string | null): Invoi
 }
 
 function getInvNumber(b: ApiBooking) {
-  return invoiceNumber(b.bookingRef || String(b.id));
+  return invoiceNumber(b.bookingRef || String(b.id), b.type || b.bookingType);
 }
 
 function formatINR(n: number) {
@@ -468,9 +468,9 @@ export default function AdminInvoices() {
     setLocation(`/invoice/${b.bookingRef || b.id}`);
   }
 
-  function handleDownload(b: ApiBooking) {
+  async function handleDownload(b: ApiBooking) {
     try {
-      generateInvoicePDF(bookingToInvoiceData(b, branding.logoUrl));
+      await generateInvoicePDF(bookingToInvoiceData(b, branding.logoUrl));
       toast({ title: "Invoice Downloaded", description: `${getInvNumber(b)} — ${b.passengerName}` });
     } catch {
       toast({ title: "Download Failed", variant: "destructive" });

@@ -154,13 +154,13 @@ export default function Bookings() {
     }
   };
 
-  const handleDownloadTicket = (booking: any) => {
+  const handleDownloadTicket = async (booking: any) => {
     const bid = booking.id || booking.bookingId || booking.referenceId;
     setDownloadingId(bid);
 
     try {
       const bType = (booking.type || booking.bookingType || "flight") as "flight" | "bus" | "hotel" | "package";
-      generateInvoicePDF({
+      await generateInvoicePDF({
         bookingId:       String(booking.bookingId || `BKG-${bid}`),
         bookingType:     bType,
         passengerName:   booking.passengerName  || booking.customerName  || "Passenger",

@@ -290,9 +290,9 @@ export default function BookingDetail() {
   };
   const accent = typeAccent();
 
-  const handleDownloadPDF = () => {
+  const handleDownloadPDF = async () => {
     if (!booking) return;
-    generateInvoicePDF({
+    await generateInvoicePDF({
       bookingId,
       bookingType,
       passengerName:   booking.passengerName   || booking.customerName   || "Guest",

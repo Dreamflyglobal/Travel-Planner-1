@@ -237,10 +237,10 @@ export default function PaymentSuccess() {
       default:
         return <Calendar className="w-8 h-8" />;
     }
-  };  const handleDownloadTicket = () => {
+  };  const handleDownloadTicket = async () => {
     if (!bookingDetails) return;
     try {
-      generateInvoicePDF(bookingDetails);
+      await generateInvoicePDF(bookingDetails);
       toast({
         title: "Invoice Downloaded!",
         description: `${APP_NAME} branded invoice for ${bookingDetails.bookingId} saved as PDF.`,

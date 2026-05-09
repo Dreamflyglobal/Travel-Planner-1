@@ -1,0 +1,106 @@
+Still NOT fixed properly.
+
+Current problems visible in invoice screenshot:
+
+1. OLD invoice format still showing:
+- DFG-INV-MOYHHSDM
+- BK-MOYHHSDM
+
+These must be REMOVED completely.
+
+Use:
+- BUS-INV-000001
+- BUS-BK-000001
+
+2. Route text still broken:
+Wrong:
+- V i j a y a w a d a !' C h e n n a i
+
+Correct:
+- Vijayawada → Chennai
+
+3. Description row also broken:
+- Bus - Patel Travels - vijayawada !' chennai
+
+Must become:
+- Bus - Patel Travels - Vijayawada → Chennai
+
+4. Text spacing issue still exists.
+Characters are rendering letter-by-letter.
+Fix CSS/font/rendering issue in:
+- PDF generator
+- HTML invoice
+- Download invoice
+
+5. Uploaded logo still not loading.
+Currently fallback orange DFG circle is showing.
+
+Fix:
+- Load latest uploaded website logo dynamically from settings/database/storage
+- Use same logo everywhere
+- Invoice
+- Login page
+- Header
+- PDFs
+- Emails
+
+6. Existing invoice engine is still using OLD cached formatter.
+Remove old formatter completely.
+
+-----------------------------------
+MANDATORY TECH FIX
+-----------------------------------
+
+Create centralized helpers:
+
+formatRoute(fromCity, toCity)
+generateBookingId(serviceType)
+generateInvoiceId(serviceType)
+
+Example:
+formatRoute("Vijayawada", "Chennai")
+
+Output:
+Vijayawada → Chennai
+
+-----------------------------------
+NEW ID RULES
+-----------------------------------
+
+BUS:
+BUS-BK-000001
+BUS-INV-000001
+
+FLIGHT:
+FLY-BK-000001
+FLY-INV-000001
+
+HOTEL:
+HTL-BK-000001
+HTL-INV-000001
+
+HOLIDAY:
+HLD-BK-000001
+HLD-INV-000001
+
+-----------------------------------
+VERY IMPORTANT
+-----------------------------------
+
+- Fix BOTH frontend + backend
+- Fix PDF generation
+- Fix DB save logic
+- Fix cached values
+- Fix old helper functions
+- Fix string encoding issue causing !'
+- Fix character spacing issue
+
+After fixing:
+Test new booking completely again and verify:
+- No !'
+- No spaced letters
+- Correct IDs
+- Correct logo
+- Correct routes
+- Correct PDF
+- Correct download invoice

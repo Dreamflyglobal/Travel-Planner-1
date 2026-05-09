@@ -379,7 +379,7 @@ export default function InvoiceView() {
   }, [bookingId]);
 
   const handlePrint    = () => window.print();
-  const handleDownload = () => { if (invoice) generateInvoicePDF(invoice); };
+  const handleDownload = async () => { if (invoice) await generateInvoicePDF(invoice); };
   const handleEmail    = () => {
     if (!invoice) return;
     const sub = `Your ${typeLabel(invoice.bookingType)} Confirmation — ${invoice.bookingId}`;
