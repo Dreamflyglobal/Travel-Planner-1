@@ -54,14 +54,21 @@ interface ApiUser {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const BLOCKED_KEY = "blocked_users_v1";
-
-function loadBlocked(): Set<string> {
-  try { return new Set(JSON.parse(localStorage.getItem(BLOCKED_KEY) || "[]")); }
-  catch { return new Set(); }
+async function fetchBlockedIds(): Promise<Set<string>> {
+  try {
+    const res = await fetch("/api/settings/blocked_users");
+    if (!res.ok) return new Set();
+    const data = await res.json() as { ids?: string[] };
+    return new Set(Array.isArray(data?.ids) ? data.ids : []);
+  } catch { return new Set(); }
 }
-function saveBlocked(s: Set<string>) {
-  try { localStorage.setItem(BLOCKED_KEY, JSON.stringify([...s])); } catch { /**/ }
+
+async function persistBlockedIds(s: Set<string>): Promise<void> {
+  await fetch("/api/settings/blocked_users", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids: [...s] }),
+  });
 }
 
 const TYPE_META: Record<string, { Icon: React.ElementType; color: string; bg: string }> = {
@@ -338,8 +345,15 @@ export default function AdminUsers() {
   const [error, setError]       = useState<string | null>(null);
   const [search, setSearch]   = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
-  const [blocked, setBlocked] = useState<Set<string>>(loadBlocked);
+  const [blocked, setBlocked] = useState<Set<string>>(new Set());
   const { toast } = useToast();
+
+  useEffect(() => {
+    fetchBlockedIds().then(setBlocked).catch(() => {});
+    const onFocus = () => { fetchBlockedIds().then(setBlocked).catch(() => {}); };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, []);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -404,12 +418,12 @@ export default function AdminUsers() {
     }
   }, [fetchUsers, toast]);
 
-  // ── Block / Unblock (local for now) ──────────────────────────────────────
+  // ── Block / Unblock ───────────────────────────────────────────────────────
   const toggleBlock = useCallback((id: string) => {
     setBlocked((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
-      saveBlocked(next);
+      persistBlockedIds(next).catch(() => {});
       return next;
     });
   }, []);

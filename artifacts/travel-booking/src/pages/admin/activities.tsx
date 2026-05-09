@@ -43,16 +43,21 @@ const EMPTY_FORM = {
   gallery: "",
 };
 
-function loadActivities(): Activity[] {
+async function fetchActivities(): Promise<Activity[]> {
   try {
-    return JSON.parse(localStorage.getItem("activities") ?? "[]");
-  } catch {
-    return [];
-  }
+    const res = await fetch("/api/settings/activities");
+    if (!res.ok) return [];
+    const data = await res.json() as { list?: Activity[] };
+    return Array.isArray(data?.list) ? data.list : [];
+  } catch { return []; }
 }
 
-function saveActivities(list: Activity[]) {
-  localStorage.setItem("activities", JSON.stringify(list));
+async function persistActivities(list: Activity[]): Promise<void> {
+  await fetch("/api/settings/activities", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ list }),
+  });
 }
 
 function toArray(raw: string): string[] {
@@ -76,7 +81,12 @@ export default function AdminActivities() {
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [imgErrors, setImgErrors] = useState<Record<string, boolean>>({});
 
-  useEffect(() => { setActivities(loadActivities()); }, []);
+  useEffect(() => {
+    const load = () => { fetchActivities().then(setActivities).catch(() => {}); };
+    load();
+    window.addEventListener("focus", load);
+    return () => window.removeEventListener("focus", load);
+  }, []);
 
   function openCreate() {
     setEditing(null);
@@ -129,18 +139,18 @@ export default function AdminActivities() {
       ? activities.map((a) => a.id === editing.id ? { ...a, ...fields } : a)
       : [...activities, { id: Date.now().toString(), ...fields }];
 
-    saveActivities(next);
     setActivities(next);
     setShowForm(false);
+    persistActivities(next).catch(() => {});
     toast({ title: editing ? "Activity updated!" : "Activity created!", description: fields.title });
   }
 
   function confirmDelete() {
     if (!deleting) return;
     const next = activities.filter((a) => a.id !== deleting);
-    saveActivities(next);
     setActivities(next);
     setDeleting(null);
+    persistActivities(next).catch(() => {});
     toast({ title: "Activity deleted" });
   }
 

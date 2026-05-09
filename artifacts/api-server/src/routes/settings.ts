@@ -5,7 +5,14 @@ import { logger } from "../lib/logger.js";
 
 const router: IRouter = Router();
 
-const VALID_NAMESPACES = new Set(["branding", "site", "website", "notification"]);
+const VALID_NAMESPACES = new Set([
+  "branding", "site", "website", "notification",
+  "markup_convenience", "markup_hidden", "markup_agent", "markup_simple",
+  "paymentmode", "autorefund",
+  "cms",
+  "activities",
+  "blocked_users",
+]);
 
 // ── GET /settings/:namespace ──────────────────────────────────────────────────
 router.get("/settings/:namespace", async (req, res): Promise<void> => {

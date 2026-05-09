@@ -40,12 +40,29 @@ const DEFAULT_SETTINGS: MarkupSettings = {
   packages: { ...DEFAULT_CONFIG },
 };
 
+// ── Module-level in-memory caches (warmed by MarkupProvider on mount/focus) ──
+
+let _convenienceCache: MarkupSettings | null = null;
+let _hiddenCache: MarkupSettings | null = null;
+let _agentCache: MarkupSettings | null = null;
+
+export function warmConvenienceFeeCache(settings: MarkupSettings): void {
+  _convenienceCache = settings;
+}
+export function warmHiddenMarkupCache(settings: MarkupSettings): void {
+  _hiddenCache = settings;
+}
+export function warmAgentMarkupCache(settings: MarkupSettings): void {
+  _agentCache = settings;
+}
+
 // ── Convenience Fee (VISIBLE to customers) ────────────────────────────────
 
 const FEE_KEY_V2 = "markup_settings_v2";
 const FEE_KEY_V1 = "markup_settings";   // legacy migration
 
 export function getMarkupSettings(): MarkupSettings {
+  if (_convenienceCache) return _convenienceCache;
   try {
     const raw = localStorage.getItem(FEE_KEY_V2);
     if (raw) {
@@ -71,7 +88,8 @@ export function getMarkupSettings(): MarkupSettings {
   return { ...DEFAULT_SETTINGS };
 }
 
-export function saveMarkupSettings(settings: MarkupSettings) {
+export function saveMarkupSettings(settings: MarkupSettings): void {
+  _convenienceCache = settings;
   localStorage.setItem(FEE_KEY_V2, JSON.stringify(settings));
 }
 
@@ -88,6 +106,7 @@ export function getConvenienceFee(basePrice: number, service: ServiceType): numb
 const HIDDEN_MARKUP_KEY = "hidden_markup_v1";
 
 export function getHiddenMarkupSettings(): MarkupSettings {
+  if (_hiddenCache) return _hiddenCache;
   try {
     const raw = localStorage.getItem(HIDDEN_MARKUP_KEY);
     if (raw) {
@@ -103,7 +122,8 @@ export function getHiddenMarkupSettings(): MarkupSettings {
   return { ...DEFAULT_SETTINGS };
 }
 
-export function saveHiddenMarkupSettings(settings: MarkupSettings) {
+export function saveHiddenMarkupSettings(settings: MarkupSettings): void {
+  _hiddenCache = settings;
   localStorage.setItem(HIDDEN_MARKUP_KEY, JSON.stringify(settings));
 }
 
@@ -128,6 +148,7 @@ export function getHiddenMarkupAmount(basePrice: number, service: ServiceType): 
 const AGENT_MARKUP_KEY = "agent_markup_v1";
 
 export function getAgentMarkupSettings(): MarkupSettings {
+  if (_agentCache) return _agentCache;
   try {
     const raw = localStorage.getItem(AGENT_MARKUP_KEY);
     if (raw) {
@@ -143,7 +164,8 @@ export function getAgentMarkupSettings(): MarkupSettings {
   return { ...DEFAULT_SETTINGS };
 }
 
-export function saveAgentMarkupSettings(settings: MarkupSettings) {
+export function saveAgentMarkupSettings(settings: MarkupSettings): void {
+  _agentCache = settings;
   localStorage.setItem(AGENT_MARKUP_KEY, JSON.stringify(settings));
 }
 

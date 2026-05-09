@@ -1327,10 +1327,31 @@ function PaymentModeSection() {
   const [saved, setSaved] = useState(false);
   const { toast } = useToast();
 
+  useEffect(() => {
+    const load = () => {
+      fetch("/api/settings/paymentmode")
+        .then((r) => r.json())
+        .then((d) => {
+          const m: PaymentMode = d?.mode === "live" ? "live" : "test";
+          setMode(m);
+          try { localStorage.setItem(PAYMENT_MODE_KEY, m); } catch { /* noop */ }
+        })
+        .catch(() => {});
+    };
+    load();
+    window.addEventListener("focus", load);
+    return () => window.removeEventListener("focus", load);
+  }, []);
+
   function handleToggle(checked: boolean) {
     const next: PaymentMode = checked ? "live" : "test";
     setMode(next);
     try { localStorage.setItem(PAYMENT_MODE_KEY, next); } catch { /* noop */ }
+    fetch("/api/settings/paymentmode", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: next }),
+    }).catch(() => {});
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
     toast({
@@ -1423,9 +1444,31 @@ function AutoRefundToggle() {
   });
   const { toast } = useToast();
 
+  useEffect(() => {
+    const load = () => {
+      fetch("/api/settings/autorefund")
+        .then((r) => r.json())
+        .then((d) => {
+          if (typeof d?.enabled === "boolean") {
+            setEnabled(d.enabled);
+            try { localStorage.setItem(AUTO_REFUND_KEY, String(d.enabled)); } catch { /* noop */ }
+          }
+        })
+        .catch(() => {});
+    };
+    load();
+    window.addEventListener("focus", load);
+    return () => window.removeEventListener("focus", load);
+  }, []);
+
   function handleToggle(checked: boolean) {
     setEnabled(checked);
     try { localStorage.setItem(AUTO_REFUND_KEY, String(checked)); } catch { /* noop */ }
+    fetch("/api/settings/autorefund", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled: checked }),
+    }).catch(() => {});
     toast({
       title: checked ? "Auto Refund enabled" : "Auto Refund disabled",
       description: checked

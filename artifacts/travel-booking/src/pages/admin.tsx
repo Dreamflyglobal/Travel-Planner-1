@@ -56,7 +56,8 @@ import {
   Eye,
   Hotel,
 } from "lucide-react";
-import { getMarkupSettings, saveMarkupSettings, getHiddenMarkupSettings, saveHiddenMarkupSettings, getHiddenMarkupAmount, getAgentMarkupSettings, saveAgentMarkupSettings, type MarkupSettings, type MarkupConfig } from "@/lib/pricing";
+import { getMarkupSettings, getHiddenMarkupSettings, getHiddenMarkupAmount, getAgentMarkupSettings, type MarkupSettings, type MarkupConfig } from "@/lib/pricing";
+import { useMarkupContext } from "@/contexts/markup-context";
 import { getAllStaffBookings } from "@/lib/staff-data";
 import { getLeads, getEnquiries, updateEnquiryStatus, updateLeadStatus, type HolidayLead, type HolidayEnquiry, type LeadStatus } from "@/lib/holiday-data";
 import { useToast } from "@/hooks/use-toast";
@@ -86,6 +87,15 @@ import { Textarea } from "@/components/ui/textarea";
 export default function AdminDashboard() {
   const [location, setLocation] = useLocation();
   const { toast } = useToast();
+  const {
+    convenienceFee: convFeeFromDB,
+    hiddenMarkup: hiddenMarkupFromDB,
+    agentMarkup: agentMarkupFromDB,
+    isLoading: markupLoading,
+    saveConvenienceFee: saveConvenienceFeeCtx,
+    saveHiddenMarkup: saveHiddenMarkupCtx,
+    saveAgentMarkup: saveAgentMarkupCtx,
+  } = useMarkupContext();
   const [activeTab, setActiveTab] = useState("bookings");
   const [showRevenueModal, setShowRevenueModal] = useState(false);
   const [showProfitModal, setShowProfitModal] = useState(false);
@@ -94,8 +104,8 @@ export default function AdminDashboard() {
   const [markup, setMarkup] = useState<MarkupSettings>(() => getMarkupSettings());
   const [markupDraft, setMarkupDraft] = useState<MarkupSettings>(() => getMarkupSettings());
 
-  const handleSaveMarkup = () => {
-    saveMarkupSettings(markupDraft);
+  const handleSaveMarkup = async () => {
+    await saveConvenienceFeeCtx(markupDraft);
     setMarkup(markupDraft);
     toast({ title: "Convenience Fee settings saved!", description: "Visible fee updated across all services." });
   };
@@ -104,8 +114,8 @@ export default function AdminDashboard() {
   const [hiddenMarkup, setHiddenMarkup] = useState<MarkupSettings>(() => getHiddenMarkupSettings());
   const [hiddenMarkupDraft, setHiddenMarkupDraft] = useState<MarkupSettings>(() => getHiddenMarkupSettings());
 
-  const handleSaveHiddenMarkup = () => {
-    saveHiddenMarkupSettings(hiddenMarkupDraft);
+  const handleSaveHiddenMarkup = async () => {
+    await saveHiddenMarkupCtx(hiddenMarkupDraft);
     setHiddenMarkup(hiddenMarkupDraft);
     toast({ title: "Customer markup saved!", description: "Customer pricing updated across all services." });
   };
@@ -114,11 +124,24 @@ export default function AdminDashboard() {
   const [agentMarkup, setAgentMarkup] = useState<MarkupSettings>(() => getAgentMarkupSettings());
   const [agentMarkupDraft, setAgentMarkupDraft] = useState<MarkupSettings>(() => getAgentMarkupSettings());
 
-  const handleSaveAgentMarkup = () => {
-    saveAgentMarkupSettings(agentMarkupDraft);
+  const handleSaveAgentMarkup = async () => {
+    await saveAgentMarkupCtx(agentMarkupDraft);
     setAgentMarkup(agentMarkupDraft);
     toast({ title: "Agent markup saved!", description: "Global agent pricing updated across all services." });
   };
+
+  // Sync markup state from DB when MarkupProvider finishes loading
+  useEffect(() => {
+    if (!markupLoading) {
+      setMarkup(convFeeFromDB);
+      setMarkupDraft(convFeeFromDB);
+      setHiddenMarkup(hiddenMarkupFromDB);
+      setHiddenMarkupDraft(hiddenMarkupFromDB);
+      setAgentMarkup(agentMarkupFromDB);
+      setAgentMarkupDraft(agentMarkupFromDB);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [markupLoading]);
 
   // Coupon state
   const [coupons, setCoupons] = useState<Array<{

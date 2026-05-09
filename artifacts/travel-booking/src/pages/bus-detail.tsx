@@ -1,5 +1,6 @@
 import { Layout } from "@/components/layout";
 import { Link, useParams, useLocation } from "wouter";
+import { useMarkupContext } from "@/contexts/markup-context";
 import { useBusDetailWithFallback } from "@/lib/use-data-with-fallback";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -80,6 +81,7 @@ export default function BusDetail() {
   const busId = parseInt(id || "0", 10);
 
   const { data: bus, isLoading } = useBusDetailWithFallback(busId);
+  const { simpleMarkup } = useMarkupContext();
 
   const handleBookNow = () => {
     if (!bus) return;
@@ -123,7 +125,7 @@ export default function BusDetail() {
   const amenities: string[] = bus.amenities || [];
   const boardingPoints: string[] = bus.boardingPoints || [];
   const droppingPoints: string[] = bus.droppingPoints || [];
-  const markup = Number(localStorage.getItem("markup") || 0);
+  const markup = simpleMarkup;
   const displayPrice = bus.price + markup;
 
   return (

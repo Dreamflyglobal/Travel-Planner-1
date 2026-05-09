@@ -8,8 +8,6 @@ import { useToast } from "@/hooks/use-toast";
 import { FileText, Save, RotateCcw, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const CMS_KEY = "admin_cms_pages_v1";
-
 interface CmsData {
   aboutUs: string;
   termsAndConditions: string;
@@ -22,16 +20,21 @@ const DEFAULT_CMS: CmsData = {
   privacyPolicy: "",
 };
 
-function loadCms(): CmsData {
+async function fetchCms(): Promise<CmsData> {
   try {
-    const raw = localStorage.getItem(CMS_KEY);
-    if (!raw) return DEFAULT_CMS;
-    return { ...DEFAULT_CMS, ...(JSON.parse(raw) as Partial<CmsData>) };
+    const res = await fetch("/api/settings/cms");
+    if (!res.ok) return DEFAULT_CMS;
+    const data = await res.json() as Partial<CmsData>;
+    return { ...DEFAULT_CMS, ...data };
   } catch { return DEFAULT_CMS; }
 }
 
-function saveCms(data: CmsData) {
-  try { localStorage.setItem(CMS_KEY, JSON.stringify(data)); } catch { /* noop */ }
+async function saveCmsToDb(data: CmsData): Promise<void> {
+  await fetch("/api/settings/cms", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
 }
 
 const PAGES = [
@@ -54,26 +57,43 @@ function SectionHeader({ icon, title, description }: { icon: React.ReactNode; ti
 
 export default function AdminCms() {
   const { toast } = useToast();
-  const [data, setData] = useState<CmsData>(loadCms);
+  const [data, setData] = useState<CmsData>(DEFAULT_CMS);
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [active, setActive] = useState<keyof CmsData>("aboutUs");
+
+  useEffect(() => {
+    const load = () => {
+      fetchCms().then(setData).catch(() => {});
+    };
+    load();
+    window.addEventListener("focus", load);
+    return () => window.removeEventListener("focus", load);
+  }, []);
 
   function patch(key: keyof CmsData, value: string) {
     setData((prev) => ({ ...prev, [key]: value }));
     setDirty(true);
   }
 
-  function handleSave() {
-    saveCms(data);
-    setDirty(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
-    toast({ title: "CMS pages saved", description: "Content updated and visible on your public pages." });
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await saveCmsToDb(data);
+      setDirty(false);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+      toast({ title: "CMS pages saved", description: "Content updated and visible on your public pages." });
+    } catch {
+      toast({ variant: "destructive", title: "Save failed", description: "Could not save CMS content. Please try again." });
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function handleReset() {
-    const fresh = loadCms();
+  async function handleReset() {
+    const fresh = await fetchCms();
     setData(fresh);
     setDirty(false);
     toast({ title: "Discarded changes", description: "Reverted to the last saved version." });
@@ -95,11 +115,11 @@ export default function AdminCms() {
             </p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={handleReset} disabled={!dirty} className="gap-1.5">
+            <Button variant="outline" size="sm" onClick={handleReset} disabled={!dirty || saving} className="gap-1.5">
               <RotateCcw className="w-4 h-4" /> Discard
             </Button>
-            <Button size="sm" onClick={handleSave} disabled={!dirty} className="gap-1.5">
-              <Save className="w-4 h-4" /> Save All
+            <Button size="sm" onClick={handleSave} disabled={!dirty || saving} className="gap-1.5">
+              <Save className="w-4 h-4" /> {saving ? "Saving…" : "Save All"}
             </Button>
           </div>
         </div>
@@ -164,11 +184,11 @@ export default function AdminCms() {
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
-                <Button variant="outline" size="sm" onClick={handleReset} disabled={!dirty} className="gap-1.5">
+                <Button variant="outline" size="sm" onClick={handleReset} disabled={!dirty || saving} className="gap-1.5">
                   <RotateCcw className="w-4 h-4" /> Discard Changes
                 </Button>
-                <Button size="sm" onClick={handleSave} disabled={!dirty} className="gap-1.5">
-                  <Save className="w-4 h-4" /> Save
+                <Button size="sm" onClick={handleSave} disabled={!dirty || saving} className="gap-1.5">
+                  <Save className="w-4 h-4" /> {saving ? "Saving…" : "Save"}
                 </Button>
               </div>
             </CardContent>
@@ -178,7 +198,7 @@ export default function AdminCms() {
         <Card>
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">
-              <strong>Tip:</strong> Content saved here is stored locally and used by your public pages. To integrate with a backend CMS or database, connect this to your API server's content table.
+              <strong>Tip:</strong> Content saved here is stored in the database and synced across all devices. Changes are reflected immediately on all admin sessions.
             </p>
           </CardContent>
         </Card>

@@ -1,6 +1,7 @@
 import { Layout } from "@/components/layout";
 import { Link, useParams, useLocation } from "wouter";
 import { getHiddenMarkupAmount } from "@/lib/pricing";
+import { useMarkupContext } from "@/contexts/markup-context";
 import { useFlightDetailWithFallback } from "@/lib/use-data-with-fallback";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -14,6 +15,7 @@ export default function FlightDetail() {
   const flightId = parseInt(id || "0", 10);
   
   const { data: flight, isLoading } = useFlightDetailWithFallback(flightId);
+  const { simpleMarkup } = useMarkupContext();
 
   const handleBookNow = () => {
     if (!flight) return;
@@ -88,7 +90,7 @@ export default function FlightDetail() {
             <div className="text-left md:text-right">
               <p className="text-sm text-muted-foreground font-medium mb-1">Price per passenger</p>
               <p className="text-4xl font-extrabold text-primary">
-                ₹{flight.price + Number(localStorage.getItem("markup") || 0)}
+                ₹{flight.price + simpleMarkup}
               </p>
             </div>
           </div>
@@ -206,7 +208,7 @@ export default function FlightDetail() {
                   <div className="border-t border-b py-4">
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-sm text-muted-foreground">Price per passenger</span>
-                      <span className="text-2xl font-bold text-primary">₹{flight.price + Number(localStorage.getItem("markup") || 0)}</span>
+                      <span className="text-2xl font-bold text-primary">₹{flight.price + simpleMarkup}</span>
                     </div>
                     <p className="text-xs text-muted-foreground">
                       Taxes and fees included

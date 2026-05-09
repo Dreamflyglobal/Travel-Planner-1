@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,23 +14,17 @@ import {
 import { Settings, Percent, Save, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
+import { useMarkupContext } from "@/contexts/markup-context";
 
 export function MarkupManager() {
   const [isOpen, setIsOpen] = useState(false);
-  const [markup, setMarkup] = useState(0);
-  const [markupType, setMarkupType] = useState<"fixed" | "percentage">("percentage");
+  const { simpleMarkup, simpleMarkupType, saveSimpleMarkup } = useMarkupContext();
+  const [markup, setMarkup] = useState(simpleMarkup);
+  const [markupType, setMarkupType] = useState<"fixed" | "percentage">(simpleMarkupType);
   const { toast } = useToast();
 
-  useEffect(() => {
-    const saved = localStorage.getItem("markup");
-    const savedType = localStorage.getItem("markupType");
-    if (saved) setMarkup(parseFloat(saved));
-    if (savedType) setMarkupType(savedType as "fixed" | "percentage");
-  }, []);
-
-  const saveMarkup = () => {
-    localStorage.setItem("markup", markup.toString());
-    localStorage.setItem("markupType", markupType);
+  const saveMarkup = async () => {
+    await saveSimpleMarkup(markup, markupType);
     toast({
       title: "Markup Saved!",
       description: `${markupType === "percentage" ? markup + "%" : "₹" + markup} markup will be applied to all bookings.`,
@@ -38,9 +32,9 @@ export function MarkupManager() {
     setIsOpen(false);
   };
 
-  const resetMarkup = () => {
+  const resetMarkup = async () => {
     setMarkup(0);
-    localStorage.setItem("markup", "0");
+    await saveSimpleMarkup(0, markupType);
     toast({
       title: "Markup Reset",
       description: "Markup has been removed from all bookings.",

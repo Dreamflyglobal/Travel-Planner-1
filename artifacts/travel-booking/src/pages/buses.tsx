@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Layout } from "@/components/layout";
+import { useMarkupContext } from "@/contexts/markup-context";
 import { Link, useLocation } from "wouter";
 import { PageHero } from "@/components/page-hero";
 import { useBusesWithFallback } from "@/lib/use-data-with-fallback";
@@ -61,8 +62,8 @@ export default function Buses() {
   const [hasSearched, setHasSearched] = useState(false);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   
-  // Get admin markup
-  const markup = parseFloat(localStorage.getItem("markup") || "0");
+  // Get admin markup from DB-backed context
+  const { simpleMarkup: markup } = useMarkupContext();
   // Check if we have URL search parameters from home page
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);

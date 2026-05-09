@@ -8,6 +8,7 @@ import { BrandingProvider } from "@/contexts/branding-context";
 import { SiteSettingsProvider } from "@/contexts/site-settings-context";
 import { NotificationSettingsProvider } from "@/contexts/notification-settings-context";
 import { WebsiteSettingsProvider } from "@/contexts/website-settings-context";
+import { MarkupProvider } from "@/contexts/markup-context";
 import { AdminGuard } from "@/components/admin-guard";
 import { AgentGuard } from "@/components/agent-guard";
 import { PushNotificationPrompt } from "@/components/push-notification-prompt";
@@ -238,6 +239,7 @@ function App() {
         <SiteSettingsProvider>
         <NotificationSettingsProvider>
         <WebsiteSettingsProvider>
+        <MarkupProvider>
         <AuthProvider>
           <TooltipProvider>
             <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
@@ -252,6 +254,7 @@ function App() {
             <Toaster />
           </TooltipProvider>
         </AuthProvider>
+        </MarkupProvider>
         </WebsiteSettingsProvider>
         </NotificationSettingsProvider>
         </SiteSettingsProvider>

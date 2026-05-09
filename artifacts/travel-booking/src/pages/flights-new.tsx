@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Layout } from "@/components/layout";
+import { useMarkupContext } from "@/contexts/markup-context";
 import { Link } from "wouter";
 import { useFlightsWithFallback } from "@/lib/use-data-with-fallback";
 import { Button } from "@/components/ui/button";
@@ -32,8 +33,8 @@ export default function Flights() {
   const [selectedAirlines, setSelectedAirlines] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
 
-  // Get admin markup
-  const markup = parseFloat(localStorage.getItem("markup") || "0");
+  // Get admin markup from DB-backed context
+  const { simpleMarkup: markup } = useMarkupContext();
   
   // Get unique airlines
   const airlines = Array.isArray(flights) 

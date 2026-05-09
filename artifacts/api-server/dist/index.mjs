@@ -166768,7 +166768,21 @@ var coupons_default = router30;
 var import_express31 = __toESM(require_express2(), 1);
 init_drizzle_orm();
 var router31 = (0, import_express31.Router)();
-var VALID_NAMESPACES = /* @__PURE__ */ new Set(["branding", "site", "website", "notification"]);
+var VALID_NAMESPACES = /* @__PURE__ */ new Set([
+  "branding",
+  "site",
+  "website",
+  "notification",
+  "markup_convenience",
+  "markup_hidden",
+  "markup_agent",
+  "markup_simple",
+  "paymentmode",
+  "autorefund",
+  "cms",
+  "activities",
+  "blocked_users"
+]);
 router31.get("/settings/:namespace", async (req, res) => {
   const ns = req.params.namespace?.toLowerCase();
   if (!VALID_NAMESPACES.has(ns)) {
