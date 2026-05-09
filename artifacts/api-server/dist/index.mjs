@@ -20905,27 +20905,27 @@ var require_router = __commonJS({
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var methods = METHODS.map((method) => method.toLowerCase());
-    module.exports = Router31;
+    module.exports = Router32;
     module.exports.Route = Route;
-    function Router31(options) {
-      if (!(this instanceof Router31)) {
-        return new Router31(options);
+    function Router32(options) {
+      if (!(this instanceof Router32)) {
+        return new Router32(options);
       }
       const opts = options || {};
-      function router31(req, res, next) {
-        router31.handle(req, res, next);
+      function router32(req, res, next) {
+        router32.handle(req, res, next);
       }
-      Object.setPrototypeOf(router31, this);
-      router31.caseSensitive = opts.caseSensitive;
-      router31.mergeParams = opts.mergeParams;
-      router31.params = {};
-      router31.strict = opts.strict;
-      router31.stack = [];
-      return router31;
+      Object.setPrototypeOf(router32, this);
+      router32.caseSensitive = opts.caseSensitive;
+      router32.mergeParams = opts.mergeParams;
+      router32.params = {};
+      router32.strict = opts.strict;
+      router32.stack = [];
+      return router32;
     }
-    Router31.prototype = function() {
+    Router32.prototype = function() {
     };
-    Router31.prototype.param = function param2(name2, fn) {
+    Router32.prototype.param = function param2(name2, fn) {
       if (!name2) {
         throw new TypeError("argument name is required");
       }
@@ -20945,7 +20945,7 @@ var require_router = __commonJS({
       params.push(fn);
       return this;
     };
-    Router31.prototype.handle = function handle(req, res, callback) {
+    Router32.prototype.handle = function handle(req, res, callback) {
       if (!callback) {
         throw new TypeError("argument callback is required");
       }
@@ -21072,7 +21072,7 @@ var require_router = __commonJS({
         }
       }
     };
-    Router31.prototype.use = function use(handler) {
+    Router32.prototype.use = function use(handler) {
       let offset = 0;
       let path = "/";
       if (typeof handler !== "function") {
@@ -21105,7 +21105,7 @@ var require_router = __commonJS({
       }
       return this;
     };
-    Router31.prototype.route = function route(path) {
+    Router32.prototype.route = function route(path) {
       const route2 = new Route(path);
       const layer = new Layer(path, {
         sensitive: this.caseSensitive,
@@ -21120,7 +21120,7 @@ var require_router = __commonJS({
       return route2;
     };
     methods.concat("all").forEach(function(method) {
-      Router31.prototype[method] = function(path) {
+      Router32.prototype[method] = function(path) {
         const route = this.route(path);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
@@ -21303,13 +21303,13 @@ var require_application = __commonJS({
     var compileTrust = require_utils3().compileTrust;
     var resolve2 = __require("node:path").resolve;
     var once = require_once();
-    var Router31 = require_router();
+    var Router32 = require_router();
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var app3 = exports = module.exports = {};
     var trustProxyDefaultSymbol = "@@symbol:trust_proxy_default";
     app3.init = function init() {
-      var router31 = null;
+      var router32 = null;
       this.cache = /* @__PURE__ */ Object.create(null);
       this.engines = /* @__PURE__ */ Object.create(null);
       this.settings = /* @__PURE__ */ Object.create(null);
@@ -21318,13 +21318,13 @@ var require_application = __commonJS({
         configurable: true,
         enumerable: true,
         get: function getrouter() {
-          if (router31 === null) {
-            router31 = new Router31({
+          if (router32 === null) {
+            router32 = new Router32({
               caseSensitive: this.enabled("case sensitive routing"),
               strict: this.enabled("strict routing")
             });
           }
-          return router31;
+          return router32;
         }
       });
     };
@@ -21395,15 +21395,15 @@ var require_application = __commonJS({
       if (fns.length === 0) {
         throw new TypeError("app.use() requires a middleware function");
       }
-      var router31 = this.router;
+      var router32 = this.router;
       fns.forEach(function(fn2) {
         if (!fn2 || !fn2.handle || !fn2.set) {
-          return router31.use(path, fn2);
+          return router32.use(path, fn2);
         }
         debug(".use app under %s", path);
         fn2.mountpath = path;
         fn2.parent = this;
-        router31.use(path, function mounted_app(req, res, next) {
+        router32.use(path, function mounted_app(req, res, next) {
           var orig = req.app;
           fn2.handle(req, res, function(err) {
             Object.setPrototypeOf(req, orig.request);
@@ -23976,7 +23976,7 @@ var require_express = __commonJS({
     var EventEmitter2 = __require("node:events").EventEmitter;
     var mixin = require_merge_descriptors();
     var proto = require_application();
-    var Router31 = require_router();
+    var Router32 = require_router();
     var req = require_request();
     var res = require_response();
     exports = module.exports = createApplication;
@@ -23998,8 +23998,8 @@ var require_express = __commonJS({
     exports.application = proto;
     exports.request = req;
     exports.response = res;
-    exports.Route = Router31.Route;
-    exports.Router = Router31;
+    exports.Route = Router32.Route;
+    exports.Router = Router32;
     exports.json = bodyParser.json;
     exports.raw = bodyParser.raw;
     exports.static = require_serve_static();
@@ -133609,7 +133609,7 @@ var require_mongoose2 = __commonJS({
 })();
 
 // src/app.ts
-var import_express31 = __toESM(require_express2(), 1);
+var import_express32 = __toESM(require_express2(), 1);
 var import_cors = __toESM(require_lib3(), 1);
 var import_cookie_parser = __toESM(require_cookie_parser(), 1);
 var import_pino_http = __toESM(require_logger(), 1);
@@ -133618,7 +133618,7 @@ import { dirname, resolve, join } from "node:path";
 import { existsSync } from "node:fs";
 
 // src/routes/index.ts
-var import_express30 = __toESM(require_express2(), 1);
+var import_express31 = __toESM(require_express2(), 1);
 
 // src/routes/health.ts
 var import_express = __toESM(require_express2(), 1);
@@ -143196,6 +143196,8 @@ __export(schema_exports, {
   bookingRefundsTable: () => bookingRefundsTable,
   bookingsTable: () => bookingsTable,
   busesTable: () => busesTable,
+  couponUsageTable: () => couponUsageTable,
+  couponsTable: () => couponsTable,
   destinationsTable: () => destinationsTable,
   enquiriesTable: () => enquiriesTable,
   flightsTable: () => flightsTable,
@@ -154969,6 +154971,37 @@ var bookingRefundsTable = pgTable("booking_refunds", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
 });
 
+// ../../lib/db/src/schema/coupons.ts
+var couponsTable = pgTable("coupons", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull().unique(),
+  discount: numeric("discount", { precision: 10, scale: 2 }).notNull(),
+  discountType: text("discount_type").notNull().default("fixed"),
+  // "fixed" | "percentage"
+  type: text("type").notNull().default("public"),
+  // "public" | "welcome" | "user_specific"
+  allowedPhone: text("allowed_phone"),
+  // only for user_specific
+  validUntil: text("valid_until").notNull(),
+  // ISO date string YYYY-MM-DD
+  usageLimit: integer("usage_limit").notNull().default(0),
+  // 0 = unlimited
+  minBookingAmount: numeric("min_booking_amount", { precision: 10, scale: 2 }).notNull().default("0"),
+  serviceType: text("service_type"),
+  // "flight"|"bus"|"hotel"|"holiday"|null=all
+  flightType: text("flight_type"),
+  // "domestic"|"international"|null
+  airline: text("airline"),
+  description: text("description"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+});
+var couponUsageTable = pgTable("coupon_usage", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull(),
+  phone: text("phone").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+});
+
 // ../../lib/db/src/index.ts
 var { Pool: Pool3 } = esm_default;
 if (!process.env.DATABASE_URL) {
@@ -166573,41 +166606,178 @@ router29.get("/users/:id/bookings", async (req, res) => {
 });
 var users_default = router29;
 
-// src/routes/index.ts
+// src/routes/coupons.ts
+var import_express30 = __toESM(require_express2(), 1);
+init_drizzle_orm();
 var router30 = (0, import_express30.Router)();
-router30.use(health_default);
-router30.use(auth_default);
-router30.use(admin_default);
-router30.use(admin_notify_default);
-router30.use(flights_default);
-router30.use(buses_default);
-router30.use(hotels_default);
-router30.use(packages_default);
-router30.use(bookings_default);
-router30.use("/payments", payments_default);
-router30.use("/tickets", tickets_default);
-router30.use("/send-whatsapp", whatsapp_default);
-router30.use("/itinerary-pdf", itinerary_pdf_default);
-router30.use("/holiday-whatsapp", holiday_whatsapp_default);
-router30.use("/followup", followup_default);
-router30.use(leads_default);
-router30.use(holiday_packages_default);
-router30.use(enquiries_default);
-router30.use(push_default);
-router30.use(currency_default);
-router30.use(marketing_default);
-router30.use(admin_bookings_default);
-router30.use(book_flight_default);
-router30.use(verify_payment_default);
-router30.use(tripjack_default);
-router30.use(tripjackRoutes_default);
-router30.use(tbo_default);
-router30.use(test_comms_default);
-router30.use(users_default);
-var routes_default = router30;
+function rowToCoupon(row) {
+  return {
+    code: row.code,
+    discount: Number(row.discount),
+    discountType: row.discountType,
+    type: row.type,
+    allowed_phone: row.allowedPhone ?? void 0,
+    validUntil: row.validUntil,
+    usageLimit: row.usageLimit ?? 0,
+    minBookingAmount: Number(row.minBookingAmount ?? 0),
+    service_type: row.serviceType ?? void 0,
+    flight_type: row.flightType ?? void 0,
+    airline: row.airline ?? void 0,
+    description: row.description ?? void 0,
+    used_by: []
+    // populated by client from usage records
+  };
+}
+router30.get("/coupons", async (_req, res) => {
+  try {
+    const rows = await db.select().from(couponsTable).orderBy(desc(couponsTable.createdAt));
+    res.json(rows.map(rowToCoupon));
+  } catch (err) {
+    logger.error({ err }, "[coupons] failed to list coupons");
+    res.status(500).json({ error: "Failed to fetch coupons" });
+  }
+});
+router30.post("/coupons", async (req, res) => {
+  try {
+    const b = req.body;
+    const code = String(b.code ?? "").trim().toUpperCase();
+    if (!code) {
+      res.status(400).json({ error: "code is required" });
+      return;
+    }
+    const discount = Number(b.discount);
+    if (isNaN(discount) || discount <= 0) {
+      res.status(400).json({ error: "discount must be > 0" });
+      return;
+    }
+    const validUntil = String(b.validUntil ?? "").trim();
+    if (!validUntil) {
+      res.status(400).json({ error: "validUntil is required" });
+      return;
+    }
+    const [existing] = await db.select({ code: couponsTable.code }).from(couponsTable).where(eq(couponsTable.code, code)).limit(1);
+    if (existing) {
+      res.status(409).json({ error: `Coupon "${code}" already exists` });
+      return;
+    }
+    const [inserted] = await db.insert(couponsTable).values({
+      code,
+      discount: String(discount),
+      discountType: b.discountType === "percentage" ? "percentage" : "fixed",
+      type: ["public", "welcome", "user_specific"].includes(b.type) ? b.type : "public",
+      allowedPhone: b.allowed_phone ? String(b.allowed_phone).trim() : null,
+      validUntil,
+      usageLimit: Number(b.usageLimit ?? 0) || 0,
+      minBookingAmount: String(Number(b.minBookingAmount ?? 0) || 0),
+      serviceType: b.service_type ? String(b.service_type) : null,
+      flightType: b.flight_type ? String(b.flight_type) : null,
+      airline: b.airline ? String(b.airline).trim() : null,
+      description: b.description ? String(b.description).trim() : null
+    }).returning();
+    logger.info({ code }, "[coupons] created");
+    res.status(201).json(rowToCoupon(inserted));
+  } catch (err) {
+    logger.error({ err }, "[coupons] failed to create coupon");
+    res.status(500).json({ error: "Failed to create coupon" });
+  }
+});
+router30.delete("/coupons/:code", async (req, res) => {
+  try {
+    const code = req.params.code?.trim().toUpperCase();
+    if (!code) {
+      res.status(400).json({ error: "code is required" });
+      return;
+    }
+    const deleted = await db.delete(couponsTable).where(eq(couponsTable.code, code)).returning();
+    if (deleted.length === 0) {
+      res.status(404).json({ error: "Coupon not found" });
+      return;
+    }
+    logger.info({ code }, "[coupons] deleted");
+    res.json({ success: true, code });
+  } catch (err) {
+    logger.error({ err }, "[coupons] failed to delete coupon");
+    res.status(500).json({ error: "Failed to delete coupon" });
+  }
+});
+router30.post("/coupons/usage", async (req, res) => {
+  try {
+    const code = String(req.body.code ?? "").trim().toUpperCase();
+    const phone = String(req.body.phone ?? "").trim();
+    if (!code || !phone) {
+      res.status(400).json({ error: "code and phone are required" });
+      return;
+    }
+    const normalised = phone.replace(/\D/g, "").slice(-10);
+    const [inserted] = await db.insert(couponUsageTable).values({ code, phone: normalised }).returning();
+    logger.info({ code, phone: normalised }, "[coupons] usage recorded");
+    res.status(201).json({ success: true, id: inserted.id });
+  } catch (err) {
+    logger.error({ err }, "[coupons] failed to record usage");
+    res.status(500).json({ error: "Failed to record usage" });
+  }
+});
+router30.get("/coupons/usage/counts", async (_req, res) => {
+  try {
+    const rows = await db.select({
+      code: couponUsageTable.code,
+      count: sql`cast(count(*) as int)`
+    }).from(couponUsageTable).groupBy(couponUsageTable.code);
+    const counts = {};
+    for (const r2 of rows) counts[r2.code] = r2.count;
+    res.json(counts);
+  } catch (err) {
+    logger.error({ err }, "[coupons] failed to fetch usage counts");
+    res.status(500).json({ error: "Failed to fetch usage counts" });
+  }
+});
+router30.get("/coupons/usage", async (_req, res) => {
+  try {
+    const rows = await db.select({ code: couponUsageTable.code, phone: couponUsageTable.phone }).from(couponUsageTable).orderBy(desc(couponUsageTable.createdAt));
+    res.json(rows);
+  } catch (err) {
+    logger.error({ err }, "[coupons] failed to fetch usage");
+    res.status(500).json({ error: "Failed to fetch coupon usage" });
+  }
+});
+var coupons_default = router30;
+
+// src/routes/index.ts
+var router31 = (0, import_express31.Router)();
+router31.use(health_default);
+router31.use(auth_default);
+router31.use(admin_default);
+router31.use(admin_notify_default);
+router31.use(flights_default);
+router31.use(buses_default);
+router31.use(hotels_default);
+router31.use(packages_default);
+router31.use(bookings_default);
+router31.use("/payments", payments_default);
+router31.use("/tickets", tickets_default);
+router31.use("/send-whatsapp", whatsapp_default);
+router31.use("/itinerary-pdf", itinerary_pdf_default);
+router31.use("/holiday-whatsapp", holiday_whatsapp_default);
+router31.use("/followup", followup_default);
+router31.use(leads_default);
+router31.use(holiday_packages_default);
+router31.use(enquiries_default);
+router31.use(push_default);
+router31.use(currency_default);
+router31.use(marketing_default);
+router31.use(admin_bookings_default);
+router31.use(book_flight_default);
+router31.use(verify_payment_default);
+router31.use(tripjack_default);
+router31.use(tripjackRoutes_default);
+router31.use(tbo_default);
+router31.use(test_comms_default);
+router31.use(users_default);
+router31.use(coupons_default);
+var routes_default = router31;
 
 // src/app.ts
-var app2 = (0, import_express31.default)();
+var app2 = (0, import_express32.default)();
 app2.use(
   (0, import_pino_http.default)({
     logger,
@@ -166634,15 +166804,15 @@ app2.use(
   })
 );
 app2.use((0, import_cookie_parser.default)());
-app2.use(import_express31.default.json());
-app2.use(import_express31.default.urlencoded({ extended: true }));
+app2.use(import_express32.default.json());
+app2.use(import_express32.default.urlencoded({ extended: true }));
 app2.use("/api", routes_default);
 if (process.env.NODE_ENV === "production") {
   const currentDir = dirname(fileURLToPath(import.meta.url));
   const staticDir = resolve(currentDir, "../../travel-booking/dist/public");
   if (existsSync(staticDir)) {
     logger.info({ staticDir }, "Serving frontend static files");
-    app2.use(import_express31.default.static(staticDir, { maxAge: "1d", index: false }));
+    app2.use(import_express32.default.static(staticDir, { maxAge: "1d", index: false }));
     app2.use((_req, res) => {
       res.sendFile(join(staticDir, "index.html"));
     });

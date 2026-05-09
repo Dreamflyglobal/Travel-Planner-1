@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/auth-context";
 import { getConvenienceFee } from "@/lib/pricing";
-import { validateCoupon, getCoupons, checkFirstTimeUsage, recordCouponUsage, type Coupon } from "@/lib/coupon";
+import { validateCouponFromList, apiFetchCoupons, apiFetchCouponUsage, apiRecordCouponUsage, checkFirstTimeUsage, type Coupon, type CouponUsageRecord } from "@/lib/coupon";
 import { AvailableCoupons } from "@/components/available-coupons";
 import { useCreateBooking } from "@workspace/api-client-react";
 import { openRazorpayCheckout, verifyRazorpayPayment } from "@/lib/use-razorpay";
@@ -258,6 +258,8 @@ export default function BookingPayment() {
   const [paymentError,    setPaymentError]    = useState<string | null>(null);
   const [useCredits,      setUseCredits]      = useState(false);
   const [autoCouponDone,  setAutoCouponDone]  = useState(false);
+  const [allCoupons,      setAllCoupons]      = useState<Coupon[]>([]);
+  const [couponUsageRecs, setCouponUsageRecs] = useState<CouponUsageRecord[]>([]);
 
   const COUPON_SS_KEY = "ww_coupon_code";
 
@@ -272,8 +274,15 @@ export default function BookingPayment() {
     setSession(s);
   }, []);
 
+  // Fetch coupons from API on mount (cross-device, server-backed)
+  useEffect(() => {
+    apiFetchCoupons().then(setAllCoupons).catch(() => {});
+    apiFetchCouponUsage().then(setCouponUsageRecs).catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (!session || autoCouponDone || couponStatus === "valid") return;
+    if (allCoupons.length === 0) return; // wait until coupons are loaded
 
     // 1. Restore previously applied coupon from sessionStorage (highest priority)
     const savedCode = sessionStorage.getItem(COUPON_SS_KEY);
@@ -283,24 +292,24 @@ export default function BookingPayment() {
       return;
     }
 
-    // 2. Auto-apply best public coupon
+    // 2. Auto-apply best public coupon from API-fetched list
     const base = session.totalBase;
     const svcType = session.type; // "flight" | "bus" | "hotel" — matches coupon service_type
     const phone = session.type === "hotel" ? session.guest?.phone ?? ""
       : (session as any).passengers?.[0]?.phone ?? "";
     const ctx = { phone, userBookingsCount: 0, service_type: svcType as any };
-    const all = getCoupons().filter((c) => c.type === "public");
+    const all = allCoupons.filter((c) => c.type === "public");
     let bestCode = "";
     let bestAmt  = 0;
     for (const c of all) {
-      const r = validateCoupon(c.code, base, ctx);
+      const r = validateCouponFromList(c.code, base, ctx, allCoupons, couponUsageRecs);
       if (r.ok && r.discountAmount > bestAmt) { bestAmt = r.discountAmount; bestCode = c.code; }
     }
     if (bestCode) {
       setTimeout(() => applyCoupon(bestCode), 600);
     }
     setAutoCouponDone(true);
-  }, [session]);
+  }, [session, allCoupons]);
 
   const totalBase = useMemo(() => {
     if (!session) return 0;
@@ -337,7 +346,7 @@ export default function BookingPayment() {
     const code = (codeOverride ?? couponInput).trim().toUpperCase();
     if (!code) return;
     if (codeOverride) setCouponInput(codeOverride);
-    const result = validateCoupon(code, totalBase, couponContext);
+    const result = validateCouponFromList(code, totalBase, couponContext, allCoupons, couponUsageRecs);
     if (result.ok) {
       setDiscount(result.discountAmount);
       setAppliedCoupon(result.coupon);
@@ -644,7 +653,7 @@ export default function BookingPayment() {
     }
     if (appliedCoupon) {
       const phone = session.type === "hotel" ? (session as HotelBookingSession).guest.phone : (session as any).passengers[0].phone;
-      recordCouponUsage(appliedCoupon.code, phone);
+      apiRecordCouponUsage(appliedCoupon.code, phone);
     }
     if (user?.role === "staff") {
       const wCustName    = session.type === "hotel" ? (session as HotelBookingSession).guest.name : (session as any).passengers[0].name;
@@ -771,7 +780,7 @@ export default function BookingPayment() {
       }
       if (appliedCoupon) {
         const phone = session.type === "hotel" ? (session as HotelBookingSession).guest.phone : (session as any).passengers[0].phone;
-        recordCouponUsage(appliedCoupon.code, phone);
+        apiRecordCouponUsage(appliedCoupon.code, phone);
       }
       if (user?.role === "staff") {
         const cCustName    = session.type === "hotel" ? (session as HotelBookingSession).guest.name : (session as any).passengers[0].name;
@@ -1101,7 +1110,7 @@ export default function BookingPayment() {
           }
         }
 
-        if (appliedCoupon) recordCouponUsage(appliedCoupon.code, custPhone);
+        if (appliedCoupon) apiRecordCouponUsage(appliedCoupon.code, custPhone);
         convertLeadToBooked(custPhone, session.type, bookingRef);
 
         // Push notification: booking confirmation
@@ -1438,6 +1447,8 @@ export default function BookingPayment() {
                         context={couponContext}
                         onApply={(code) => applyCoupon(code)}
                         appliedCode={appliedCoupon?.code}
+                        coupons={allCoupons}
+                        usageRecords={couponUsageRecs}
                       />
                       <label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
                         <Tag className="w-3.5 h-3.5" /> Have a coupon?

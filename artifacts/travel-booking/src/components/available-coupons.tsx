@@ -1,19 +1,29 @@
 import { useMemo } from "react";
-import { Tag, Percent, IndianRupee, Sparkles, Gift, User, Plane, Bus, Hotel, Map } from "lucide-react";
+import { Tag, Sparkles, Gift, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { getAvailableCoupons, computeDiscountAmount, type Coupon, type CouponContext } from "@/lib/coupon";
+import {
+  getAvailableCouponsFromList,
+  computeDiscountAmount,
+  type Coupon,
+  type CouponContext,
+  type CouponUsageRecord,
+} from "@/lib/coupon";
 
 interface AvailableCouponsProps {
   bookingAmount: number;
   context?: CouponContext;
   onApply: (code: string) => void;
   appliedCode?: string;
+  /** Pre-fetched coupon list from API (preferred). Falls back to localStorage if omitted. */
+  coupons?: Coupon[];
+  /** Pre-fetched usage records from API. */
+  usageRecords?: CouponUsageRecord[];
 }
 
 function typeLabel(coupon: Coupon) {
   const t = coupon.type ?? (coupon.firstTimeOnly ? "welcome" : "public");
-  if (t === "welcome") return { label: "Welcome Offer", color: "bg-amber-100 text-amber-700 border-amber-200", icon: Gift };
+  if (t === "welcome")      return { label: "Welcome Offer", color: "bg-amber-100 text-amber-700 border-amber-200",  icon: Gift };
   if (t === "user_specific") return { label: "Special Offer", color: "bg-purple-100 text-purple-700 border-purple-200", icon: User };
   return { label: "Public", color: "bg-blue-100 text-blue-700 border-blue-200", icon: Sparkles };
 }
@@ -21,31 +31,46 @@ function typeLabel(coupon: Coupon) {
 function serviceLabel(coupon: Coupon): { label: string; color: string } | null {
   if (!coupon.service_type) return null;
   const labels: Record<string, { label: string; color: string }> = {
-    flight:  { label: "Flights", color: "bg-sky-100 text-sky-700 border-sky-200" },
-    bus:     { label: "Bus", color: "bg-orange-100 text-orange-700 border-orange-200" },
-    hotel:   { label: "Hotels", color: "bg-green-100 text-green-700 border-green-200" },
+    flight:  { label: "Flights",  color: "bg-sky-100 text-sky-700 border-sky-200" },
+    bus:     { label: "Bus",      color: "bg-orange-100 text-orange-700 border-orange-200" },
+    hotel:   { label: "Hotels",   color: "bg-green-100 text-green-700 border-green-200" },
     holiday: { label: "Holidays", color: "bg-rose-100 text-rose-700 border-rose-200" },
   };
   return labels[coupon.service_type] ?? null;
 }
 
-export function AvailableCoupons({ bookingAmount, context, onApply, appliedCode }: AvailableCouponsProps) {
-  const coupons = useMemo(
-    () => getAvailableCoupons(bookingAmount, context),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [bookingAmount, context?.phone, context?.userBookingsCount, context?.service_type, context?.flight_type, context?.airline],
-  );
+export function AvailableCoupons({
+  bookingAmount,
+  context,
+  onApply,
+  appliedCode,
+  coupons: couponsProp,
+  usageRecords = [],
+}: AvailableCouponsProps) {
+  const available = useMemo(() => {
+    if (!couponsProp) return [];
+    return getAvailableCouponsFromList(bookingAmount, context ?? {}, couponsProp, usageRecords);
+  }, [
+    bookingAmount,
+    couponsProp,
+    usageRecords,
+    context?.phone,
+    context?.userBookingsCount,
+    context?.service_type,
+    context?.flight_type,
+    context?.airline,
+  ]);
 
-  if (coupons.length === 0) return null;
+  if (available.length === 0) return null;
 
   return (
     <div className="space-y-3">
       <p className="text-sm font-semibold flex items-center gap-2 text-primary">
         <Tag className="w-4 h-4" />
-        Available Offers ({coupons.length})
+        Available Offers ({available.length})
       </p>
       <div className="grid grid-cols-1 gap-2">
-        {coupons.map((coupon) => {
+        {available.map((coupon) => {
           const { label, color, icon: Icon } = typeLabel(coupon);
           const svc = serviceLabel(coupon);
           const discountText =

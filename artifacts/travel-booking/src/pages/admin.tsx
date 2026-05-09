@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { apiFetchCoupons, apiFetchCouponUsageCounts, apiCreateCoupon, apiDeleteCoupon } from "@/lib/coupon";
 import { useLocation } from "wouter";
 import { AdminLayout } from "@/components/admin-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -153,15 +154,8 @@ export default function AdminDashboard() {
   });
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [couponToDelete, setCouponToDelete] = useState<string | null>(null);
-  const [couponUsageCounts, setCouponUsageCounts] = useState<Record<string, number>>(() => {
-    try {
-      const raw: Array<{ code: string }> = JSON.parse(localStorage.getItem("coupon_usage") ?? "[]");
-      return raw.reduce<Record<string, number>>((acc, u) => {
-        acc[u.code] = (acc[u.code] ?? 0) + 1;
-        return acc;
-      }, {});
-    } catch { return {}; }
-  });
+  const [couponUsageCounts, setCouponUsageCounts] = useState<Record<string, number>>({});
+  const [couponLoading, setCouponLoading] = useState(false);
 
   // Package state
   const [packages, setPackages] = useState<Array<{
@@ -183,25 +177,26 @@ export default function AdminDashboard() {
   const [showDeletePackageDialog, setShowDeletePackageDialog] = useState(false);
   const [packageToDelete, setPackageToDelete] = useState<string | null>(null);
 
-  // Load coupons and packages from localStorage
-  useEffect(() => {
-    const savedCoupons = localStorage.getItem("coupons");
-    if (savedCoupons) {
-      try {
-        setCoupons(JSON.parse(savedCoupons));
-      } catch (e) {
-        console.error("Error loading coupons:", e);
-        setCoupons([]);
-      }
-    }
-    // Refresh coupon usage counts on mount
+  // Load coupons from API (server-backed, cross-device)
+  const loadCouponsFromApi = useCallback(async () => {
+    setCouponLoading(true);
     try {
-      const raw: Array<{ code: string }> = JSON.parse(localStorage.getItem("coupon_usage") ?? "[]");
-      setCouponUsageCounts(raw.reduce<Record<string, number>>((acc, u) => {
-        acc[u.code] = (acc[u.code] ?? 0) + 1;
-        return acc;
-      }, {}));
-    } catch { /* ignore */ }
+      const [couponsData, usageCounts] = await Promise.all([
+        apiFetchCoupons(),
+        apiFetchCouponUsageCounts(),
+      ]);
+      setCoupons(couponsData as any);
+      setCouponUsageCounts(usageCounts);
+    } catch (e) {
+      console.error("Failed to load coupons from API:", e);
+    } finally {
+      setCouponLoading(false);
+    }
+  }, []);
+
+  // Load coupons and packages on mount
+  useEffect(() => {
+    loadCouponsFromApi();
 
     const savedPackages = localStorage.getItem("packages");
     if (savedPackages) {
@@ -214,11 +209,6 @@ export default function AdminDashboard() {
     }
   }, []);
 
-  // Save coupons to localStorage
-  const saveCoupons = (updatedCoupons: typeof coupons) => {
-    localStorage.setItem("coupons", JSON.stringify(updatedCoupons));
-    setCoupons(updatedCoupons);
-  };
 
   // Add new coupon
   const handleAddCoupon = () => {
@@ -280,31 +270,26 @@ export default function AdminDashboard() {
       return;
     }
 
-    const updatedCoupons = [
-      ...coupons,
-      {
-        code,
-        discount,
-        discountType: newCoupon.discountType,
-        type: newCoupon.type,
-        allowed_phone: newCoupon.type === "user_specific" ? newCoupon.allowed_phone.trim() : undefined,
-        used_by: [],
-        validUntil,
-        firstTimeOnly: newCoupon.type === "welcome",
-        usageLimit: newCoupon.usageLimit ? parseInt(newCoupon.usageLimit) : 0,
-        minBookingAmount: newCoupon.minBookingAmount ? parseFloat(newCoupon.minBookingAmount) : 0,
-        service_type: newCoupon.service_type || undefined,
-        flight_type: newCoupon.service_type === "flight" && newCoupon.flight_type ? newCoupon.flight_type : undefined,
-        airline: newCoupon.service_type === "flight" && newCoupon.airline.trim() ? newCoupon.airline.trim() : undefined,
-        description: newCoupon.description.trim() || undefined,
-      }
-    ];
-
-    saveCoupons(updatedCoupons);
-
-    toast({
-      title: "Coupon Added Successfully!",
-      description: `Coupon "${code}" has been created.`,
+    // Save to server via API
+    apiCreateCoupon({
+      code,
+      discount,
+      discountType: newCoupon.discountType,
+      type: newCoupon.type,
+      allowed_phone: newCoupon.type === "user_specific" ? newCoupon.allowed_phone.trim() : undefined,
+      validUntil,
+      firstTimeOnly: newCoupon.type === "welcome",
+      usageLimit: newCoupon.usageLimit ? parseInt(newCoupon.usageLimit) : 0,
+      minBookingAmount: newCoupon.minBookingAmount ? parseFloat(newCoupon.minBookingAmount) : 0,
+      service_type: (newCoupon.service_type || undefined) as any,
+      flight_type: (newCoupon.service_type === "flight" && newCoupon.flight_type ? newCoupon.flight_type : undefined) as any,
+      airline: newCoupon.service_type === "flight" && newCoupon.airline.trim() ? newCoupon.airline.trim() : undefined,
+      description: newCoupon.description.trim() || undefined,
+    }).then(() => {
+      toast({ title: "Coupon Added Successfully!", description: `Coupon "${code}" has been created.` });
+      loadCouponsFromApi(); // refresh list from server
+    }).catch((err) => {
+      toast({ variant: "destructive", title: "Failed to create coupon", description: err?.message ?? "Server error" });
     });
 
     setNewCoupon({
@@ -332,17 +317,16 @@ export default function AdminDashboard() {
 
   const confirmDeleteCoupon = () => {
     if (!couponToDelete) return;
-
-    const updatedCoupons = coupons.filter(c => c.code !== couponToDelete);
-    saveCoupons(updatedCoupons);
-
-    toast({
-      title: "Coupon Deleted",
-      description: `Coupon "${couponToDelete}" has been removed.`,
-    });
-
+    const code = couponToDelete;
     setShowDeleteDialog(false);
     setCouponToDelete(null);
+
+    apiDeleteCoupon(code).then(() => {
+      toast({ title: "Coupon Deleted", description: `Coupon "${code}" has been removed.` });
+      loadCouponsFromApi(); // refresh list from server
+    }).catch((err) => {
+      toast({ variant: "destructive", title: "Failed to delete coupon", description: err?.message ?? "Server error" });
+    });
   };
 
   // Check if coupon is expired
