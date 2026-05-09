@@ -22,6 +22,12 @@ function isBase64Url(s: string | null | undefined): boolean {
   return typeof s === "string" && s.startsWith("data:");
 }
 
+/** Relative /uploads/ paths only exist on the dev filesystem — strip them from
+ *  localStorage so they never cause 404s in production after a redeploy. */
+function isUploadsPath(s: string | null | undefined): boolean {
+  return typeof s === "string" && s.startsWith("/uploads/");
+}
+
 function sanitize(raw: Partial<BrandingSettings>): BrandingSettings {
   return {
     companyName: raw.companyName?.trim()  || DEFAULT_BRANDING.companyName,
@@ -34,8 +40,10 @@ function sanitize(raw: Partial<BrandingSettings>): BrandingSettings {
 function sanitizeForCache(s: BrandingSettings): BrandingSettings {
   return {
     ...s,
-    logoUrl:    isBase64Url(s.logoUrl)    ? null : s.logoUrl,
-    faviconUrl: isBase64Url(s.faviconUrl) ? null : s.faviconUrl,
+    // Never cache data URLs (too large for localStorage) or /uploads/ paths
+    // (ephemeral filesystem — gone after every redeploy in production).
+    logoUrl:    (isBase64Url(s.logoUrl)    || isUploadsPath(s.logoUrl))    ? null : s.logoUrl,
+    faviconUrl: (isBase64Url(s.faviconUrl) || isUploadsPath(s.faviconUrl)) ? null : s.faviconUrl,
   };
 }
 

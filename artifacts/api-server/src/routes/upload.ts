@@ -1,40 +1,21 @@
 import { Router } from "express";
 import multer from "multer";
 import path from "node:path";
-import fs from "node:fs";
-import crypto from "node:crypto";
-
-const UPLOADS_DIR = path.resolve(process.cwd(), "uploads");
-
-if (!fs.existsSync(UPLOADS_DIR)) {
-  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-}
 
 const ALLOWED_MIME: Record<string, string> = {
-  "image/png":                  ".png",
-  "image/jpeg":                 ".jpg",
-  "image/jpg":                  ".jpg",
-  "image/webp":                 ".webp",
-  "image/svg+xml":              ".svg",
-  "image/gif":                  ".gif",
-  "image/x-icon":               ".ico",
-  "image/vnd.microsoft.icon":   ".ico",
+  "image/png":                "png",
+  "image/jpeg":               "jpeg",
+  "image/jpg":                "jpeg",
+  "image/webp":               "webp",
+  "image/svg+xml":            "svg+xml",
+  "image/gif":                "gif",
+  "image/x-icon":             "x-icon",
+  "image/vnd.microsoft.icon": "vnd.microsoft.icon",
 };
 
 const MAX_LOGO_BYTES    = 5  * 1024 * 1024;
 const MAX_FAVICON_BYTES = 2  * 1024 * 1024;
 const RAW_CAP_BYTES     = 20 * 1024 * 1024;
-
-function makeStorage(prefix: string) {
-  return multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
-    filename: (_req, file, cb) => {
-      const ext = ALLOWED_MIME[file.mimetype] ?? path.extname(file.originalname).toLowerCase();
-      const uid = crypto.randomBytes(8).toString("hex");
-      cb(null, `${prefix}-${uid}${ext}`);
-    },
-  });
-}
 
 function fileFilter(
   _req: Express.Request,
@@ -44,21 +25,28 @@ function fileFilter(
   if (ALLOWED_MIME[file.mimetype]) {
     cb(null, true);
   } else {
-    cb(new Error(`Unsupported file type: ${file.mimetype}. Allowed: PNG, JPG, WEBP, SVG, ICO.`));
+    cb(new Error(`Unsupported file type: ${file.mimetype}. Allowed: PNG, JPG, WEBP, SVG, ICO, GIF.`));
   }
 }
 
 const uploadLogo = multer({
-  storage: makeStorage("logo"),
+  storage: multer.memoryStorage(),
   limits:  { fileSize: Math.min(MAX_LOGO_BYTES, RAW_CAP_BYTES) },
   fileFilter,
 });
 
 const uploadFavicon = multer({
-  storage: makeStorage("favicon"),
+  storage: multer.memoryStorage(),
   limits:  { fileSize: Math.min(MAX_FAVICON_BYTES, RAW_CAP_BYTES) },
   fileFilter,
 });
+
+function toDataUrl(file: Express.Multer.File): string {
+  const subtype = ALLOWED_MIME[file.mimetype] ?? path.extname(file.originalname).replace(".", "");
+  const mimeType = subtype.includes("/") ? `image/${subtype}` : file.mimetype;
+  const b64 = file.buffer.toString("base64");
+  return `data:${mimeType};base64,${b64}`;
+}
 
 const router = Router();
 
@@ -67,7 +55,7 @@ router.post("/upload/logo", uploadLogo.single("file"), (req, res) => {
     res.status(400).json({ error: "No file received." });
     return;
   }
-  const url = `/uploads/${req.file.filename}`;
+  const url = toDataUrl(req.file);
   res.json({ url });
 });
 
@@ -76,7 +64,7 @@ router.post("/upload/favicon", uploadFavicon.single("file"), (req, res) => {
     res.status(400).json({ error: "No file received." });
     return;
   }
-  const url = `/uploads/${req.file.filename}`;
+  const url = toDataUrl(req.file);
   res.json({ url });
 });
 

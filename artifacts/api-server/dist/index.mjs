@@ -116,10 +116,10 @@ var require_package = __commonJS({
 // ../../node_modules/.pnpm/dotenv@16.6.1/node_modules/dotenv/lib/main.js
 var require_main = __commonJS({
   "../../node_modules/.pnpm/dotenv@16.6.1/node_modules/dotenv/lib/main.js"(exports, module) {
-    var fs3 = __require("fs");
+    var fs2 = __require("fs");
     var path2 = __require("path");
     var os = __require("os");
-    var crypto6 = __require("crypto");
+    var crypto5 = __require("crypto");
     var packageJson = require_package();
     var version3 = packageJson.version;
     var LINE = /(?:^|^)\s*(?:export\s+)?([\w.-]+)(?:\s*=\s*?|:\s+?)(\s*'(?:\\'|[^'])*'|\s*"(?:\\"|[^"])*"|\s*`(?:\\`|[^`])*`|[^#\r\n]+)?\s*(?:#.*)?(?:$|$)/mg;
@@ -225,7 +225,7 @@ var require_main = __commonJS({
       if (options && options.path && options.path.length > 0) {
         if (Array.isArray(options.path)) {
           for (const filepath of options.path) {
-            if (fs3.existsSync(filepath)) {
+            if (fs2.existsSync(filepath)) {
               possibleVaultPath = filepath.endsWith(".vault") ? filepath : `${filepath}.vault`;
             }
           }
@@ -235,7 +235,7 @@ var require_main = __commonJS({
       } else {
         possibleVaultPath = path2.resolve(process.cwd(), ".env.vault");
       }
-      if (fs3.existsSync(possibleVaultPath)) {
+      if (fs2.existsSync(possibleVaultPath)) {
         return possibleVaultPath;
       }
       return null;
@@ -284,7 +284,7 @@ var require_main = __commonJS({
       const parsedAll = {};
       for (const path3 of optionPaths) {
         try {
-          const parsed = DotenvModule.parse(fs3.readFileSync(path3, { encoding }));
+          const parsed = DotenvModule.parse(fs2.readFileSync(path3, { encoding }));
           DotenvModule.populate(parsedAll, parsed, options);
         } catch (e2) {
           if (debug) {
@@ -338,7 +338,7 @@ var require_main = __commonJS({
       const authTag = ciphertext.subarray(-16);
       ciphertext = ciphertext.subarray(12, -16);
       try {
-        const aesgcm = crypto6.createDecipheriv("aes-256-gcm", key, nonce);
+        const aesgcm = crypto5.createDecipheriv("aes-256-gcm", key, nonce);
         aesgcm.setAuthTag(authTag);
         return `${aesgcm.update(ciphertext)}${aesgcm.final()}`;
       } catch (error40) {
@@ -19082,7 +19082,7 @@ var require_view = __commonJS({
     "use strict";
     var debug = require_src()("express:view");
     var path2 = __require("node:path");
-    var fs3 = __require("node:fs");
+    var fs2 = __require("node:fs");
     var dirname2 = path2.dirname;
     var basename2 = path2.basename;
     var extname = path2.extname;
@@ -19162,7 +19162,7 @@ var require_view = __commonJS({
     function tryStat(path3) {
       debug('stat "%s"', path3);
       try {
-        return fs3.statSync(path3);
+        return fs2.statSync(path3);
       } catch (e2) {
         return void 0;
       }
@@ -19175,14 +19175,14 @@ var require_etag = __commonJS({
   "../../node_modules/.pnpm/etag@1.8.1/node_modules/etag/index.js"(exports, module) {
     "use strict";
     module.exports = etag;
-    var crypto6 = __require("crypto");
+    var crypto5 = __require("crypto");
     var Stats = __require("fs").Stats;
     var toString3 = Object.prototype.toString;
     function entitytag(entity) {
       if (entity.length === 0) {
         return '"0-2jmj7l5rSw0yVb/vlWAYkK/YBwk"';
       }
-      var hash2 = crypto6.createHash("sha1").update(entity, "utf8").digest("base64").substring(0, 27);
+      var hash2 = crypto5.createHash("sha1").update(entity, "utf8").digest("base64").substring(0, 27);
       var len = typeof entity === "string" ? Buffer.byteLength(entity, "utf8") : entity.length;
       return '"' + len.toString(16) + "-" + hash2 + '"';
     }
@@ -22657,17 +22657,17 @@ var require_content_disposition = __commonJS({
 // ../../node_modules/.pnpm/cookie-signature@1.2.2/node_modules/cookie-signature/index.js
 var require_cookie_signature = __commonJS({
   "../../node_modules/.pnpm/cookie-signature@1.2.2/node_modules/cookie-signature/index.js"(exports) {
-    var crypto6 = __require("crypto");
+    var crypto5 = __require("crypto");
     exports.sign = function(val, secret) {
       if ("string" != typeof val) throw new TypeError("Cookie value must be provided as a string.");
       if (null == secret) throw new TypeError("Secret key must be provided.");
-      return val + "." + crypto6.createHmac("sha256", secret).update(val).digest("base64").replace(/\=+$/, "");
+      return val + "." + crypto5.createHmac("sha256", secret).update(val).digest("base64").replace(/\=+$/, "");
     };
     exports.unsign = function(input, secret) {
       if ("string" != typeof input) throw new TypeError("Signed cookie string must be provided.");
       if (null == secret) throw new TypeError("Secret key must be provided.");
       var tentativeValue = input.slice(0, input.lastIndexOf(".")), expectedInput = exports.sign(tentativeValue, secret), expectedBuffer = Buffer.from(expectedInput), inputBuffer = Buffer.from(input);
-      return expectedBuffer.length === inputBuffer.length && crypto6.timingSafeEqual(expectedBuffer, inputBuffer) ? tentativeValue : false;
+      return expectedBuffer.length === inputBuffer.length && crypto5.timingSafeEqual(expectedBuffer, inputBuffer) ? tentativeValue : false;
     };
   }
 });
@@ -22848,7 +22848,7 @@ var require_send = __commonJS({
     var escapeHtml = require_escape_html();
     var etag = require_etag();
     var fresh = require_fresh();
-    var fs3 = __require("fs");
+    var fs2 = __require("fs");
     var mime = require_mime_types();
     var ms = require_ms();
     var onFinished = require_on_finished();
@@ -23130,7 +23130,7 @@ var require_send = __commonJS({
       var i2 = 0;
       var self2 = this;
       debug('stat "%s"', path3);
-      fs3.stat(path3, function onstat(err, stat2) {
+      fs2.stat(path3, function onstat(err, stat2) {
         var pathEndsWithSep = path3[path3.length - 1] === sep;
         if (err && err.code === "ENOENT" && !extname(path3) && !pathEndsWithSep) {
           return next(err);
@@ -23147,7 +23147,7 @@ var require_send = __commonJS({
         }
         var p = path3 + "." + self2._extensions[i2++];
         debug('stat "%s"', p);
-        fs3.stat(p, function(err2, stat2) {
+        fs2.stat(p, function(err2, stat2) {
           if (err2) return next(err2);
           if (stat2.isDirectory()) return next();
           self2.emit("file", p, stat2);
@@ -23165,7 +23165,7 @@ var require_send = __commonJS({
         }
         var p = join2(path3, self2._index[i2]);
         debug('stat "%s"', p);
-        fs3.stat(p, function(err2, stat2) {
+        fs2.stat(p, function(err2, stat2) {
           if (err2) return next(err2);
           if (stat2.isDirectory()) return next();
           self2.emit("file", p, stat2);
@@ -23177,7 +23177,7 @@ var require_send = __commonJS({
     SendStream.prototype.stream = function stream4(path3, options) {
       var self2 = this;
       var res = this.res;
-      var stream5 = fs3.createReadStream(path3, options);
+      var stream5 = fs2.createReadStream(path3, options);
       this.emit("stream", stream5);
       stream5.pipe(res);
       function cleanup() {
@@ -24297,11 +24297,11 @@ var require_lib3 = __commonJS({
 // ../../node_modules/.pnpm/cookie-signature@1.0.6/node_modules/cookie-signature/index.js
 var require_cookie_signature2 = __commonJS({
   "../../node_modules/.pnpm/cookie-signature@1.0.6/node_modules/cookie-signature/index.js"(exports) {
-    var crypto6 = __require("crypto");
+    var crypto5 = __require("crypto");
     exports.sign = function(val, secret) {
       if ("string" != typeof val) throw new TypeError("Cookie value must be provided as a string.");
       if ("string" != typeof secret) throw new TypeError("Secret string must be provided.");
-      return val + "." + crypto6.createHmac("sha256", secret).update(val).digest("base64").replace(/\=+$/, "");
+      return val + "." + crypto5.createHmac("sha256", secret).update(val).digest("base64").replace(/\=+$/, "");
     };
     exports.unsign = function(val, secret) {
       if ("string" != typeof val) throw new TypeError("Signed cookie string must be provided.");
@@ -24310,7 +24310,7 @@ var require_cookie_signature2 = __commonJS({
       return sha1(mac) == sha1(val) ? str : false;
     };
     function sha1(str) {
-      return crypto6.createHash("sha1").update(str).digest("hex");
+      return crypto5.createHash("sha1").update(str).digest("hex");
     }
   }
 });
@@ -25582,7 +25582,7 @@ var require_atomic_sleep = __commonJS({
 var require_sonic_boom = __commonJS({
   "../../node_modules/.pnpm/sonic-boom@4.2.1/node_modules/sonic-boom/index.js"(exports, module) {
     "use strict";
-    var fs3 = __require("fs");
+    var fs2 = __require("fs");
     var EventEmitter2 = __require("events");
     var inherits2 = __require("util").inherits;
     var path2 = __require("path");
@@ -25639,20 +25639,20 @@ var require_sonic_boom = __commonJS({
       const mode = sonic.mode;
       if (sonic.sync) {
         try {
-          if (sonic.mkdir) fs3.mkdirSync(path2.dirname(file2), { recursive: true });
-          const fd = fs3.openSync(file2, flags, mode);
+          if (sonic.mkdir) fs2.mkdirSync(path2.dirname(file2), { recursive: true });
+          const fd = fs2.openSync(file2, flags, mode);
           fileOpened(null, fd);
         } catch (err) {
           fileOpened(err);
           throw err;
         }
       } else if (sonic.mkdir) {
-        fs3.mkdir(path2.dirname(file2), { recursive: true }, (err) => {
+        fs2.mkdir(path2.dirname(file2), { recursive: true }, (err) => {
           if (err) return fileOpened(err);
-          fs3.open(file2, flags, mode, fileOpened);
+          fs2.open(file2, flags, mode, fileOpened);
         });
       } else {
-        fs3.open(file2, flags, mode, fileOpened);
+        fs2.open(file2, flags, mode, fileOpened);
       }
     }
     function SonicBoom(opts) {
@@ -25693,8 +25693,8 @@ var require_sonic_boom = __commonJS({
         this.flush = flushBuffer;
         this.flushSync = flushBufferSync;
         this._actualWrite = actualWriteBuffer;
-        fsWriteSync = () => fs3.writeSync(this.fd, this._writingBuf);
-        fsWrite = () => fs3.write(this.fd, this._writingBuf, this.release);
+        fsWriteSync = () => fs2.writeSync(this.fd, this._writingBuf);
+        fsWrite = () => fs2.write(this.fd, this._writingBuf, this.release);
       } else if (contentMode === void 0 || contentMode === kContentModeUtf8) {
         this._writingBuf = "";
         this.write = write;
@@ -25703,15 +25703,15 @@ var require_sonic_boom = __commonJS({
         this._actualWrite = actualWrite;
         fsWriteSync = () => {
           if (Buffer.isBuffer(this._writingBuf)) {
-            return fs3.writeSync(this.fd, this._writingBuf);
+            return fs2.writeSync(this.fd, this._writingBuf);
           }
-          return fs3.writeSync(this.fd, this._writingBuf, "utf8");
+          return fs2.writeSync(this.fd, this._writingBuf, "utf8");
         };
         fsWrite = () => {
           if (Buffer.isBuffer(this._writingBuf)) {
-            return fs3.write(this.fd, this._writingBuf, this.release);
+            return fs2.write(this.fd, this._writingBuf, this.release);
           }
-          return fs3.write(this.fd, this._writingBuf, "utf8", this.release);
+          return fs2.write(this.fd, this._writingBuf, "utf8", this.release);
         };
       } else {
         throw new Error(`SonicBoom supports "${kContentModeUtf8}" and "${kContentModeBuffer}", but passed ${contentMode}`);
@@ -25768,7 +25768,7 @@ var require_sonic_boom = __commonJS({
           }
         }
         if (this._fsync) {
-          fs3.fsyncSync(this.fd);
+          fs2.fsyncSync(this.fd);
         }
         const len = this._len;
         if (this._reopening) {
@@ -25882,7 +25882,7 @@ var require_sonic_boom = __commonJS({
       const onDrain = () => {
         if (!this._fsync) {
           try {
-            fs3.fsync(this.fd, (err) => {
+            fs2.fsync(this.fd, (err) => {
               this._flushPending = false;
               cb(err);
             });
@@ -25984,7 +25984,7 @@ var require_sonic_boom = __commonJS({
       const fd = this.fd;
       this.once("ready", () => {
         if (fd !== this.fd) {
-          fs3.close(fd, (err) => {
+          fs2.close(fd, (err) => {
             if (err) {
               return this.emit("error", err);
             }
@@ -26033,7 +26033,7 @@ var require_sonic_boom = __commonJS({
           buf = this._bufs[0];
         }
         try {
-          const n = Buffer.isBuffer(buf) ? fs3.writeSync(this.fd, buf) : fs3.writeSync(this.fd, buf, "utf8");
+          const n = Buffer.isBuffer(buf) ? fs2.writeSync(this.fd, buf) : fs2.writeSync(this.fd, buf, "utf8");
           const releasedBufObj = releaseWritingBuf(buf, this._len, n);
           buf = releasedBufObj.writingBuf;
           this._len = releasedBufObj.len;
@@ -26049,7 +26049,7 @@ var require_sonic_boom = __commonJS({
         }
       }
       try {
-        fs3.fsyncSync(this.fd);
+        fs2.fsyncSync(this.fd);
       } catch {
       }
     }
@@ -26070,7 +26070,7 @@ var require_sonic_boom = __commonJS({
           buf = mergeBuf(this._bufs[0], this._lens[0]);
         }
         try {
-          const n = fs3.writeSync(this.fd, buf);
+          const n = fs2.writeSync(this.fd, buf);
           buf = buf.subarray(n);
           this._len = Math.max(this._len - n, 0);
           if (buf.length <= 0) {
@@ -26098,13 +26098,13 @@ var require_sonic_boom = __commonJS({
       this._writingBuf = this._writingBuf.length ? this._writingBuf : this._bufs.shift() || "";
       if (this.sync) {
         try {
-          const written = Buffer.isBuffer(this._writingBuf) ? fs3.writeSync(this.fd, this._writingBuf) : fs3.writeSync(this.fd, this._writingBuf, "utf8");
+          const written = Buffer.isBuffer(this._writingBuf) ? fs2.writeSync(this.fd, this._writingBuf) : fs2.writeSync(this.fd, this._writingBuf, "utf8");
           release(null, written);
         } catch (err) {
           release(err);
         }
       } else {
-        fs3.write(this.fd, this._writingBuf, release);
+        fs2.write(this.fd, this._writingBuf, release);
       }
     }
     function actualWriteBuffer() {
@@ -26113,7 +26113,7 @@ var require_sonic_boom = __commonJS({
       this._writingBuf = this._writingBuf.length ? this._writingBuf : mergeBuf(this._bufs.shift(), this._lens.shift());
       if (this.sync) {
         try {
-          const written = fs3.writeSync(this.fd, this._writingBuf);
+          const written = fs2.writeSync(this.fd, this._writingBuf);
           release(null, written);
         } catch (err) {
           release(err);
@@ -26122,7 +26122,7 @@ var require_sonic_boom = __commonJS({
         if (kCopyBuffer) {
           this._writingBuf = Buffer.from(this._writingBuf);
         }
-        fs3.write(this.fd, this._writingBuf, release);
+        fs2.write(this.fd, this._writingBuf, release);
       }
     }
     function actualClose(sonic) {
@@ -26138,12 +26138,12 @@ var require_sonic_boom = __commonJS({
       sonic._lens = [];
       assert2(typeof sonic.fd === "number", `sonic.fd must be a number, got ${typeof sonic.fd}`);
       try {
-        fs3.fsync(sonic.fd, closeWrapped);
+        fs2.fsync(sonic.fd, closeWrapped);
       } catch {
       }
       function closeWrapped() {
         if (sonic.fd !== 1 && sonic.fd !== 2) {
-          fs3.close(sonic.fd, done);
+          fs2.close(sonic.fd, done);
         } else {
           done();
         }
@@ -30346,7 +30346,7 @@ var require_cert_signatures = __commonJS({
 var require_sasl = __commonJS({
   "../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/crypto/sasl.js"(exports, module) {
     "use strict";
-    var crypto6 = require_utils5();
+    var crypto5 = require_utils5();
     var { signatureAlgorithmHashFromCertificate } = require_cert_signatures();
     function startSession(mechanisms, stream4) {
       const candidates = ["SCRAM-SHA-256"];
@@ -30358,7 +30358,7 @@ var require_sasl = __commonJS({
       if (mechanism === "SCRAM-SHA-256-PLUS" && typeof stream4.getPeerCertificate !== "function") {
         throw new Error("SASL: Mechanism SCRAM-SHA-256-PLUS requires a certificate");
       }
-      const clientNonce = crypto6.randomBytes(18).toString("base64");
+      const clientNonce = crypto5.randomBytes(18).toString("base64");
       const gs2Header = mechanism === "SCRAM-SHA-256-PLUS" ? "p=tls-server-end-point" : stream4 ? "y" : "n";
       return {
         mechanism,
@@ -30393,20 +30393,20 @@ var require_sasl = __commonJS({
         const peerCert = stream4.getPeerCertificate().raw;
         let hashName = signatureAlgorithmHashFromCertificate(peerCert);
         if (hashName === "MD5" || hashName === "SHA-1") hashName = "SHA-256";
-        const certHash = await crypto6.hashByName(hashName, peerCert);
+        const certHash = await crypto5.hashByName(hashName, peerCert);
         const bindingData = Buffer.concat([Buffer.from("p=tls-server-end-point,,"), Buffer.from(certHash)]);
         channelBinding = bindingData.toString("base64");
       }
       const clientFinalMessageWithoutProof = "c=" + channelBinding + ",r=" + sv.nonce;
       const authMessage = clientFirstMessageBare + "," + serverFirstMessage + "," + clientFinalMessageWithoutProof;
       const saltBytes = Buffer.from(sv.salt, "base64");
-      const saltedPassword = await crypto6.deriveKey(password, saltBytes, sv.iteration);
-      const clientKey = await crypto6.hmacSha256(saltedPassword, "Client Key");
-      const storedKey = await crypto6.sha256(clientKey);
-      const clientSignature = await crypto6.hmacSha256(storedKey, authMessage);
+      const saltedPassword = await crypto5.deriveKey(password, saltBytes, sv.iteration);
+      const clientKey = await crypto5.hmacSha256(saltedPassword, "Client Key");
+      const storedKey = await crypto5.sha256(clientKey);
+      const clientSignature = await crypto5.hmacSha256(storedKey, authMessage);
       const clientProof = xorBuffers(Buffer.from(clientKey), Buffer.from(clientSignature)).toString("base64");
-      const serverKey = await crypto6.hmacSha256(saltedPassword, "Server Key");
-      const serverSignatureBytes = await crypto6.hmacSha256(serverKey, authMessage);
+      const serverKey = await crypto5.hmacSha256(saltedPassword, "Server Key");
+      const serverSignatureBytes = await crypto5.hmacSha256(serverKey, authMessage);
       session.message = "SASLResponse";
       session.serverSignature = Buffer.from(serverSignatureBytes).toString("base64");
       session.response = clientFinalMessageWithoutProof + ",p=" + clientProof;
@@ -30601,15 +30601,15 @@ var require_pg_connection_string = __commonJS({
       if (config2.sslcert || config2.sslkey || config2.sslrootcert || config2.sslmode) {
         config2.ssl = {};
       }
-      const fs3 = config2.sslcert || config2.sslkey || config2.sslrootcert ? __require("fs") : null;
+      const fs2 = config2.sslcert || config2.sslkey || config2.sslrootcert ? __require("fs") : null;
       if (config2.sslcert) {
-        config2.ssl.cert = fs3.readFileSync(config2.sslcert).toString();
+        config2.ssl.cert = fs2.readFileSync(config2.sslcert).toString();
       }
       if (config2.sslkey) {
-        config2.ssl.key = fs3.readFileSync(config2.sslkey).toString();
+        config2.ssl.key = fs2.readFileSync(config2.sslkey).toString();
       }
       if (config2.sslrootcert) {
-        config2.ssl.ca = fs3.readFileSync(config2.sslrootcert).toString();
+        config2.ssl.ca = fs2.readFileSync(config2.sslrootcert).toString();
       }
       if (options.useLibpqCompat && config2.uselibpqcompat) {
         throw new Error("Both useLibpqCompat and uselibpqcompat are set. Please use only one of them.");
@@ -32546,15 +32546,15 @@ var require_lib4 = __commonJS({
   "../../node_modules/.pnpm/pgpass@1.0.5/node_modules/pgpass/lib/index.js"(exports, module) {
     "use strict";
     var path2 = __require("path");
-    var fs3 = __require("fs");
+    var fs2 = __require("fs");
     var helper = require_helper();
     module.exports = function(connInfo, cb) {
       var file2 = helper.getFileName();
-      fs3.stat(file2, function(err, stat2) {
+      fs2.stat(file2, function(err, stat2) {
         if (err || !helper.usePgPass(stat2, file2)) {
           return cb(void 0);
         }
-        var st = fs3.createReadStream(file2);
+        var st = fs2.createReadStream(file2);
         helper.getPassword(connInfo, st, cb);
       });
     };
@@ -32574,7 +32574,7 @@ var require_client = __commonJS({
     var Query2 = require_query();
     var defaults3 = require_defaults();
     var Connection2 = require_connection();
-    var crypto6 = require_utils5();
+    var crypto5 = require_utils5();
     var activeQueryDeprecationNotice = nodeUtils.deprecate(
       () => {
       },
@@ -32809,7 +32809,7 @@ var require_client = __commonJS({
       _handleAuthMD5Password(msg) {
         this._getPassword(async () => {
           try {
-            const hashedPassword = await crypto6.postgresMd5PasswordHash(this.user, this.password, msg.salt);
+            const hashedPassword = await crypto5.postgresMd5PasswordHash(this.user, this.password, msg.salt);
             this.connection.password(hashedPassword);
           } catch (e2) {
             this.emit("error", e2);
@@ -38445,14 +38445,14 @@ var require_buffer_equal_constant_time = __commonJS({
 var require_jwa = __commonJS({
   "../../node_modules/.pnpm/jwa@2.0.1/node_modules/jwa/index.js"(exports, module) {
     var Buffer4 = require_safe_buffer().Buffer;
-    var crypto6 = __require("crypto");
+    var crypto5 = __require("crypto");
     var formatEcdsa = require_ecdsa_sig_formatter();
     var util4 = __require("util");
     var MSG_INVALID_ALGORITHM = '"%s" is not a valid algorithm.\n  Supported algorithms are:\n  "HS256", "HS384", "HS512", "RS256", "RS384", "RS512", "PS256", "PS384", "PS512", "ES256", "ES384", "ES512" and "none".';
     var MSG_INVALID_SECRET = "secret must be a string or buffer";
     var MSG_INVALID_VERIFIER_KEY = "key must be a string or a buffer";
     var MSG_INVALID_SIGNER_KEY = "key must be a string, a buffer or an object";
-    var supportsKeyObjects = typeof crypto6.createPublicKey === "function";
+    var supportsKeyObjects = typeof crypto5.createPublicKey === "function";
     if (supportsKeyObjects) {
       MSG_INVALID_VERIFIER_KEY += " or a KeyObject";
       MSG_INVALID_SECRET += "or a KeyObject";
@@ -38542,17 +38542,17 @@ var require_jwa = __commonJS({
       return function sign(thing, secret) {
         checkIsSecretKey(secret);
         thing = normalizeInput(thing);
-        var hmac = crypto6.createHmac("sha" + bits, secret);
+        var hmac = crypto5.createHmac("sha" + bits, secret);
         var sig = (hmac.update(thing), hmac.digest("base64"));
         return fromBase64(sig);
       };
     }
     var bufferEqual;
-    var timingSafeEqual = "timingSafeEqual" in crypto6 ? function timingSafeEqual2(a, b) {
+    var timingSafeEqual = "timingSafeEqual" in crypto5 ? function timingSafeEqual2(a, b) {
       if (a.byteLength !== b.byteLength) {
         return false;
       }
-      return crypto6.timingSafeEqual(a, b);
+      return crypto5.timingSafeEqual(a, b);
     } : function timingSafeEqual2(a, b) {
       if (!bufferEqual) {
         bufferEqual = require_buffer_equal_constant_time();
@@ -38569,7 +38569,7 @@ var require_jwa = __commonJS({
       return function sign(thing, privateKey) {
         checkIsPrivateKey(privateKey);
         thing = normalizeInput(thing);
-        var signer = crypto6.createSign("RSA-SHA" + bits);
+        var signer = crypto5.createSign("RSA-SHA" + bits);
         var sig = (signer.update(thing), signer.sign(privateKey, "base64"));
         return fromBase64(sig);
       };
@@ -38579,7 +38579,7 @@ var require_jwa = __commonJS({
         checkIsPublicKey(publicKey);
         thing = normalizeInput(thing);
         signature = toBase64(signature);
-        var verifier = crypto6.createVerify("RSA-SHA" + bits);
+        var verifier = crypto5.createVerify("RSA-SHA" + bits);
         verifier.update(thing);
         return verifier.verify(publicKey, signature, "base64");
       };
@@ -38588,11 +38588,11 @@ var require_jwa = __commonJS({
       return function sign(thing, privateKey) {
         checkIsPrivateKey(privateKey);
         thing = normalizeInput(thing);
-        var signer = crypto6.createSign("RSA-SHA" + bits);
+        var signer = crypto5.createSign("RSA-SHA" + bits);
         var sig = (signer.update(thing), signer.sign({
           key: privateKey,
-          padding: crypto6.constants.RSA_PKCS1_PSS_PADDING,
-          saltLength: crypto6.constants.RSA_PSS_SALTLEN_DIGEST
+          padding: crypto5.constants.RSA_PKCS1_PSS_PADDING,
+          saltLength: crypto5.constants.RSA_PSS_SALTLEN_DIGEST
         }, "base64"));
         return fromBase64(sig);
       };
@@ -38602,12 +38602,12 @@ var require_jwa = __commonJS({
         checkIsPublicKey(publicKey);
         thing = normalizeInput(thing);
         signature = toBase64(signature);
-        var verifier = crypto6.createVerify("RSA-SHA" + bits);
+        var verifier = crypto5.createVerify("RSA-SHA" + bits);
         verifier.update(thing);
         return verifier.verify({
           key: publicKey,
-          padding: crypto6.constants.RSA_PKCS1_PSS_PADDING,
-          saltLength: crypto6.constants.RSA_PSS_SALTLEN_DIGEST
+          padding: crypto5.constants.RSA_PKCS1_PSS_PADDING,
+          saltLength: crypto5.constants.RSA_PSS_SALTLEN_DIGEST
         }, signature, "base64");
       };
     }
@@ -51043,9 +51043,9 @@ var require_form_data = __commonJS({
     var http5 = __require("http");
     var https3 = __require("https");
     var parseUrl2 = __require("url").parse;
-    var fs3 = __require("fs");
+    var fs2 = __require("fs");
     var Stream3 = __require("stream").Stream;
-    var crypto6 = __require("crypto");
+    var crypto5 = __require("crypto");
     var mime = require_mime_types2();
     var asynckit = require_asynckit();
     var setToStringTag = require_es_set_tostringtag();
@@ -51110,7 +51110,7 @@ var require_form_data = __commonJS({
         if (value.end != void 0 && value.end != Infinity && value.start != void 0) {
           callback(null, value.end + 1 - (value.start ? value.start : 0));
         } else {
-          fs3.stat(value.path, function(err, stat2) {
+          fs2.stat(value.path, function(err, stat2) {
             if (err) {
               callback(err);
               return;
@@ -51251,7 +51251,7 @@ var require_form_data = __commonJS({
       return Buffer.concat([dataBuffer, Buffer.from(this._lastBoundary())]);
     };
     FormData5.prototype._generateBoundary = function() {
-      this._boundary = "--------------------------" + crypto6.randomBytes(12).toString("hex");
+      this._boundary = "--------------------------" + crypto5.randomBytes(12).toString("hex");
     };
     FormData5.prototype.getLengthSync = function() {
       var knownLength = this._overheadLength + this._valueLength;
@@ -51888,7 +51888,7 @@ var require_axios = __commonJS({
   "../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/dist/node/axios.cjs"(exports, module) {
     "use strict";
     var FormData$1 = require_form_data();
-    var crypto6 = __require("crypto");
+    var crypto5 = __require("crypto");
     var url3 = __require("url");
     var http5 = __require("http");
     var https3 = __require("https");
@@ -52669,7 +52669,7 @@ var require_axios = __commonJS({
         length
       } = alphabet;
       const randomValues = new Uint32Array(size);
-      crypto6.randomFillSync(randomValues);
+      crypto5.randomFillSync(randomValues);
       for (let i2 = 0; i2 < size; i2++) {
         str += alphabet[randomValues[i2] % length];
       }
@@ -55702,7 +55702,7 @@ var require_razorpay_utils = __commonJS({
     } : function(obj) {
       return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj;
     };
-    var crypto6 = __require("crypto");
+    var crypto5 = __require("crypto");
     function getDateInSecs(date6) {
       return +new Date(date6) / 1e3;
     }
@@ -55739,12 +55739,12 @@ var require_razorpay_utils = __commonJS({
       return new Error("\n" + summary + "\n" + ("Expected(" + (typeof expectedVal === "undefined" ? "undefined" : _typeof(expectedVal)) + ")\n" + prettify(expectedVal) + "\n\n") + ("Got(" + (typeof gotVal === "undefined" ? "undefined" : _typeof(gotVal)) + ")\n" + prettify(gotVal)));
     }
     function validateWebhookSignature(body, signature, secret) {
-      var crypto7 = __require("crypto");
+      var crypto6 = __require("crypto");
       if (!isDefined(body) || !isDefined(signature) || !isDefined(secret)) {
         throw Error("Invalid Parameters: Please give request body,signature sent in X-Razorpay-Signature header and webhook secret from dashboard as parameters");
       }
       body = body.toString();
-      var expectedSignature = crypto7.createHmac("sha256", secret).update(body).digest("hex");
+      var expectedSignature = crypto6.createHmac("sha256", secret).update(body).digest("hex");
       return expectedSignature === signature;
     }
     function validatePaymentVerification() {
@@ -55782,7 +55782,7 @@ var require_razorpay_utils = __commonJS({
         var keyBytes = Buffer.from(secret.slice(0, 16), "utf8");
         var iv = Buffer.alloc(12);
         keyBytes.copy(iv, 0, 0, 12);
-        var cipher = crypto6.createCipheriv("aes-128-gcm", keyBytes, iv);
+        var cipher = crypto5.createCipheriv("aes-128-gcm", keyBytes, iv);
         var encryptedData = cipher.update(dataToEncrypt, "utf8");
         encryptedData = Buffer.concat([encryptedData, cipher.final()]);
         var authTag = cipher.getAuthTag();
@@ -62548,12 +62548,12 @@ var require_make_middleware = __commonJS({
 // ../../node_modules/.pnpm/multer@2.1.1/node_modules/multer/storage/disk.js
 var require_disk = __commonJS({
   "../../node_modules/.pnpm/multer@2.1.1/node_modules/multer/storage/disk.js"(exports, module) {
-    var fs3 = __require("fs");
+    var fs2 = __require("fs");
     var os = __require("os");
     var path2 = __require("path");
-    var crypto6 = __require("crypto");
+    var crypto5 = __require("crypto");
     function getFilename(req, file2, cb) {
-      crypto6.randomBytes(16, function(err, raw) {
+      crypto5.randomBytes(16, function(err, raw) {
         cb(err, err ? void 0 : raw.toString("hex"));
       });
     }
@@ -62563,7 +62563,7 @@ var require_disk = __commonJS({
     function DiskStorage(opts) {
       this.getFilename = opts.filename || getFilename;
       if (typeof opts.destination === "string") {
-        fs3.mkdirSync(opts.destination, { recursive: true });
+        fs2.mkdirSync(opts.destination, { recursive: true });
         this.getDestination = function($0, $1, cb) {
           cb(null, opts.destination);
         };
@@ -62578,7 +62578,7 @@ var require_disk = __commonJS({
         that.getFilename(req, file2, function(err2, filename) {
           if (err2) return cb(err2);
           var finalPath = path2.join(destination, filename);
-          var outStream = fs3.createWriteStream(finalPath);
+          var outStream = fs2.createWriteStream(finalPath);
           file2.stream.pipe(outStream);
           outStream.on("error", cb);
           outStream.on("finish", function() {
@@ -62597,7 +62597,7 @@ var require_disk = __commonJS({
       delete file2.destination;
       delete file2.filename;
       delete file2.path;
-      fs3.unlink(path3, cb);
+      fs2.unlink(path3, cb);
     };
     module.exports = function(opts) {
       return new DiskStorage(opts);
@@ -66343,10 +66343,10 @@ var require_bson = __commonJS({
       return webByteUtils.fromNumberArray(Array.from({ length: byteLength }, () => Math.floor(Math.random() * 256)));
     }
     var webRandomBytes = (() => {
-      const { crypto: crypto6 } = globalThis;
-      if (crypto6 != null && typeof crypto6.getRandomValues === "function") {
+      const { crypto: crypto5 } = globalThis;
+      if (crypto5 != null && typeof crypto5.getRandomValues === "function") {
         return (byteLength) => {
-          return crypto6.getRandomValues(webByteUtils.allocate(byteLength));
+          return crypto5.getRandomValues(webByteUtils.allocate(byteLength));
         };
       } else {
         if (isReactNative2()) {
@@ -72042,7 +72042,7 @@ var require_utils7 = __commonJS({
     exports.decorateDecryptionResult = decorateDecryptionResult;
     exports.addAbortListener = addAbortListener;
     exports.abortable = abortable;
-    var crypto6 = __require("crypto");
+    var crypto5 = __require("crypto");
     var fs_1 = __require("fs");
     var http5 = __require("http");
     var timers_1 = __require("timers");
@@ -72198,7 +72198,7 @@ var require_utils7 = __commonJS({
       }
     }
     function uuidV4() {
-      const result = crypto6.randomBytes(16);
+      const result = crypto5.randomBytes(16);
       result[6] = result[6] & 15 | 64;
       result[8] = result[8] & 63 | 128;
       return result;
@@ -72782,7 +72782,7 @@ var require_utils7 = __commonJS({
     function squashError(_error) {
       return;
     }
-    exports.randomBytes = (0, util_1.promisify)(crypto6.randomBytes);
+    exports.randomBytes = (0, util_1.promisify)(crypto5.randomBytes);
     async function once(ee, name2, options) {
       options?.signal?.throwIfAborted();
       const { promise: promise2, resolve: resolve2, reject } = promiseWithResolvers();
@@ -82685,7 +82685,7 @@ var require_node_domexception = __commonJS({
 });
 
 // ../../node_modules/.pnpm/fetch-blob@3.2.0/node_modules/fetch-blob/from.js
-import { statSync, createReadStream, promises as fs2 } from "node:fs";
+import { statSync, createReadStream, promises as fs } from "node:fs";
 import { basename } from "node:path";
 var import_node_domexception, stat, blobFromSync, blobFrom, fileFrom, fileFromSync, fromBlob, fromFile, BlobDataItem;
 var init_from = __esm({
@@ -82693,7 +82693,7 @@ var init_from = __esm({
     import_node_domexception = __toESM(require_node_domexception(), 1);
     init_file();
     init_fetch_blob();
-    ({ stat } = fs2);
+    ({ stat } = fs);
     blobFromSync = (path2, type) => fromBlob(statSync(path2), path2, type);
     blobFrom = (path2, type) => stat(path2).then((stat2) => fromBlob(stat2, path2, type));
     fileFrom = (path2, type) => stat(path2).then((stat2) => fromFile(stat2, path2, type));
@@ -92702,12 +92702,12 @@ var require_crypto_callbacks = __commonJS({
     exports.sha256Hook = sha256Hook;
     exports.makeHmacHook = makeHmacHook;
     exports.signRsaSha256Hook = signRsaSha256Hook;
-    var crypto6 = __require("crypto");
+    var crypto5 = __require("crypto");
     function makeAES256Hook(method, mode) {
       return function(key, iv, input, output) {
         let result;
         try {
-          const cipher = crypto6[method](mode, key, iv);
+          const cipher = crypto5[method](mode, key, iv);
           cipher.setAutoPadding(false);
           result = cipher.update(input);
           const final = cipher.final();
@@ -92723,7 +92723,7 @@ var require_crypto_callbacks = __commonJS({
     }
     function randomHook(buffer, count2) {
       try {
-        crypto6.randomFillSync(buffer, 0, count2);
+        crypto5.randomFillSync(buffer, 0, count2);
       } catch (e2) {
         return e2;
       }
@@ -92732,7 +92732,7 @@ var require_crypto_callbacks = __commonJS({
     function sha256Hook(input, output) {
       let result;
       try {
-        result = crypto6.createHash("sha256").update(input).digest();
+        result = crypto5.createHash("sha256").update(input).digest();
       } catch (e2) {
         return e2;
       }
@@ -92743,7 +92743,7 @@ var require_crypto_callbacks = __commonJS({
       return (key, input, output) => {
         let result;
         try {
-          result = crypto6.createHmac(algorithm, key).update(input).digest();
+          result = crypto5.createHmac(algorithm, key).update(input).digest();
         } catch (e2) {
           return e2;
         }
@@ -92754,7 +92754,7 @@ var require_crypto_callbacks = __commonJS({
     function signRsaSha256Hook(key, input, output) {
       let result;
       try {
-        const signer = crypto6.createSign("sha256WithRSAEncryption");
+        const signer = crypto5.createSign("sha256WithRSAEncryption");
         const privateKey = Buffer.from(`-----BEGIN PRIVATE KEY-----
 ${key.toString("base64")}
 -----END PRIVATE KEY-----
@@ -93188,7 +93188,7 @@ var require_state_machine = __commonJS({
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.StateMachine = void 0;
-    var fs3 = __require("fs/promises");
+    var fs2 = __require("fs/promises");
     var net = __require("net");
     var tls = __require("tls");
     var bson_1 = require_bson2();
@@ -93475,11 +93475,11 @@ var require_state_machine = __commonJS({
           options.secureContext = tlsOptions.secureContext;
         }
         if (tlsOptions.tlsCertificateKeyFile) {
-          const cert = await fs3.readFile(tlsOptions.tlsCertificateKeyFile);
+          const cert = await fs2.readFile(tlsOptions.tlsCertificateKeyFile);
           options.cert = options.key = cert;
         }
         if (tlsOptions.tlsCAFile) {
-          options.ca = await fs3.readFile(tlsOptions.tlsCAFile);
+          options.ca = await fs2.readFile(tlsOptions.tlsCAFile);
         }
         if (tlsOptions.tlsCertificateKeyFilePassword) {
           options.passphrase = tlsOptions.tlsCertificateKeyFilePassword;
@@ -101402,7 +101402,7 @@ var require_token_machine_workflow = __commonJS({
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.callback = void 0;
-    var fs3 = __require("fs");
+    var fs2 = __require("fs");
     var error_1 = require_error();
     var TOKEN_MISSING_ERROR = "OIDC_TOKEN_FILE must be set in the environment.";
     var callback = async () => {
@@ -101410,7 +101410,7 @@ var require_token_machine_workflow = __commonJS({
       if (!tokenFile) {
         throw new error_1.MongoAWSError(TOKEN_MISSING_ERROR);
       }
-      const token = await fs3.promises.readFile(tokenFile, "utf8");
+      const token = await fs2.promises.readFile(tokenFile, "utf8");
       return { accessToken: token };
     };
     exports.callback = callback;
@@ -101963,7 +101963,7 @@ var require_scram = __commonJS({
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.ScramSHA256 = exports.ScramSHA1 = void 0;
     var saslprep_1 = require_node3();
-    var crypto6 = __require("crypto");
+    var crypto5 = __require("crypto");
     var bson_1 = require_bson2();
     var error_1 = require_error();
     var utils_1 = require_utils7();
@@ -102116,9 +102116,9 @@ var require_scram = __commonJS({
       }
       let md5;
       try {
-        md5 = crypto6.createHash("md5");
+        md5 = crypto5.createHash("md5");
       } catch (err) {
-        if (crypto6.getFips()) {
+        if (crypto5.getFips()) {
           throw new Error("Auth mechanism SCRAM-SHA-1 is not supported in FIPS mode");
         }
         throw err;
@@ -102141,10 +102141,10 @@ var require_scram = __commonJS({
       return Buffer.from(res).toString("base64");
     }
     function H(method, text2) {
-      return crypto6.createHash(method).update(text2).digest();
+      return crypto5.createHash(method).update(text2).digest();
     }
     function HMAC(method, key, text2) {
-      return crypto6.createHmac(method, key).update(text2).digest();
+      return crypto5.createHmac(method, key).update(text2).digest();
     }
     var _hiCache = {};
     var _hiCacheCount = 0;
@@ -102161,7 +102161,7 @@ var require_scram = __commonJS({
       if (_hiCache[key] != null) {
         return _hiCache[key];
       }
-      const saltedData = crypto6.pbkdf2Sync(data, salt, iterations, hiLengthMap[cryptoMethod], cryptoMethod);
+      const saltedData = crypto5.pbkdf2Sync(data, salt, iterations, hiLengthMap[cryptoMethod], cryptoMethod);
       if (_hiCacheCount >= 200) {
         _hiCachePurge();
       }
@@ -102173,8 +102173,8 @@ var require_scram = __commonJS({
       if (lhs.length !== rhs.length) {
         return false;
       }
-      if (typeof crypto6.timingSafeEqual === "function") {
-        return crypto6.timingSafeEqual(lhs, rhs);
+      if (typeof crypto5.timingSafeEqual === "function") {
+        return crypto5.timingSafeEqual(lhs, rhs);
       }
       let result = 0;
       for (let i2 = 0; i2 < lhs.length; i2++) {
@@ -141580,7 +141580,7 @@ var import_cookie_parser = __toESM(require_cookie_parser(), 1);
 var import_pino_http = __toESM(require_logger(), 1);
 import { fileURLToPath } from "node:url";
 import { dirname, resolve, join } from "node:path";
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync } from "node:fs";
 
 // src/routes/index.ts
 var import_express33 = __toESM(require_express2(), 1);
@@ -174793,59 +174793,49 @@ var settings_default = router31;
 var import_express32 = __toESM(require_express2(), 1);
 var import_multer = __toESM(require_multer(), 1);
 import path from "node:path";
-import fs from "node:fs";
-import crypto5 from "node:crypto";
-var UPLOADS_DIR = path.resolve(process.cwd(), "uploads");
-if (!fs.existsSync(UPLOADS_DIR)) {
-  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-}
 var ALLOWED_MIME = {
-  "image/png": ".png",
-  "image/jpeg": ".jpg",
-  "image/jpg": ".jpg",
-  "image/webp": ".webp",
-  "image/svg+xml": ".svg",
-  "image/gif": ".gif",
-  "image/x-icon": ".ico",
-  "image/vnd.microsoft.icon": ".ico"
+  "image/png": "png",
+  "image/jpeg": "jpeg",
+  "image/jpg": "jpeg",
+  "image/webp": "webp",
+  "image/svg+xml": "svg+xml",
+  "image/gif": "gif",
+  "image/x-icon": "x-icon",
+  "image/vnd.microsoft.icon": "vnd.microsoft.icon"
 };
 var MAX_LOGO_BYTES = 5 * 1024 * 1024;
 var MAX_FAVICON_BYTES = 2 * 1024 * 1024;
 var RAW_CAP_BYTES = 20 * 1024 * 1024;
-function makeStorage(prefix) {
-  return import_multer.default.diskStorage({
-    destination: (_req, _file2, cb) => cb(null, UPLOADS_DIR),
-    filename: (_req, file2, cb) => {
-      const ext = ALLOWED_MIME[file2.mimetype] ?? path.extname(file2.originalname).toLowerCase();
-      const uid = crypto5.randomBytes(8).toString("hex");
-      cb(null, `${prefix}-${uid}${ext}`);
-    }
-  });
-}
 function fileFilter(_req, file2, cb) {
   if (ALLOWED_MIME[file2.mimetype]) {
     cb(null, true);
   } else {
-    cb(new Error(`Unsupported file type: ${file2.mimetype}. Allowed: PNG, JPG, WEBP, SVG, ICO.`));
+    cb(new Error(`Unsupported file type: ${file2.mimetype}. Allowed: PNG, JPG, WEBP, SVG, ICO, GIF.`));
   }
 }
 var uploadLogo = (0, import_multer.default)({
-  storage: makeStorage("logo"),
+  storage: import_multer.default.memoryStorage(),
   limits: { fileSize: Math.min(MAX_LOGO_BYTES, RAW_CAP_BYTES) },
   fileFilter
 });
 var uploadFavicon = (0, import_multer.default)({
-  storage: makeStorage("favicon"),
+  storage: import_multer.default.memoryStorage(),
   limits: { fileSize: Math.min(MAX_FAVICON_BYTES, RAW_CAP_BYTES) },
   fileFilter
 });
+function toDataUrl(file2) {
+  const subtype = ALLOWED_MIME[file2.mimetype] ?? path.extname(file2.originalname).replace(".", "");
+  const mimeType = subtype.includes("/") ? `image/${subtype}` : file2.mimetype;
+  const b64 = file2.buffer.toString("base64");
+  return `data:${mimeType};base64,${b64}`;
+}
 var router32 = (0, import_express32.Router)();
 router32.post("/upload/logo", uploadLogo.single("file"), (req, res) => {
   if (!req.file) {
     res.status(400).json({ error: "No file received." });
     return;
   }
-  const url3 = `/uploads/${req.file.filename}`;
+  const url3 = toDataUrl(req.file);
   res.json({ url: url3 });
 });
 router32.post("/upload/favicon", uploadFavicon.single("file"), (req, res) => {
@@ -174853,7 +174843,7 @@ router32.post("/upload/favicon", uploadFavicon.single("file"), (req, res) => {
     res.status(400).json({ error: "No file received." });
     return;
   }
-  const url3 = `/uploads/${req.file.filename}`;
+  const url3 = toDataUrl(req.file);
   res.json({ url: url3 });
 });
 router32.use(
@@ -174904,10 +174894,6 @@ router33.use(upload_default);
 var routes_default = router33;
 
 // src/app.ts
-var UPLOADS_DIR2 = resolve(process.cwd(), "uploads");
-if (!existsSync(UPLOADS_DIR2)) {
-  mkdirSync(UPLOADS_DIR2, { recursive: true });
-}
 var app2 = (0, import_express34.default)();
 app2.use(
   (0, import_pino_http.default)({
@@ -174935,9 +174921,8 @@ app2.use(
   })
 );
 app2.use((0, import_cookie_parser.default)());
-app2.use(import_express34.default.json());
-app2.use(import_express34.default.urlencoded({ extended: true }));
-app2.use("/uploads", import_express34.default.static(UPLOADS_DIR2, { maxAge: 0, etag: false }));
+app2.use(import_express34.default.json({ limit: "20mb" }));
+app2.use(import_express34.default.urlencoded({ extended: true, limit: "20mb" }));
 app2.use("/api", routes_default);
 if (process.env.NODE_ENV === "production") {
   const currentDir = dirname(fileURLToPath(import.meta.url));

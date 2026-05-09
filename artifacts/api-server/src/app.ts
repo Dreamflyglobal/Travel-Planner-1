@@ -4,14 +4,9 @@ import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve, join } from "node:path";
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync } from "node:fs";
 import router from "./routes";
 import { logger } from "./lib/logger";
-
-const UPLOADS_DIR = resolve(process.cwd(), "uploads");
-if (!existsSync(UPLOADS_DIR)) {
-  mkdirSync(UPLOADS_DIR, { recursive: true });
-}
 
 const app: Express = express();
 
@@ -42,20 +37,18 @@ app.use(
   }),
 );
 app.use(cookieParser());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
-// ── Uploaded media files (/uploads/*) ────────────────────────────────────────
-// Serve with no-store so browsers always fetch the latest logo/favicon
-app.use("/uploads", express.static(UPLOADS_DIR, { maxAge: 0, etag: false }));
+// Increase JSON body size limit to 20 MB so base64-encoded logo / favicon
+// data URLs (stored directly in the settings DB) can be saved without a 413.
+app.use(express.json({ limit: "20mb" }));
+app.use(express.urlencoded({ extended: true, limit: "20mb" }));
 
 // ── API routes (/api/*) ──────────────────────────────────────────────────────
 app.use("/api", router);
 
 // ── Production static file serving ──────────────────────────────────────────
-// When deployed as a single service (Railway, Render, etc.), the Express server
-// also serves the Vite-built frontend so both share the same origin — no CORS or
-// proxy config required on the client side.
+// When deployed, Express serves the Vite-built frontend so both share the same
+// origin — no CORS or proxy config needed on the client side.
 //
 // Build order: pnpm --filter @workspace/travel-booking run build  THEN
 //              pnpm --filter @workspace/api-server  run build
