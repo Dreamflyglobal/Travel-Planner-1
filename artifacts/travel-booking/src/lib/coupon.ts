@@ -142,7 +142,8 @@ export function validateCouponFromList(
   coupons: Coupon[],
   usageRecords: CouponUsageRecord[],
 ): CouponValidationResult {
-  const coupon = coupons.find((c) => c.code === code);
+  const upperCode = code.trim().toUpperCase();
+  const coupon = coupons.find((c) => c.code.toUpperCase() === upperCode);
   if (!coupon) return { ok: false, error: "Invalid coupon code" };
 
   // Expiry
@@ -244,10 +245,11 @@ export function getAvailableCouponsFromList(
 
     const limit = coupon.usageLimit ?? 0;
     if (limit > 0) {
-      const count = usageRecords.filter((u) => u.code === coupon.code).length;
+      const count = usageRecords.filter((u) => u.code.toUpperCase() === coupon.code.toUpperCase()).length;
       if (count >= limit) return false;
     }
 
+    // Only filter by service_type when BOTH coupon and context have a type set
     if (coupon.service_type && ctx.service_type && coupon.service_type !== ctx.service_type) return false;
 
     if (coupon.service_type === "flight") {

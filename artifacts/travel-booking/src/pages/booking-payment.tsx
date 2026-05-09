@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/auth-context";
 import { getConvenienceFee } from "@/lib/pricing";
-import { validateCouponFromList, apiFetchCoupons, apiFetchCouponUsage, apiRecordCouponUsage, checkFirstTimeUsage, type Coupon, type CouponUsageRecord } from "@/lib/coupon";
+import { validateCouponFromList, apiFetchCoupons, apiFetchCouponUsage, apiRecordCouponUsage, checkFirstTimeUsage, type Coupon, type CouponContext, type CouponUsageRecord } from "@/lib/coupon";
 import { AvailableCoupons } from "@/components/available-coupons";
 import { useCreateBooking } from "@workspace/api-client-react";
 import { openRazorpayCheckout, verifyRazorpayPayment } from "@/lib/use-razorpay";
@@ -251,6 +251,7 @@ export default function BookingPayment() {
 
   const [couponInput,     setCouponInput]     = useState("");
   const [couponStatus,    setCouponStatus]    = useState<"idle"|"valid"|"invalid">("idle");
+  const [couponError,     setCouponError]     = useState<string>("Invalid coupon code");
   const [discount,        setDiscount]        = useState(0);
   const [appliedCoupon,   setAppliedCoupon]   = useState<Coupon | null>(null);
   const [processing,      setProcessing]      = useState(false);
@@ -264,6 +265,10 @@ export default function BookingPayment() {
   const COUPON_SS_KEY = "ww_coupon_code";
 
   const paymentDoneRef = useRef(false);
+  // Refs so setTimeout callbacks always get the latest coupon data (no stale closure)
+  const couponContextRef  = useRef<CouponContext>({});
+  const allCouponsRef     = useRef<Coupon[]>([]);
+  const couponUsageRecsRef = useRef<CouponUsageRecord[]>([]);
 
   useEffect(() => {
     const s = loadBookingSession();
@@ -328,7 +333,8 @@ export default function BookingPayment() {
   const creditApplied  = useCredits && canUseCredits ? Math.min(walletBalance, totalAfterCoupon) : 0;
   const netPayable     = totalAfterCoupon - creditApplied;
 
-  const serviceType = session?.type ?? "flight"; // "flight" | "bus" | "hotel" — matches coupon service_type
+  // service_type is undefined until session loads — this prevents defaulting to "flight" prematurely
+  const serviceType = session?.type as "flight" | "bus" | "hotel" | "holiday" | undefined;
 
   const couponContext = useMemo(() => {
     const phone = user?.phone ?? (session?.type === "flight" ? session.passengers[0]?.phone
@@ -339,31 +345,45 @@ export default function BookingPayment() {
       const stored = JSON.parse(localStorage.getItem("travel_bookings") ?? "[]");
       if (user?.id) userBookingsCount = stored.filter((b: any) => b.userId === user.id).length;
     } catch {}
-    return { phone, userBookingsCount, service_type: serviceType as any };
+    return { phone, userBookingsCount, service_type: serviceType };
   }, [user, session, serviceType]);
 
+  // Keep refs in sync so setTimeout callbacks always use the latest values
+  useEffect(() => { couponContextRef.current  = couponContext;   }, [couponContext]);
+  useEffect(() => { allCouponsRef.current      = allCoupons;     }, [allCoupons]);
+  useEffect(() => { couponUsageRecsRef.current = couponUsageRecs; }, [couponUsageRecs]);
+
   function applyCoupon(codeOverride?: string) {
+    // Use refs to guarantee we always have the latest context/coupons even from setTimeout
+    const ctx     = couponContextRef.current;
+    const coupons = allCouponsRef.current;
+    const usage   = couponUsageRecsRef.current;
+    const base    = totalBase || (session?.totalBase ?? 0);
+
     const code = (codeOverride ?? couponInput).trim().toUpperCase();
     if (!code) return;
     if (codeOverride) setCouponInput(codeOverride);
-    const result = validateCouponFromList(code, totalBase, couponContext, allCoupons, couponUsageRecs);
+    const result = validateCouponFromList(code, base, ctx, coupons, usage);
     if (result.ok) {
       setDiscount(result.discountAmount);
       setAppliedCoupon(result.coupon);
       setCouponStatus("valid");
+      setCouponError("");
       try { sessionStorage.setItem(COUPON_SS_KEY, code); } catch { /* ignore */ }
-      toast({ title: "Coupon applied!", description: `₹${result.discountAmount.toLocaleString("en-IN")} off` });
+      toast({ title: "Coupon applied!", description: `₹${result.discountAmount.toLocaleString("en-IN")} off your booking` });
     } else {
       setDiscount(0);
       setAppliedCoupon(null);
       setCouponStatus("invalid");
+      setCouponError(result.error);
       try { sessionStorage.removeItem(COUPON_SS_KEY); } catch { /* ignore */ }
-      toast({ variant: "destructive", title: result.error, description: `Code: "${code}"` });
+      toast({ variant: "destructive", title: "Coupon not applied", description: result.error });
     }
   }
 
   function removeCoupon() {
     setCouponInput(""); setCouponStatus("idle"); setDiscount(0); setAppliedCoupon(null);
+    setCouponError(""); 
     try { sessionStorage.removeItem(COUPON_SS_KEY); } catch { /* ignore */ }
   }
 
@@ -1476,7 +1496,7 @@ export default function BookingPayment() {
                       )}
                       {couponStatus === "invalid" && (
                         <p className="text-xs text-red-500 flex items-center gap-1">
-                          <XCircle className="w-3.5 h-3.5" /> Invalid coupon code
+                          <XCircle className="w-3.5 h-3.5" /> {couponError || "Invalid coupon code"}
                         </p>
                       )}
                     </div>
