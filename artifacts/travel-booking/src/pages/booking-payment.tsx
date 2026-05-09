@@ -251,24 +251,17 @@ export default function BookingPayment() {
 
   const [couponInput,     setCouponInput]     = useState("");
   const [couponStatus,    setCouponStatus]    = useState<"idle"|"valid"|"invalid">("idle");
-  const [couponError,     setCouponError]     = useState<string>("Invalid coupon code");
+  const [couponError,     setCouponError]     = useState<string>("");
   const [discount,        setDiscount]        = useState(0);
   const [appliedCoupon,   setAppliedCoupon]   = useState<Coupon | null>(null);
   const [processing,      setProcessing]      = useState(false);
   const [walletPaying,    setWalletPaying]    = useState(false);
   const [paymentError,    setPaymentError]    = useState<string | null>(null);
   const [useCredits,      setUseCredits]      = useState(false);
-  const [autoCouponDone,  setAutoCouponDone]  = useState(false);
   const [allCoupons,      setAllCoupons]      = useState<Coupon[]>([]);
   const [couponUsageRecs, setCouponUsageRecs] = useState<CouponUsageRecord[]>([]);
 
-  const COUPON_SS_KEY = "ww_coupon_code";
-
   const paymentDoneRef = useRef(false);
-  // Refs so setTimeout callbacks always get the latest coupon data (no stale closure)
-  const couponContextRef  = useRef<CouponContext>({});
-  const allCouponsRef     = useRef<Coupon[]>([]);
-  const couponUsageRecsRef = useRef<CouponUsageRecord[]>([]);
 
   useEffect(() => {
     const s = loadBookingSession();
@@ -291,36 +284,19 @@ export default function BookingPayment() {
     return () => document.removeEventListener("visibilitychange", onFocus);
   }, []);
 
+  // Clear coupon state whenever the booking service type changes (prevents bus coupon carrying over to hotel etc.)
+  const sessionTypeRef = useRef<string | undefined>(undefined);
   useEffect(() => {
-    if (!session || autoCouponDone || couponStatus === "valid") return;
-    if (allCoupons.length === 0) return; // wait until coupons are loaded
-
-    // 1. Restore previously applied coupon from sessionStorage (highest priority)
-    const savedCode = sessionStorage.getItem(COUPON_SS_KEY);
-    if (savedCode) {
-      setTimeout(() => applyCoupon(savedCode), 300);
-      setAutoCouponDone(true);
-      return;
+    if (!session) return;
+    if (sessionTypeRef.current !== undefined && sessionTypeRef.current !== session.type) {
+      setCouponInput("");
+      setCouponStatus("idle");
+      setCouponError("");
+      setDiscount(0);
+      setAppliedCoupon(null);
     }
-
-    // 2. Auto-apply best public coupon from API-fetched list
-    const base = session.totalBase;
-    const svcType = session.type; // "flight" | "bus" | "hotel" — matches coupon service_type
-    const phone = session.type === "hotel" ? session.guest?.phone ?? ""
-      : (session as any).passengers?.[0]?.phone ?? "";
-    const ctx = { phone, userBookingsCount: 0, service_type: svcType as any };
-    const all = allCoupons.filter((c) => c.type === "public");
-    let bestCode = "";
-    let bestAmt  = 0;
-    for (const c of all) {
-      const r = validateCouponFromList(c.code, base, ctx, allCoupons, couponUsageRecs);
-      if (r.ok && r.discountAmount > bestAmt) { bestAmt = r.discountAmount; bestCode = c.code; }
-    }
-    if (bestCode) {
-      setTimeout(() => applyCoupon(bestCode), 600);
-    }
-    setAutoCouponDone(true);
-  }, [session, allCoupons]);
+    sessionTypeRef.current = session.type;
+  }, [session?.type]);
 
   const totalBase = useMemo(() => {
     if (!session) return 0;
@@ -354,43 +330,31 @@ export default function BookingPayment() {
     return { phone, userBookingsCount, service_type: serviceType };
   }, [user, session, serviceType]);
 
-  // Keep refs in sync so setTimeout callbacks always use the latest values
-  useEffect(() => { couponContextRef.current  = couponContext;   }, [couponContext]);
-  useEffect(() => { allCouponsRef.current      = allCoupons;     }, [allCoupons]);
-  useEffect(() => { couponUsageRecsRef.current = couponUsageRecs; }, [couponUsageRecs]);
-
-  function applyCoupon(codeOverride?: string) {
-    // Use refs to guarantee we always have the latest context/coupons even from setTimeout
-    const ctx     = couponContextRef.current;
-    const coupons = allCouponsRef.current;
-    const usage   = couponUsageRecsRef.current;
-    const base    = totalBase || (session?.totalBase ?? 0);
-
-    const code = (codeOverride ?? couponInput).trim().toUpperCase();
+  function applyCoupon() {
+    const code = couponInput.trim().toUpperCase();
     if (!code) return;
-    if (codeOverride) setCouponInput(codeOverride);
-    const result = validateCouponFromList(code, base, ctx, coupons, usage);
+    const result = validateCouponFromList(code, totalBase, couponContext, allCoupons, couponUsageRecs);
     if (result.ok) {
       setDiscount(result.discountAmount);
       setAppliedCoupon(result.coupon);
       setCouponStatus("valid");
       setCouponError("");
-      try { sessionStorage.setItem(COUPON_SS_KEY, code); } catch { /* ignore */ }
       toast({ title: "Coupon applied!", description: `₹${result.discountAmount.toLocaleString("en-IN")} off your booking` });
     } else {
       setDiscount(0);
       setAppliedCoupon(null);
       setCouponStatus("invalid");
       setCouponError(result.error);
-      try { sessionStorage.removeItem(COUPON_SS_KEY); } catch { /* ignore */ }
       toast({ variant: "destructive", title: "Coupon not applied", description: result.error });
     }
   }
 
   function removeCoupon() {
-    setCouponInput(""); setCouponStatus("idle"); setDiscount(0); setAppliedCoupon(null);
-    setCouponError(""); 
-    try { sessionStorage.removeItem(COUPON_SS_KEY); } catch { /* ignore */ }
+    setCouponInput("");
+    setCouponStatus("idle");
+    setCouponError("");
+    setDiscount(0);
+    setAppliedCoupon(null);
   }
 
   function buildFlightBooking(s: FlightBookingSession, paymentId: string, bookingRef: string, userId: string) {
@@ -752,7 +716,6 @@ export default function BookingPayment() {
     if (wTjResult?.tjBookingRef) (wLastSuccessful as any).tjBookingRef = wTjResult.tjBookingRef;
     localStorage.setItem("lastSuccessfulBooking", JSON.stringify(wLastSuccessful));
     paymentDoneRef.current = true;
-    try { sessionStorage.removeItem(COUPON_SS_KEY); } catch { /* ignore */ }
     clearBookingSession();
     refreshUser();
     setWalletPaying(false);
@@ -879,7 +842,6 @@ export default function BookingPayment() {
       if (cTjResult?.tjBookingRef) (cLastSuccessful as any).tjBookingRef = cTjResult.tjBookingRef;
       localStorage.setItem("lastSuccessfulBooking", JSON.stringify(cLastSuccessful));
       paymentDoneRef.current = true;
-      try { sessionStorage.removeItem(COUPON_SS_KEY); } catch { /* ignore */ }
       clearBookingSession();
       refreshUser();
       setProcessing(false);
@@ -1233,7 +1195,6 @@ export default function BookingPayment() {
         if (flightBookResult?.tjBookingRef) (lastSuccessful as any).tjBookingRef = flightBookResult.tjBookingRef;
         localStorage.setItem("lastSuccessfulBooking", JSON.stringify(lastSuccessful));
         paymentDoneRef.current = true;
-        try { sessionStorage.removeItem(COUPON_SS_KEY); } catch { /* ignore */ }
         clearBookingSession();
         refreshUser();
         setProcessing(false);
