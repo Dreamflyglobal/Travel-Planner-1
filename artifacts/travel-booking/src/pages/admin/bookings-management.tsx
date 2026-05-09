@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { sanitizeLocation, formatRoute } from "@/lib/location-utils";
+import { sanitizeLocation, formatRoute, sanitizeBookingTitle } from "@/lib/location-utils";
 import { Link } from "wouter";
 import {
   Card, CardContent, CardHeader, CardTitle, CardDescription,
@@ -707,7 +707,7 @@ function BookingDetailSheet({
                   )}
                 </SheetTitle>
                 <SheetDescription className="text-xs mt-0.5">
-                  {booking.title || booking.serviceType} · Created {fmtDate(booking.createdAt)}
+                  {sanitizeBookingTitle(booking.title) || booking.serviceType} · Created {fmtDate(booking.createdAt)}
                 </SheetDescription>
               </div>
             </div>

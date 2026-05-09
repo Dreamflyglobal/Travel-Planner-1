@@ -42,10 +42,11 @@ export function sanitizeLocation(raw: string | null | undefined): string {
   // ── Normalise whitespace ──────────────────────────────────────────────────
   s = s.replace(/\s+/g, " ").trim();
 
-  // ── Title-case only if entire string is all-caps (API returns "HYDERABAD") ──
-  // Preserves mixed-case names like "New Delhi", "McLeod Ganj"
-  const isAllCaps = s === s.toUpperCase() && /[A-Z]/.test(s);
-  if (isAllCaps) {
+  // ── Title-case if entirely all-caps ("HYDERABAD") or all-lowercase ("visakhapatnam") ──
+  // Preserves correctly mixed-case names like "New Delhi", "McLeod Ganj"
+  const isAllCaps  = s === s.toUpperCase() && /[A-Z]/.test(s);
+  const isAllLower = s === s.toLowerCase() && /[a-z]/.test(s);
+  if (isAllCaps || isAllLower) {
     s = s
       .split(" ")
       .map((w) => (w.length > 0 ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : ""))
@@ -70,4 +71,36 @@ export function formatRoute(
   if (!f) return t;
   if (!t) return f;
   return `${f}${separator}${t}`;
+}
+
+/**
+ * Sanitizes a booking title that may contain route corruption artifacts.
+ *
+ * Handles:
+ *   "visakhapatnam !' tirupati"  →  "Visakhapatnam → Tirupati"
+ *   "Hyderabad → Goa"            →  "Hyderabad → Goa"  (passthrough)
+ *   "Hotel Grand Palace"         →  "Hotel Grand Palace"  (non-route, passthrough)
+ */
+export function sanitizeBookingTitle(raw: string | null | undefined): string {
+  if (!raw) return "";
+
+  // Strip zero-width / invisible characters first
+  let s = String(raw).replace(/[\x00-\x1F\x7F\u00AD\u200B\u200C\u200D\u2028\u2029\uFEFF]/g, "").trim();
+
+  // If the title contains a corruption artifact (!' or similar), treat it as a route
+  const corruptionPattern = /!['\u2019\u0060\u0027;]/;
+  if (corruptionPattern.test(s)) {
+    const parts = s.split(corruptionPattern).map((p) => sanitizeLocation(p.trim())).filter(Boolean);
+    if (parts.length >= 2) return parts.join(" \u2192 ");
+    if (parts.length === 1) return parts[0];
+  }
+
+  // If already contains →, re-sanitize each segment
+  if (s.includes("\u2192")) {
+    const parts = s.split("\u2192").map((p) => sanitizeLocation(p.trim())).filter(Boolean);
+    if (parts.length >= 2) return parts.join(" \u2192 ");
+  }
+
+  // Not a route title — return as-is (hotel name, package name, etc.)
+  return s;
 }

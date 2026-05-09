@@ -1,0 +1,129 @@
+Fix invoice system completely. Current fixes did NOT apply properly.
+
+Issues still happening:
+
+1. Invoice logo not showing correctly
+2. Old invoice number format still showing
+3. Broken route text still showing:
+   Example:
+   - visakhapatnam !' tirupati
+4. PDF/download invoice still using old data
+5. Route spacing and encoding broken in description table also
+
+-----------------------------------
+REQUIRED FIXES
+-----------------------------------
+
+1. LOGO FIX
+- Use latest uploaded website logo everywhere
+- Show same logo in:
+  - Invoice PDF
+  - Download invoice
+  - Email invoice
+  - Booking page
+  - Admin invoice preview
+
+If logo missing:
+- fallback to default Dream Fly Global logo
+
+-----------------------------------
+2. ROUTE FORMAT FIX
+-----------------------------------
+
+Remove completely:
+- !'
+- broken encoding
+- random spacing
+- letter-by-letter spacing
+
+Wrong:
+- visakhapatnam !' tirupati
+
+Correct:
+- Visakhapatnam → Tirupati
+
+Apply everywhere:
+- Service Details
+- Description table
+- PDF invoice
+- Customer bookings
+- Admin panel
+- Email templates
+
+Create centralized route formatter function and use everywhere.
+
+Example:
+formatRoute(from, to)
+
+Output:
+Hyderabad → Goa
+
+-----------------------------------
+3. NEW ID FORMAT
+-----------------------------------
+
+OLD FORMAT REMOVE:
+- DFG-INV-MOYGIOCD
+- BK-MOYGIOCD
+
+Use new proper IDs:
+
+BUS:
+- Booking ID: BUS-BK-000001
+- Invoice ID: BUS-INV-000001
+
+FLIGHT:
+- FLT-BK-000001
+- FLT-INV-000001
+
+HOTEL:
+- HTL-BK-000001
+- HTL-INV-000001
+
+HOLIDAY:
+- HLD-BK-000001
+- HLD-INV-000001
+
+-----------------------------------
+4. IMPORTANT
+-----------------------------------
+
+- Existing old bookings must NOT crash
+- New bookings must use new format
+- PDF generator must use latest IDs
+- Downloaded invoice must match database
+- No cached old values
+- Clear old invoice generation logic completely
+
+-----------------------------------
+5. PDF/INVOICE ENGINE FIX
+-----------------------------------
+
+Current PDF still uses old fields.
+
+Fix invoice generator to always use:
+- latest booking data
+- latest logo
+- formatted route
+- new invoice IDs
+
+Regenerate invoice dynamically from DB instead of cached/static values.
+
+-----------------------------------
+6. TEST EVERYTHING
+-----------------------------------
+
+Test:
+- Bus booking
+- Flight booking
+- Hotel booking
+
+Verify:
+- Logo visible
+- Correct IDs
+- Correct routes
+- No !'
+- No broken spacing
+- PDF correct
+- Download correct
+- Mobile and desktop same

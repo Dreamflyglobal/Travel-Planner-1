@@ -1,5 +1,7 @@
 import { APP_NAME, APP_SUPPORT_PHONE, APP_SUPPORT_EMAIL } from "@/lib/app-config";
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useBranding } from "@/contexts/branding-context";
+import { sanitizeBookingTitle } from "@/lib/location-utils";
 import { useLocation } from "wouter";
 import { AdminLayout } from "@/components/admin-layout";
 import { Button } from "@/components/ui/button";
@@ -52,7 +54,7 @@ interface ApiBooking {
 
 const GST_RATE = 0.05; // 5 % GST on convenience fee (indicative)
 
-function bookingToInvoiceData(b: ApiBooking): InvoiceData {
+function bookingToInvoiceData(b: ApiBooking, logoDataUrl?: string | null): InvoiceData {
   const d  = b.details || {};
   const fi = d.flightInfo  || {};
   const bi = d.busInfo     || {};
@@ -70,7 +72,8 @@ function bookingToInvoiceData(b: ApiBooking): InvoiceData {
     paymentId:      b.paymentId || "—",
     paymentStatus:  b.paymentStatus || "pending",
     timestamp:      b.createdAt || new Date().toISOString(),
-    title:          b.title || "",
+    title:          sanitizeBookingTitle(b.title) || b.title || "",
+    logoDataUrl:    logoDataUrl ?? undefined,
     selectedSeats:  d.selectedSeats || bi.seats,
     roomType:       hi.room_type,
     flightAirline:    fi.airline,
@@ -193,7 +196,7 @@ function InvoiceRow({ booking, onView, onDownload, onPrint, onEmail, onWhatsApp 
                     {meta.label}
                   </Badge>
                 </div>
-                <p className="text-xs text-slate-500 truncate font-medium">{booking.title || `${meta.label} Booking`}</p>
+                <p className="text-xs text-slate-500 truncate font-medium">{sanitizeBookingTitle(booking.title) || `${meta.label} Booking`}</p>
                 <p className="text-xs text-slate-400 font-mono">{booking.bookingRef}</p>
               </div>
             </div>
@@ -365,7 +368,7 @@ function InvoiceRow({ booking, onView, onDownload, onPrint, onEmail, onWhatsApp 
                     </>
                   )}
                   {booking.bookingType === "package" && (
-                    <div className="flex justify-between"><span className="text-slate-500">Package</span><span className="font-semibold truncate max-w-[130px]">{booking.title}</span></div>
+                    <div className="flex justify-between"><span className="text-slate-500">Package</span><span className="font-semibold truncate max-w-[130px]">{sanitizeBookingTitle(booking.title)}</span></div>
                   )}
                 </div>
               </div>
@@ -407,6 +410,7 @@ export default function AdminInvoices() {
   const [filterType, setFilterType] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const { toast } = useToast();
+  const { branding } = useBranding();
 
   const fetchBookings = useCallback(async () => {
     setLoading(true);
@@ -466,7 +470,7 @@ export default function AdminInvoices() {
 
   function handleDownload(b: ApiBooking) {
     try {
-      generateInvoicePDF(bookingToInvoiceData(b));
+      generateInvoicePDF(bookingToInvoiceData(b, branding.logoUrl));
       toast({ title: "Invoice Downloaded", description: `${getInvNumber(b)} — ${b.passengerName}` });
     } catch {
       toast({ title: "Download Failed", variant: "destructive" });

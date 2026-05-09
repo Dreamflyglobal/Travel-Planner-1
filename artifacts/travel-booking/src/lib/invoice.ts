@@ -1,6 +1,6 @@
 import jsPDF from "jspdf";
 import { APP_NAME, APP_SUPPORT_PHONE, APP_SUPPORT_EMAIL, APP_INITIALS } from "@/lib/app-config";
-import { sanitizeLocation } from "@/lib/location-utils";
+import { sanitizeLocation, sanitizeBookingTitle } from "@/lib/location-utils";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -18,6 +18,8 @@ export interface InvoiceData {
   paymentStatus: string;
   timestamp: string;
   title: string;
+  /** Base64 data URL of the company logo (e.g. from branding settings). */
+  logoDataUrl?: string;
   selectedSeats?: string[];
   roomType?: string;
   // Hotel-specific
@@ -137,20 +139,40 @@ export function generateInvoicePDF(data: InvoiceData): void {
   const invNum = invoiceNumber(data.bookingId);
   const generatedAt = new Date().toISOString();
 
+  // ── Sanitize title: fix !' corruption and reformat routes ─────────────────
+  const cleanTitle = sanitizeBookingTitle(data.title) || data.title;
+
   // ── Store for admin ──────────────────────────────────────────────────────
-  storeInvoice({ ...data, invoiceNumber: invNum, generatedAt });
+  storeInvoice({ ...data, title: cleanTitle, invoiceNumber: invNum, generatedAt });
 
   // ── Header strip ─────────────────────────────────────────────────────────
   doc.setFillColor(...C.dark);
   doc.rect(0, 0, W, 42, "F");
 
-  // Logo circle
-  doc.setFillColor(...C.primary);
-  doc.circle(22, 18, 9, "F");
-  doc.setTextColor(...C.white);
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "bold");
-  doc.text(APP_INITIALS, 22, 21, { align: "center" });
+  // Logo: use uploaded branding logo if provided, else fall back to initials circle
+  if (data.logoDataUrl && data.logoDataUrl.startsWith("data:")) {
+    try {
+      // Detect format from data URL (image/png, image/jpeg, etc.)
+      const mimeMatch = data.logoDataUrl.match(/^data:image\/(\w+);/);
+      const fmt = mimeMatch ? mimeMatch[1].toUpperCase() : "PNG";
+      doc.addImage(data.logoDataUrl, fmt === "JPG" ? "JPEG" : fmt, 10, 7, 22, 22);
+    } catch {
+      // Fallback to initials circle if image fails
+      doc.setFillColor(...C.primary);
+      doc.circle(22, 18, 9, "F");
+      doc.setTextColor(...C.white);
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      doc.text(APP_INITIALS, 22, 21, { align: "center" });
+    }
+  } else {
+    doc.setFillColor(...C.primary);
+    doc.circle(22, 18, 9, "F");
+    doc.setTextColor(...C.white);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.text(APP_INITIALS, 22, 21, { align: "center" });
+  }
 
   // Company name
   doc.setFontSize(20);
@@ -252,7 +274,7 @@ export function generateInvoicePDF(data: InvoiceData): void {
   if (isFlight) {
     const airlineLabel = data.flightAirline
       ? `${data.flightAirline}${data.flightNumber ? ` (${data.flightNumber})` : ""}`
-      : data.title.slice(0, 36);
+      : cleanTitle.slice(0, 36);
     svcRows.push(["Airline", airlineLabel]);
     if (data.flightFrom && data.flightTo) svcRows.push(["Route", `${sanitizeLocation(data.flightFrom) || data.flightFrom} \u2192 ${sanitizeLocation(data.flightTo) || data.flightTo}`]);
     svcRows.push(["Travel Date", dateStr(data.travelDate)]);
@@ -264,7 +286,7 @@ export function generateInvoicePDF(data: InvoiceData): void {
   } else if (isBus) {
     const opLabel = data.busOperator
       ? `${data.busOperator}${data.busType ? ` (${data.busType})` : ""}`
-      : data.title.slice(0, 36);
+      : cleanTitle.slice(0, 36);
     svcRows.push(["Operator", opLabel]);
     if (data.busFrom && data.busTo) svcRows.push(["Route", `${sanitizeLocation(data.busFrom) || data.busFrom} \u2192 ${sanitizeLocation(data.busTo) || data.busTo}`]);
     svcRows.push(["Travel Date", dateStr(data.travelDate)]);
@@ -289,7 +311,7 @@ export function generateInvoicePDF(data: InvoiceData): void {
     const guestLine = data.hotelAdults ? `${data.hotelAdults} Adult${data.hotelAdults > 1 ? "s" : ""}` : undefined;
     if (guestLine)         svcRows.push(["Guests", guestLine]);
   } else {
-    svcRows.push(["Description", data.title.length > 36 ? data.title.slice(0, 36) + "…" : data.title]);
+    svcRows.push(["Description", cleanTitle.length > 36 ? cleanTitle.slice(0, 36) + "…" : cleanTitle]);
     svcRows.push(["Travel Date", dateStr(data.travelDate)]);
     if (data.checkoutDate) svcRows.push(["Checkout Date", dateStr(data.checkoutDate)]);
     if (data.selectedSeats?.length) svcRows.push(["Seats", data.selectedSeats.join(", ")]);
@@ -345,8 +367,8 @@ export function generateInvoicePDF(data: InvoiceData): void {
   doc.setFontSize(8.5);
   doc.setFont("helvetica", "normal");
   const descFull = isHotelItem
-    ? `Hotel – ${data.hotelName || data.title}${data.roomType ? " · " + data.roomType : ""}`
-    : `${data.bookingType.charAt(0).toUpperCase() + data.bookingType.slice(1)} – ${data.title}`;
+    ? `Hotel – ${data.hotelName || cleanTitle}${data.roomType ? " · " + data.roomType : ""}`
+    : `${data.bookingType.charAt(0).toUpperCase() + data.bookingType.slice(1)} – ${cleanTitle}`;
   doc.text(descFull.length > 52 ? descFull.slice(0, 52) + "…" : descFull, cols.desc, y + 6.5);
 
   doc.setFont("helvetica", "bold");

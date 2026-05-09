@@ -10,8 +10,10 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/auth-context";
+import { useBranding } from "@/contexts/branding-context";
 import { migrateBookingTitles } from "@/lib/migrate-bookings";
 import { generateInvoicePDF } from "@/lib/invoice";
+import { sanitizeBookingTitle } from "@/lib/location-utils";
 import { 
   AlertDialog,
   AlertDialogAction,
@@ -27,6 +29,7 @@ import {
 export default function Bookings() {
   const [, setLocation] = useLocation();
   const { isAuthenticated, user } = useAuth();
+  const { branding } = useBranding();
   const { toast } = useToast();
   const [downloadingId, setDownloadingId] = useState<string | number | null>(null);
   
@@ -170,7 +173,8 @@ export default function Bookings() {
         paymentId:       booking.paymentId || booking.details?.paymentId || "N/A",
         paymentStatus:   booking.paymentStatus || booking.status || "paid",
         timestamp:       booking.createdAt || booking.bookingDate || booking.timestamp || new Date().toISOString(),
-        title:           booking.title || booking.details?.title || `${bType} Booking`,
+        title:           sanitizeBookingTitle(booking.title || booking.details?.title || `${bType} Booking`),
+        logoDataUrl:     branding.logoUrl ?? undefined,
         selectedSeats:   booking.selectedSeats,
         roomType:        booking.roomType,
         // Hotel
@@ -326,7 +330,7 @@ export default function Bookings() {
                         {bookingType.toUpperCase()} • ID: #{booking.id || booking.referenceId}
                       </p>
                       <CardTitle className="text-lg line-clamp-2">
-                        {booking.title || booking.details?.title || `${bookingType.charAt(0).toUpperCase() + bookingType.slice(1)} Booking #${booking.id || booking.referenceId}`}
+                        {sanitizeBookingTitle(booking.title || booking.details?.title) || `${bookingType.charAt(0).toUpperCase() + bookingType.slice(1)} Booking #${booking.id || booking.referenceId}`}
                       </CardTitle>
                     </div>
                   </div>
