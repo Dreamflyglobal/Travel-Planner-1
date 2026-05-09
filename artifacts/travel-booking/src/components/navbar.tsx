@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Plane, Bus, Building2, Palmtree, Car, Compass, Train, FileText, Umbrella, User, Menu, LogOut, Settings, Ticket, Sparkles, ShieldCheck, Wallet, Gift } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -18,6 +18,27 @@ import { useAuth } from "@/contexts/auth-context";
 import { useBranding } from "@/contexts/branding-context";
 import { cn } from "@/lib/utils";
 import { popUnseenRewardNotifications } from "@/lib/referral";
+
+function BrandLogo({ logoUrl, companyName }: { logoUrl: string | null; companyName: string }) {
+  const [broken, setBroken] = useState(false);
+  useEffect(() => { setBroken(false); }, [logoUrl]);
+  if (logoUrl && !broken) {
+    return (
+      <img
+        src={logoUrl}
+        alt={companyName}
+        className="w-10 h-10 rounded-lg object-contain bg-white border border-slate-200 shadow-md transition-transform group-hover:scale-105"
+        data-testid="img-brand-logo"
+        onError={() => setBroken(true)}
+      />
+    );
+  }
+  return (
+    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center shadow-md transition-transform group-hover:scale-105">
+      <Sparkles className="h-6 w-6 text-white" />
+    </div>
+  );
+}
 
 export function Navbar() {
   const [location] = useLocation();
@@ -213,18 +234,7 @@ export function Navbar() {
         <div className="flex h-16 items-center justify-between px-4">
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-2 group" data-testid="link-brand-home">
-            {branding.logoUrl ? (
-              <img
-                src={branding.logoUrl}
-                alt={branding.companyName}
-                className="w-10 h-10 rounded-lg object-contain bg-white border border-slate-200 shadow-md transition-transform group-hover:scale-105"
-                data-testid="img-brand-logo"
-              />
-            ) : (
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center shadow-md transition-transform group-hover:scale-105">
-                <Sparkles className="h-6 w-6 text-white" />
-              </div>
-            )}
+            <BrandLogo logoUrl={branding.logoUrl} companyName={branding.companyName} />
             <div className="flex flex-col">
               <span
                 className="font-bold text-xl bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent"

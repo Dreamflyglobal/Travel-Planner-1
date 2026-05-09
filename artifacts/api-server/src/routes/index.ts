@@ -30,6 +30,7 @@ import testCommsRouter        from "./test-comms";
 import usersRouter             from "./users";
 import couponsRouter           from "./coupons";
 import settingsRouter          from "./settings";
+import uploadRouter            from "./upload";
 
 const router: IRouter = Router();
 
@@ -64,5 +65,6 @@ router.use(testCommsRouter);
 router.use(usersRouter);
 router.use(couponsRouter);
 router.use(settingsRouter);
+router.use(uploadRouter);
 
 export default router;

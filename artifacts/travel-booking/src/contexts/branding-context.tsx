@@ -18,12 +18,24 @@ export const DEFAULT_BRANDING: BrandingSettings = {
   faviconUrl:  null,
 };
 
+function isBase64Url(s: string | null | undefined): boolean {
+  return typeof s === "string" && s.startsWith("data:");
+}
+
 function sanitize(raw: Partial<BrandingSettings>): BrandingSettings {
   return {
     companyName: raw.companyName?.trim()  || DEFAULT_BRANDING.companyName,
     tagline:     raw.tagline?.trim()      || DEFAULT_BRANDING.tagline,
     logoUrl:     raw.logoUrl   ?? null,
     faviconUrl:  raw.faviconUrl ?? null,
+  };
+}
+
+function sanitizeForCache(s: BrandingSettings): BrandingSettings {
+  return {
+    ...s,
+    logoUrl:    isBase64Url(s.logoUrl)    ? null : s.logoUrl,
+    faviconUrl: isBase64Url(s.faviconUrl) ? null : s.faviconUrl,
   };
 }
 
@@ -38,7 +50,7 @@ function readCache(): BrandingSettings {
 }
 
 function writeCache(s: BrandingSettings) {
-  try { window.localStorage.setItem(CACHE_KEY, JSON.stringify(s)); } catch { /* noop */ }
+  try { window.localStorage.setItem(CACHE_KEY, JSON.stringify(sanitizeForCache(s))); } catch { /* noop */ }
 }
 
 function applyFavicon(faviconUrl: string | null) {

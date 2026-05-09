@@ -4,9 +4,14 @@ import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve, join } from "node:path";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import router from "./routes";
 import { logger } from "./lib/logger";
+
+const UPLOADS_DIR = resolve(process.cwd(), "uploads");
+if (!existsSync(UPLOADS_DIR)) {
+  mkdirSync(UPLOADS_DIR, { recursive: true });
+}
 
 const app: Express = express();
 
@@ -39,6 +44,10 @@ app.use(
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// ── Uploaded media files (/uploads/*) ────────────────────────────────────────
+// Serve with no-store so browsers always fetch the latest logo/favicon
+app.use("/uploads", express.static(UPLOADS_DIR, { maxAge: 0, etag: false }));
 
 // ── API routes (/api/*) ──────────────────────────────────────────────────────
 app.use("/api", router);

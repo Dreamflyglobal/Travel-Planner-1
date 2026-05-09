@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
 import { useAuth } from "@/contexts/auth-context";
 import { useBranding } from "@/contexts/branding-context";
@@ -57,6 +57,27 @@ function SidebarLink({
   );
 }
 
+function AdminBrandLogo({ logoUrl }: { logoUrl: string | null }) {
+  const [broken, setBroken] = useState(false);
+  useEffect(() => { setBroken(false); }, [logoUrl]);
+  if (logoUrl && !broken) {
+    return (
+      <img
+        src={logoUrl}
+        alt="Logo"
+        className="w-8 h-8 rounded-lg object-contain bg-white"
+        data-testid="img-admin-brand-logo"
+        onError={() => setBroken(true)}
+      />
+    );
+  }
+  return (
+    <div className="w-8 h-8 rounded-lg bg-purple-600 flex items-center justify-center">
+      <ShieldCheck className="w-4 h-4 text-white" />
+    </div>
+  );
+}
+
 function Sidebar({ onClose }: { onClose?: () => void }) {
   const [location] = useLocation();
   const { user, logout } = useAuth();
@@ -73,18 +94,7 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
       {/* Logo — fixed at top, never scrolls */}
       <div className="flex items-center justify-between shrink-0 px-5 py-4 border-b border-white/10">
         <div className="flex items-center gap-2.5">
-          {branding.logoUrl ? (
-            <img
-              src={branding.logoUrl}
-              alt={branding.companyName}
-              className="w-8 h-8 rounded-lg object-contain bg-white"
-              data-testid="img-admin-brand-logo"
-            />
-          ) : (
-            <div className="w-8 h-8 rounded-lg bg-purple-600 flex items-center justify-center">
-              <ShieldCheck className="w-4 h-4 text-white" />
-            </div>
-          )}
+          <AdminBrandLogo logoUrl={branding.logoUrl} />
           <div>
             <p className="text-white font-bold text-sm leading-tight" data-testid="text-admin-brand-name">{branding.companyName}</p>
             <p className="text-purple-400 text-[10px] font-semibold uppercase tracking-widest leading-tight">Admin Panel</p>

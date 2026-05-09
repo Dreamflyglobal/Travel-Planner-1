@@ -57,8 +57,10 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-const MAX_LOGO_BYTES = 1_500_000;
-const MAX_FAVICON_BYTES = 500_000;
+const MAX_LOGO_BYTES    = 5 * 1024 * 1024;
+const MAX_FAVICON_BYTES = 1 * 1024 * 1024;
+
+const ALLOWED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp", "image/svg+xml", "image/gif"];
 
 const CURRENCIES: { value: Currency; label: string }[] = [
   { value: "INR", label: "₹ INR — Indian Rupee" },
@@ -68,13 +70,16 @@ const CURRENCIES: { value: Currency; label: string }[] = [
   { value: "AED", label: "د.إ AED — UAE Dirham" },
 ];
 
-function readFileAsDataURL(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(reader.error ?? new Error("Failed to read file"));
-    reader.onload = () => resolve(reader.result as string);
-    reader.readAsDataURL(file);
-  });
+async function uploadImageFile(file: File, kind: "logo" | "favicon"): Promise<string> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`/api/upload/${kind}`, { method: "POST", body: formData });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(err.error ?? `Upload failed (${res.status})`);
+  }
+  const data = await res.json() as { url: string };
+  return data.url;
 }
 
 export default function AdminSettings() {
@@ -97,6 +102,8 @@ export default function AdminSettings() {
 
   const logoInputRef = useRef<HTMLInputElement>(null);
   const faviconInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingFavicon, setUploadingFavicon] = useState(false);
 
   function patchBranding(patch: Partial<BrandingSettings>) {
     setBrandingDraft((prev) => ({ ...prev, ...patch }));
@@ -115,35 +122,45 @@ export default function AdminSettings() {
     e.target.value = "";
     if (!file) return;
 
-    const limit = kind === "logo" ? MAX_LOGO_BYTES : MAX_FAVICON_BYTES;
-    if (file.size > limit) {
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
       toast({
-        title: "File too large",
-        description: `${kind === "logo" ? "Logo" : "Favicon"} must be smaller than ${(limit / 1_000_000).toFixed(1)} MB.`,
-        variant: "destructive",
-      });
-      return;
-    }
-    if (!file.type.startsWith("image/")) {
-      toast({
-        title: "Unsupported file",
-        description: "Please choose an image file (PNG, JPG, SVG, or ICO).",
+        title: "Unsupported file type",
+        description: "Allowed formats: PNG, JPG, JPEG, WEBP, SVG, GIF.",
         variant: "destructive",
       });
       return;
     }
 
-    try {
-      const dataUrl = await readFileAsDataURL(file);
-      if (kind === "logo") patchBranding({ logoUrl: dataUrl });
-      else patchBranding({ faviconUrl: dataUrl });
-    } catch (err) {
-      console.error(err);
+    const limit = kind === "logo" ? MAX_LOGO_BYTES : MAX_FAVICON_BYTES;
+    if (file.size > limit) {
       toast({
-        title: "Could not read image",
-        description: "Please try a different file.",
+        title: "File too large",
+        description: `${kind === "logo" ? "Logo" : "Favicon"} must be smaller than ${(limit / 1_048_576).toFixed(0)} MB.`,
         variant: "destructive",
       });
+      return;
+    }
+
+    if (kind === "logo") setUploadingLogo(true);
+    else setUploadingFavicon(true);
+
+    try {
+      const url = await uploadImageFile(file, kind);
+      if (kind === "logo") patchBranding({ logoUrl: url });
+      else patchBranding({ faviconUrl: url });
+      toast({
+        title: `${kind === "logo" ? "Logo" : "Favicon"} uploaded`,
+        description: "Click Save Changes to apply it across the site.",
+      });
+    } catch (err: any) {
+      toast({
+        title: "Upload failed",
+        description: err?.message ?? "Could not upload image. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      if (kind === "logo") setUploadingLogo(false);
+      else setUploadingFavicon(false);
     }
   }
 
@@ -309,14 +326,16 @@ export default function AdminSettings() {
                 />
                 <Button
                   onClick={() => logoInputRef.current?.click()}
+                  disabled={uploadingLogo}
                   data-testid="button-upload-logo"
                 >
                   <Upload className="w-4 h-4 mr-2" />
-                  Upload logo
+                  {uploadingLogo ? "Uploading…" : "Upload logo"}
                 </Button>
                 {brandingDraft.logoUrl && (
                   <Button
                     variant="outline"
+                    disabled={uploadingLogo}
                     onClick={() => patchBranding({ logoUrl: null })}
                     data-testid="button-remove-logo"
                   >
@@ -353,14 +372,16 @@ export default function AdminSettings() {
                 />
                 <Button
                   onClick={() => faviconInputRef.current?.click()}
+                  disabled={uploadingFavicon}
                   data-testid="button-upload-favicon"
                 >
                   <Upload className="w-4 h-4 mr-2" />
-                  Upload favicon
+                  {uploadingFavicon ? "Uploading…" : "Upload favicon"}
                 </Button>
                 {brandingDraft.faviconUrl && (
                   <Button
                     variant="outline"
+                    disabled={uploadingFavicon}
                     onClick={() => patchBranding({ faviconUrl: null })}
                     data-testid="button-remove-favicon"
                   >
@@ -595,14 +616,18 @@ function LogoPreview({
   logoUrl: string | null;
   companyName: string;
 }) {
+  const [broken, setBroken] = useState(false);
+  useEffect(() => { setBroken(false); }, [logoUrl]);
+  const showImg = logoUrl && !broken;
   return (
     <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3 min-w-[260px]">
-      {logoUrl ? (
+      {showImg ? (
         <img
           src={logoUrl}
           alt={companyName}
           className="w-20 h-20 rounded-lg object-contain bg-white border border-slate-200"
           data-testid="img-preview-logo"
+          onError={() => setBroken(true)}
         />
       ) : (
         <div className="w-20 h-20 rounded-lg bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center shadow-md">
