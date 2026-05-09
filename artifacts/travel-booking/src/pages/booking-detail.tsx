@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { generateInvoicePDF } from "@/lib/invoice";
 import { sanitizeLocation, formatRoute } from "@/lib/location-utils";
+import { useBranding } from "@/contexts/branding-context";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -124,6 +125,7 @@ export default function BookingDetail() {
   const [isLoading, setIsLoading] = useState(true);
   const [resending, setResending] = useState<string | null>(null);
   const { toast } = useToast();
+  const { branding } = useBranding();
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -306,6 +308,7 @@ export default function BookingDetail() {
       paymentStatus:   bookingStatus,
       timestamp:       booking.timestamp       || booking.createdAt      || booking.bookingDate || new Date().toISOString(),
       title:           booking.title           || booking.details?.title || "Booking",
+      logoDataUrl:     branding.logoUrl ?? undefined,
       selectedSeats:   booking.selectedSeats,
       roomType:        booking.roomType,
       // Hotel

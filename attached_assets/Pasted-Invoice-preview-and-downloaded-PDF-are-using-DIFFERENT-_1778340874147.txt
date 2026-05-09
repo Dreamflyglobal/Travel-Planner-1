@@ -1,0 +1,104 @@
+Invoice preview and downloaded PDF are using DIFFERENT rendering systems.
+Preview invoice is correct.
+Downloaded invoice is still using OLD broken template.
+
+Fix immediately.
+
+-----------------------------------
+CURRENT STATUS
+-----------------------------------
+
+VIEW INVOICE PAGE:
+✅ Route correct
+✅ No spacing issue
+✅ Looks good
+
+DOWNLOADED PDF:
+❌ Old template still used
+❌ Logo missing
+❌ Broken route text
+❌ Letter spacing issue
+❌ Old invoice formatter
+❌ Wrong booking ID format
+
+-----------------------------------
+REQUIRED FIX
+-----------------------------------
+
+Downloaded PDF must use EXACT SAME DATA + SAME TEMPLATE as View Invoice page.
+
+DO NOT use:
+- old PDF HTML
+- cached invoice template
+- old PDF renderer
+- legacy invoice formatter
+
+-----------------------------------
+IMPLEMENT THIS
+-----------------------------------
+
+1. Rebuild PDF from live invoice page data
+
+Use same:
+- logo
+- route formatter
+- invoice IDs
+- customer details
+- service details
+- description rows
+
+2. PDF generator must call SAME helpers:
+- formatRoute()
+- sanitizeText()
+- generateBookingId()
+- generateInvoiceId()
+
+3. PDF must use same CSS:
+- letter-spacing: normal;
+- proper fonts
+- no justify spacing
+- no broken text rendering
+
+-----------------------------------
+LOGO FIX
+-----------------------------------
+
+Current downloaded PDF still showing fallback orange DFG circle.
+
+Fix:
+- Load latest uploaded logo dynamically
+- Convert logo to base64 before PDF generation if needed
+- Ensure remote image loading works inside PDF renderer
+
+Fallback logo only if uploaded logo missing.
+
+-----------------------------------
+FINAL OUTPUT MUST MATCH VIEW PAGE
+-----------------------------------
+
+Downloaded PDF must show:
+
+Invoice ID:
+BUS-INV-000001
+
+Booking ID:
+BUS-BK-000001
+
+Route:
+Tirupati → Vijayawada
+
+Description:
+Bus - APSRTC - Tirupati → Vijayawada
+
+Logo:
+Latest uploaded Dream Fly Global logo
+
+-----------------------------------
+TEST AFTER FIX
+-----------------------------------
+
+1. Open View Invoice
+2. Download PDF
+3. Compare both
+
+Both must look IDENTICAL.

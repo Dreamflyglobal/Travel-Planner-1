@@ -9,7 +9,7 @@ import {
   ChevronRight, Shield, Info, Globe,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { generateInvoicePDF } from "@/lib/invoice";
+import { generateInvoicePDF, invoiceNumber as buildInvoiceNumber } from "@/lib/invoice";
 import { sanitizeLocation, formatRoute } from "@/lib/location-utils";
 
 // ── Seat label converter ──────────────────────────────────────────────────────
@@ -87,15 +87,6 @@ const COMPANY = {
   gst:     "GSTIN: Applied For",
 };
 
-function invNum(id: string) {
-  // New format: FLT-BK-000001 → FLT-INV-000001
-  const newFmt = id.match(/^(FLT|BUS|HTL|HLD|ACT|VISA|INS|CAR)-BK-(\d+)$/i);
-  if (newFmt) return `${newFmt[1].toUpperCase()}-INV-${newFmt[2]}`;
-  // Legacy: FLY00001 → DFG-FLY-INV-00001
-  const legacyFmt = id.match(/^(FLY|BUS|HOT|HOL)(\d+)$/i);
-  if (legacyFmt) return `DFG-${legacyFmt[1].toUpperCase()}-INV-${legacyFmt[2]}`;
-  return `DFG-INV-${id.replace(/[^A-Z0-9]/gi, "").toUpperCase().slice(-8)}`;
-}
 
 // ── Type accent colours ───────────────────────────────────────────────────────
 function typeAccent(type: BookingInvoice["bookingType"]) {
@@ -379,7 +370,10 @@ export default function InvoiceView() {
   }, [bookingId]);
 
   const handlePrint    = () => window.print();
-  const handleDownload = async () => { if (invoice) await generateInvoicePDF(invoice); };
+  const handleDownload = async () => {
+    if (!invoice) return;
+    await generateInvoicePDF({ ...invoice, logoDataUrl: branding.logoUrl ?? undefined });
+  };
   const handleEmail    = () => {
     if (!invoice) return;
     const sub = `Your ${typeLabel(invoice.bookingType)} Confirmation — ${invoice.bookingId}`;
@@ -418,7 +412,7 @@ export default function InvoiceView() {
     );
   }
 
-  const invoiceNo     = invoice.invoiceNumber || invNum(invoice.bookingId);
+  const invoiceNo     = invoice.invoiceNumber || buildInvoiceNumber(invoice.bookingId, invoice.bookingType);
   const genDate       = invoice.generatedAt   || invoice.timestamp;
   const accent        = typeAccent(invoice.bookingType);
   const cancelPolicy  = CANCEL_POLICIES[invoice.bookingType] || CANCEL_POLICIES.package;

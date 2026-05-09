@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/auth-context";
 import { popUnseenRewardNotifications } from "@/lib/referral";
 import { generateInvoicePDF, openWhatsAppConfirmation, openEmailConfirmation } from "@/lib/invoice";
+import { useBranding } from "@/contexts/branding-context";
 import { API_CONFIG } from "@/lib/api-config";
 
 interface BookingDetails {
@@ -63,6 +64,7 @@ export default function PaymentSuccess() {
   const notifySentRef = useRef(false);
   const { toast } = useToast();
   const { refreshUser } = useAuth();
+  const { branding } = useBranding();
 
   // ── Auto-send email + WhatsApp with invoice link ─────────────────────────
   async function triggerNotification(booking: BookingDetails) {
@@ -240,7 +242,7 @@ export default function PaymentSuccess() {
   };  const handleDownloadTicket = async () => {
     if (!bookingDetails) return;
     try {
-      await generateInvoicePDF(bookingDetails);
+      await generateInvoicePDF({ ...bookingDetails, logoDataUrl: branding.logoUrl ?? undefined });
       toast({
         title: "Invoice Downloaded!",
         description: `${APP_NAME} branded invoice for ${bookingDetails.bookingId} saved as PDF.`,

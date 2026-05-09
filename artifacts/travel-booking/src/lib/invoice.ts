@@ -404,9 +404,28 @@ export async function generateInvoicePDF(data: InvoiceData): Promise<void> {
   doc.setTextColor(...C.dark);
   doc.setFontSize(8.5);
   doc.setFont("helvetica", "normal");
-  const descFull = isHotelItem
-    ? `Hotel – ${data.hotelName || cleanTitle}${data.roomType ? " · " + data.roomType : ""}`
-    : `${data.bookingType.charAt(0).toUpperCase() + data.bookingType.slice(1)} – ${cleanTitle}`;
+
+  // Build a clean "Type – Operator – From → To" description line
+  let descFull: string;
+  if (isHotelItem) {
+    descFull = `Hotel – ${data.hotelName || cleanTitle}${data.roomType ? " · " + data.roomType : ""}`;
+  } else if (isBus) {
+    const busRoute = data.busFrom && data.busTo
+      ? `${sanitizeLocation(data.busFrom)} \u2192 ${sanitizeLocation(data.busTo)}`
+      : cleanTitle;
+    const busOp = data.busOperator ? ` – ${data.busOperator}` : "";
+    descFull = `Bus${busOp} – ${busRoute}`;
+  } else if (isFlight) {
+    const flightRoute = data.flightFrom && data.flightTo
+      ? `${sanitizeLocation(data.flightFrom)} \u2192 ${sanitizeLocation(data.flightTo)}`
+      : cleanTitle;
+    const airline = data.flightAirline
+      ? ` – ${data.flightAirline}${data.flightNumber ? " " + data.flightNumber : ""}`
+      : "";
+    descFull = `Flight${airline} – ${flightRoute}`;
+  } else {
+    descFull = `${data.bookingType.charAt(0).toUpperCase() + data.bookingType.slice(1)} – ${cleanTitle}`;
+  }
   doc.text(descFull.length > 52 ? descFull.slice(0, 52) + "…" : descFull, cols.desc, y + 6.5);
 
   doc.setFont("helvetica", "bold");
