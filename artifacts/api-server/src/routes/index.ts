@@ -29,6 +29,7 @@ import tboRouter              from "./tbo";
 import testCommsRouter        from "./test-comms";
 import usersRouter             from "./users";
 import couponsRouter           from "./coupons";
+import settingsRouter          from "./settings";
 
 const router: IRouter = Router();
 
@@ -62,5 +63,6 @@ router.use(tboRouter);
 router.use(testCommsRouter);
 router.use(usersRouter);
 router.use(couponsRouter);
+router.use(settingsRouter);
 
 export default router;

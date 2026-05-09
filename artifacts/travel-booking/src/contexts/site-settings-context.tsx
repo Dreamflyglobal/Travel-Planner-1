@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from "react";
 
 export type Currency = "INR" | "USD" | "EUR" | "GBP" | "AED";
 
@@ -11,85 +11,140 @@ export type SiteSettings = {
   cancellationPolicy: string;
 };
 
-const STORAGE_KEY = "site_settings_v1";
+const NAMESPACE = "site";
+const CACHE_KEY = "site_settings_cache";
 
 export const DEFAULT_SITE_SETTINGS: SiteSettings = {
-  contactEmail: "",
-  contactPhone: "",
-  paymentsEnabled: true,
-  currency: "INR",
-  bookingFee: 0,
+  contactEmail:       "",
+  contactPhone:       "",
+  paymentsEnabled:    true,
+  currency:           "INR",
+  bookingFee:         0,
   cancellationPolicy: "",
 };
 
-function loadSiteSettings(): SiteSettings {
-  if (typeof window === "undefined") return DEFAULT_SITE_SETTINGS;
+const VALID_CURRENCIES: Currency[] = ["INR", "USD", "EUR", "GBP", "AED"];
+
+function sanitize(raw: Partial<SiteSettings>): SiteSettings {
+  return {
+    contactEmail:       typeof raw.contactEmail === "string" ? raw.contactEmail : DEFAULT_SITE_SETTINGS.contactEmail,
+    contactPhone:       typeof raw.contactPhone === "string" ? raw.contactPhone : DEFAULT_SITE_SETTINGS.contactPhone,
+    paymentsEnabled:    typeof raw.paymentsEnabled === "boolean" ? raw.paymentsEnabled : DEFAULT_SITE_SETTINGS.paymentsEnabled,
+    currency:           VALID_CURRENCIES.includes(raw.currency as Currency) ? raw.currency as Currency : DEFAULT_SITE_SETTINGS.currency,
+    bookingFee:         typeof raw.bookingFee === "number" && Number.isFinite(raw.bookingFee) ? raw.bookingFee : DEFAULT_SITE_SETTINGS.bookingFee,
+    cancellationPolicy: typeof raw.cancellationPolicy === "string" ? raw.cancellationPolicy : DEFAULT_SITE_SETTINGS.cancellationPolicy,
+  };
+}
+
+function readCache(): SiteSettings {
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = window.localStorage.getItem(CACHE_KEY);
     if (!raw) return DEFAULT_SITE_SETTINGS;
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    const settings: SiteSettings = {
-      contactEmail:       typeof parsed.contactEmail === "string"  ? parsed.contactEmail       : DEFAULT_SITE_SETTINGS.contactEmail,
-      contactPhone:       typeof parsed.contactPhone === "string"  ? parsed.contactPhone       : DEFAULT_SITE_SETTINGS.contactPhone,
-      paymentsEnabled:    typeof parsed.paymentsEnabled === "boolean" ? parsed.paymentsEnabled : DEFAULT_SITE_SETTINGS.paymentsEnabled,
-      currency:           (parsed.currency as Currency)            || DEFAULT_SITE_SETTINGS.currency,
-      bookingFee:         typeof parsed.bookingFee === "number" && Number.isFinite(parsed.bookingFee) ? parsed.bookingFee : DEFAULT_SITE_SETTINGS.bookingFee,
-      cancellationPolicy: typeof parsed.cancellationPolicy === "string" ? parsed.cancellationPolicy : DEFAULT_SITE_SETTINGS.cancellationPolicy,
-    };
-    // Scrub any previously stored API credentials from localStorage
+    const parsed = JSON.parse(raw) as Partial<SiteSettings>;
+    // Scrub legacy keys (razorpay credentials must never be cached locally)
     if ("razorpayKeyId" in parsed || "razorpaySecret" in parsed) {
-      try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)); } catch { /* noop */ }
+      delete (parsed as Record<string, unknown>).razorpayKeyId;
+      delete (parsed as Record<string, unknown>).razorpaySecret;
     }
-    return settings;
+    return sanitize(parsed);
   } catch {
     return DEFAULT_SITE_SETTINGS;
   }
 }
 
+function writeCache(s: SiteSettings) {
+  try { window.localStorage.setItem(CACHE_KEY, JSON.stringify(s)); } catch { /* noop */ }
+}
+
 type SiteSettingsContextValue = {
   settings: SiteSettings;
-  updateSettings: (patch: Partial<SiteSettings>) => void;
-  resetSettings: () => void;
+  updateSettings: (patch: Partial<SiteSettings>) => Promise<void>;
+  resetSettings:  () => Promise<void>;
+  saving: boolean;
 };
 
 const SiteSettingsContext = createContext<SiteSettingsContextValue | undefined>(undefined);
 
 export function SiteSettingsProvider({ children }: { children: ReactNode }) {
-  const [settings, setSettings] = useState<SiteSettings>(() => loadSiteSettings());
+  const [settings, setSettings] = useState<SiteSettings>(() => readCache());
+  const [saving, setSaving] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
 
-  // Cross-tab sync
-  useEffect(() => {
-    function handleStorage(e: StorageEvent) {
-      if (e.key !== STORAGE_KEY) return;
-      setSettings(loadSiteSettings());
-    }
-    window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
-  }, []);
-
-  const updateSettings = useCallback((patch: Partial<SiteSettings>) => {
-    setSettings((prev) => {
-      const next: SiteSettings = { ...prev, ...patch };
-      try {
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-      } catch (e) {
-        console.error("[site-settings] Failed to save:", e);
-      }
-      return next;
-    });
-  }, []);
-
-  const resetSettings = useCallback(() => {
+  async function fetchFromServer(signal?: AbortSignal): Promise<SiteSettings | null> {
     try {
-      window.localStorage.removeItem(STORAGE_KEY);
+      const res = await fetch(`/api/settings/${NAMESPACE}`, { signal });
+      if (!res.ok) return null;
+      const json = await res.json() as Partial<SiteSettings>;
+      if (!json || typeof json !== "object") return null;
+      return sanitize(json);
     } catch {
-      /* noop */
+      return null;
     }
+  }
+
+  async function loadFromServer() {
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    const fresh = await fetchFromServer(ctrl.signal);
+    if (fresh) {
+      setSettings(fresh);
+      writeCache(fresh);
+    }
+  }
+
+  useEffect(() => {
+    loadFromServer();
+    function onFocus() { loadFromServer(); }
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      abortRef.current?.abort();
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const updateSettings = useCallback(async (patch: Partial<SiteSettings>) => {
+    const next = sanitize({ ...settings, ...patch });
+    setSettings(next);
+    writeCache(next);
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/settings/${NAMESPACE}`, {
+        method:  "PUT",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(next),
+      });
+      if (!res.ok) throw new Error(await res.text());
+    } catch (e) {
+      console.error("[site-settings] Failed to persist to server:", e);
+    } finally {
+      setSaving(false);
+    }
+  }, [settings]);
+
+  const resetSettings = useCallback(async () => {
     setSettings(DEFAULT_SITE_SETTINGS);
+    writeCache(DEFAULT_SITE_SETTINGS);
+    try { window.localStorage.removeItem(CACHE_KEY); } catch { /* noop */ }
+    setSaving(true);
+    try {
+      await fetch(`/api/settings/${NAMESPACE}`, {
+        method:  "PUT",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(DEFAULT_SITE_SETTINGS),
+      });
+    } catch (e) {
+      console.error("[site-settings] Failed to reset on server:", e);
+    } finally {
+      setSaving(false);
+    }
   }, []);
 
   return (
-    <SiteSettingsContext.Provider value={{ settings, updateSettings, resetSettings }}>
+    <SiteSettingsContext.Provider value={{ settings, updateSettings, resetSettings, saving }}>
       {children}
     </SiteSettingsContext.Provider>
   );

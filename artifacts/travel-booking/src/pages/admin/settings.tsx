@@ -78,13 +78,14 @@ function readFileAsDataURL(file: File): Promise<string> {
 }
 
 export default function AdminSettings() {
-  const { branding, updateBranding, resetBranding } = useBranding();
-  const { settings, updateSettings, resetSettings } = useSiteSettings();
+  const { branding, updateBranding, resetBranding, saving: brandingSaving } = useBranding();
+  const { settings, updateSettings, resetSettings, saving: siteSaving } = useSiteSettings();
   const { toast } = useToast();
 
   const [brandingDraft, setBrandingDraft] = useState<BrandingSettings>(branding);
   const [siteDraft, setSiteDraft] = useState<SiteSettings>(settings);
   const [dirty, setDirty] = useState(false);
+  const isSaving = brandingSaving || siteSaving;
 
   // Keep drafts in sync if context changes elsewhere (e.g. cross-tab updates)
   useEffect(() => {
@@ -146,7 +147,7 @@ export default function AdminSettings() {
     }
   }
 
-  function handleSave() {
+  async function handleSave() {
     // Validate booking fee
     if (siteDraft.bookingFee < 0 || !Number.isFinite(siteDraft.bookingFee)) {
       toast({
@@ -166,12 +167,14 @@ export default function AdminSettings() {
       return;
     }
 
-    updateBranding(brandingDraft);
-    updateSettings(siteDraft);
+    await Promise.all([
+      updateBranding(brandingDraft),
+      updateSettings(siteDraft),
+    ]);
     setDirty(false);
     toast({
       title: "Settings saved",
-      description: "All your changes are now live.",
+      description: "All your changes are now live across all devices.",
     });
   }
 
@@ -181,19 +184,16 @@ export default function AdminSettings() {
     setDirty(false);
   }
 
-  function handleReset() {
-    resetBranding();
-    resetSettings();
-    setTimeout(() => {
-      setBrandingDraft({
-        companyName: APP_NAME,
-        tagline: "Explore the world",
-        logoUrl: null,
-        faviconUrl: null,
-      });
-      setSiteDraft(DEFAULT_SITE_SETTINGS);
-      setDirty(false);
-    }, 0);
+  async function handleReset() {
+    await Promise.all([resetBranding(), resetSettings()]);
+    setBrandingDraft({
+      companyName: APP_NAME,
+      tagline: "Explore the world",
+      logoUrl: null,
+      faviconUrl: null,
+    });
+    setSiteDraft(DEFAULT_SITE_SETTINGS);
+    setDirty(false);
     toast({
       title: "Reset to defaults",
       description: "All settings have been restored to the original values.",
@@ -528,7 +528,11 @@ export default function AdminSettings() {
         {/* Sticky save bar */}
         <div className="sticky bottom-4 bg-white border border-slate-200 rounded-2xl shadow-lg p-4 flex items-center justify-between gap-4">
           <div className="text-sm">
-            {dirty ? (
+            {isSaving ? (
+              <span className="text-blue-600 font-medium" data-testid="text-saving-status">
+                Saving to database…
+              </span>
+            ) : dirty ? (
               <span className="text-amber-700 font-medium" data-testid="text-dirty-status">
                 You have unsaved changes
               </span>
@@ -542,18 +546,18 @@ export default function AdminSettings() {
             <Button
               variant="outline"
               onClick={handleDiscard}
-              disabled={!dirty}
+              disabled={!dirty || isSaving}
               data-testid="button-discard-settings"
             >
               Discard
             </Button>
             <Button
               onClick={handleSave}
-              disabled={!dirty}
+              disabled={!dirty || isSaving}
               data-testid="button-save-settings"
             >
               <Save className="w-4 h-4 mr-2" />
-              Save changes
+              {isSaving ? "Saving…" : "Save changes"}
             </Button>
           </div>
         </div>
@@ -642,7 +646,7 @@ function FaviconPreview({ faviconUrl }: { faviconUrl: string | null }) {
 
 // ── Notification Settings (modular, additive) ────────────────────────────────
 function NotificationSettingsSection() {
-  const { settings, updateSettings, resetSettings } = useNotificationSettings();
+  const { settings, updateSettings, resetSettings, saving } = useNotificationSettings();
   const { toast } = useToast();
 
   const [draft, setDraft] = useState<NotificationSettings>(settings);
@@ -659,7 +663,7 @@ function NotificationSettingsSection() {
     setDirty(true);
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (draft.emailEnabled) {
       if (!draft.smtpEmail.trim() || !/^\S+@\S+\.\S+$/.test(draft.smtpEmail.trim())) {
         toast({ title: "Invalid SMTP email", description: "Please enter a valid email address.", variant: "destructive" });
@@ -674,15 +678,15 @@ function NotificationSettingsSection() {
       toast({ title: "Popup message required", description: "Enter the message to show in the popup.", variant: "destructive" });
       return;
     }
-    updateSettings(draft);
+    await updateSettings(draft);
     setDirty(false);
     setSavedFlash(true);
     setTimeout(() => setSavedFlash(false), 3000);
-    toast({ title: "Notification settings saved", description: "Your notification preferences are now active." });
+    toast({ title: "Notification settings saved", description: "Your notification preferences are now active across all devices." });
   }
 
-  function handleReset() {
-    resetSettings();
+  async function handleReset() {
+    await resetSettings();
     setDraft(DEFAULT_NOTIFICATION_SETTINGS);
     setDirty(false);
     toast({ title: "Reset", description: "Notification settings restored to defaults." });
@@ -892,6 +896,7 @@ function NotificationSettingsSection() {
             variant="outline"
             size="sm"
             onClick={handleReset}
+            disabled={saving}
             data-testid="button-notif-reset"
           >
             <RotateCcw className="w-4 h-4 mr-2" />
@@ -899,11 +904,11 @@ function NotificationSettingsSection() {
           </Button>
           <Button
             onClick={handleSave}
-            disabled={!dirty}
+            disabled={!dirty || saving}
             data-testid="button-notif-save"
           >
             <Save className="w-4 h-4 mr-2" />
-            Save Notification Settings
+            {saving ? "Saving…" : "Save Notification Settings"}
           </Button>
         </div>
       </CardContent>
@@ -913,7 +918,7 @@ function NotificationSettingsSection() {
 
 // ── Website Settings (modular, additive) ────────────────────────────────────
 function WebsiteSettingsSection() {
-  const { settings, updateSettings, resetSettings } = useWebsiteSettings();
+  const { settings, updateSettings, resetSettings, saving } = useWebsiteSettings();
   const { toast } = useToast();
 
   const [draft, setDraft] = useState<WebsiteSettings>(settings);
@@ -973,7 +978,7 @@ function WebsiteSettingsSection() {
     }
   }
 
-  function handleSave() {
+  async function handleSave() {
     for (const [field, label] of [
       ["facebookUrl", "Facebook URL"],
       ["instagramUrl", "Instagram URL"],
@@ -999,18 +1004,18 @@ function WebsiteSettingsSection() {
         return;
       }
     }
-    updateSettings(draft);
+    await updateSettings(draft);
     setDirty(false);
     setSavedFlash(true);
     setTimeout(() => setSavedFlash(false), 3000);
     toast({
       title: "Website settings saved",
-      description: "Your changes are now live across the site.",
+      description: "Your changes are now live across all devices.",
     });
   }
 
-  function handleReset() {
-    resetSettings();
+  async function handleReset() {
+    await resetSettings();
     setDraft(DEFAULT_WEBSITE_SETTINGS);
     setDirty(false);
     toast({
@@ -1285,6 +1290,7 @@ function WebsiteSettingsSection() {
             variant="outline"
             size="sm"
             onClick={handleReset}
+            disabled={saving}
             data-testid="button-website-reset"
           >
             <RotateCcw className="w-4 h-4 mr-2" />
@@ -1292,11 +1298,11 @@ function WebsiteSettingsSection() {
           </Button>
           <Button
             onClick={handleSave}
-            disabled={!dirty}
+            disabled={!dirty || saving}
             data-testid="button-website-save"
           >
             <Save className="w-4 h-4 mr-2" />
-            Save Website Settings
+            {saving ? "Saving…" : "Save Website Settings"}
           </Button>
         </div>
       </CardContent>

@@ -12,3 +12,4 @@ export * from "./marketing";
 export * from "./api-keys";
 export * from "./booking-refunds";
 export * from "./coupons";
+export * from "./settings";

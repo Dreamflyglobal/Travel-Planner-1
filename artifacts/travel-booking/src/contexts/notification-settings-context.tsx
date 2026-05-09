@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from "react";
 
 export type NotificationSettings = {
   emailEnabled: boolean;
@@ -12,84 +12,141 @@ export type NotificationSettings = {
   whatsappNotifNumber: string;
 };
 
-const STORAGE_KEY = "notification_settings_v1";
+const NAMESPACE = "notification";
+const CACHE_KEY = "notification_settings_cache";
 
 export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
-  emailEnabled: false,
-  smtpEmail: "",
-  smtpPassword: "",
-  popupEnabled: true,
-  popupMessage: "Your booking has been confirmed! A confirmation has been sent to your email.",
-  smsEnabled: false,
-  smsProvider: "",
+  emailEnabled:         false,
+  smtpEmail:            "",
+  smtpPassword:         "",
+  popupEnabled:         true,
+  popupMessage:         "Your booking has been confirmed! A confirmation has been sent to your email.",
+  smsEnabled:           false,
+  smsProvider:          "",
   whatsappNotifEnabled: false,
-  whatsappNotifNumber: "",
+  whatsappNotifNumber:  "",
 };
 
-function loadSettings(): NotificationSettings {
-  if (typeof window === "undefined") return DEFAULT_NOTIFICATION_SETTINGS;
+function sanitize(raw: Partial<NotificationSettings>): NotificationSettings {
+  const d = DEFAULT_NOTIFICATION_SETTINGS;
+  return {
+    emailEnabled:         typeof raw.emailEnabled === "boolean"         ? raw.emailEnabled         : d.emailEnabled,
+    smtpEmail:            typeof raw.smtpEmail === "string"             ? raw.smtpEmail             : d.smtpEmail,
+    smtpPassword:         typeof raw.smtpPassword === "string"          ? raw.smtpPassword          : d.smtpPassword,
+    popupEnabled:         typeof raw.popupEnabled === "boolean"         ? raw.popupEnabled          : d.popupEnabled,
+    popupMessage:         typeof raw.popupMessage === "string" && raw.popupMessage.trim()
+                            ? raw.popupMessage
+                            : d.popupMessage,
+    smsEnabled:           typeof raw.smsEnabled === "boolean"           ? raw.smsEnabled            : d.smsEnabled,
+    smsProvider:          typeof raw.smsProvider === "string"           ? raw.smsProvider           : d.smsProvider,
+    whatsappNotifEnabled: typeof raw.whatsappNotifEnabled === "boolean" ? raw.whatsappNotifEnabled  : d.whatsappNotifEnabled,
+    whatsappNotifNumber:  typeof raw.whatsappNotifNumber === "string"   ? raw.whatsappNotifNumber   : d.whatsappNotifNumber,
+  };
+}
+
+function readCache(): NotificationSettings {
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = window.localStorage.getItem(CACHE_KEY);
     if (!raw) return DEFAULT_NOTIFICATION_SETTINGS;
-    const parsed = JSON.parse(raw) as Partial<NotificationSettings>;
-    return {
-      emailEnabled: typeof parsed.emailEnabled === "boolean" ? parsed.emailEnabled : DEFAULT_NOTIFICATION_SETTINGS.emailEnabled,
-      smtpEmail: typeof parsed.smtpEmail === "string" ? parsed.smtpEmail : DEFAULT_NOTIFICATION_SETTINGS.smtpEmail,
-      smtpPassword: typeof parsed.smtpPassword === "string" ? parsed.smtpPassword : DEFAULT_NOTIFICATION_SETTINGS.smtpPassword,
-      popupEnabled: typeof parsed.popupEnabled === "boolean" ? parsed.popupEnabled : DEFAULT_NOTIFICATION_SETTINGS.popupEnabled,
-      popupMessage: typeof parsed.popupMessage === "string" && parsed.popupMessage.trim()
-        ? parsed.popupMessage
-        : DEFAULT_NOTIFICATION_SETTINGS.popupMessage,
-      smsEnabled: typeof parsed.smsEnabled === "boolean" ? parsed.smsEnabled : DEFAULT_NOTIFICATION_SETTINGS.smsEnabled,
-      smsProvider: typeof parsed.smsProvider === "string" ? parsed.smsProvider : DEFAULT_NOTIFICATION_SETTINGS.smsProvider,
-      whatsappNotifEnabled: typeof parsed.whatsappNotifEnabled === "boolean" ? parsed.whatsappNotifEnabled : DEFAULT_NOTIFICATION_SETTINGS.whatsappNotifEnabled,
-      whatsappNotifNumber: typeof parsed.whatsappNotifNumber === "string" ? parsed.whatsappNotifNumber : DEFAULT_NOTIFICATION_SETTINGS.whatsappNotifNumber,
-    };
+    return sanitize(JSON.parse(raw) as Partial<NotificationSettings>);
   } catch {
     return DEFAULT_NOTIFICATION_SETTINGS;
   }
 }
 
+function writeCache(s: NotificationSettings) {
+  try { window.localStorage.setItem(CACHE_KEY, JSON.stringify(s)); } catch { /* noop */ }
+}
+
 type NotificationSettingsContextValue = {
   settings: NotificationSettings;
-  updateSettings: (patch: Partial<NotificationSettings>) => void;
-  resetSettings: () => void;
+  updateSettings: (patch: Partial<NotificationSettings>) => Promise<void>;
+  resetSettings:  () => Promise<void>;
+  saving: boolean;
 };
 
 const NotificationSettingsContext = createContext<NotificationSettingsContextValue | undefined>(undefined);
 
 export function NotificationSettingsProvider({ children }: { children: ReactNode }) {
-  const [settings, setSettings] = useState<NotificationSettings>(() => loadSettings());
+  const [settings, setSettings] = useState<NotificationSettings>(() => readCache());
+  const [saving, setSaving] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
 
-  // Cross-tab sync — whenever another tab changes settings, pick them up
-  useEffect(() => {
-    function handleStorage(e: StorageEvent) {
-      if (e.key !== STORAGE_KEY) return;
-      setSettings(loadSettings());
+  async function fetchFromServer(signal?: AbortSignal): Promise<NotificationSettings | null> {
+    try {
+      const res = await fetch(`/api/settings/${NAMESPACE}`, { signal });
+      if (!res.ok) return null;
+      const json = await res.json() as Partial<NotificationSettings>;
+      if (!json || typeof json !== "object") return null;
+      return sanitize(json);
+    } catch {
+      return null;
     }
-    window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
+  }
+
+  async function loadFromServer() {
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    const fresh = await fetchFromServer(ctrl.signal);
+    if (fresh) {
+      setSettings(fresh);
+      writeCache(fresh);
+    }
+  }
+
+  useEffect(() => {
+    loadFromServer();
+    function onFocus() { loadFromServer(); }
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      abortRef.current?.abort();
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const updateSettings = useCallback((patch: Partial<NotificationSettings>) => {
-    setSettings((prev) => {
-      const next: NotificationSettings = { ...prev, ...patch };
-      try {
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-      } catch (e) {
-        console.error("[notifications] Failed to save:", e);
-      }
-      return next;
-    });
-  }, []);
+  const updateSettings = useCallback(async (patch: Partial<NotificationSettings>) => {
+    const next = sanitize({ ...settings, ...patch });
+    setSettings(next);
+    writeCache(next);
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/settings/${NAMESPACE}`, {
+        method:  "PUT",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(next),
+      });
+      if (!res.ok) throw new Error(await res.text());
+    } catch (e) {
+      console.error("[notification-settings] Failed to persist to server:", e);
+    } finally {
+      setSaving(false);
+    }
+  }, [settings]);
 
-  const resetSettings = useCallback(() => {
-    try { window.localStorage.removeItem(STORAGE_KEY); } catch { /* noop */ }
+  const resetSettings = useCallback(async () => {
     setSettings(DEFAULT_NOTIFICATION_SETTINGS);
+    writeCache(DEFAULT_NOTIFICATION_SETTINGS);
+    try { window.localStorage.removeItem(CACHE_KEY); } catch { /* noop */ }
+    setSaving(true);
+    try {
+      await fetch(`/api/settings/${NAMESPACE}`, {
+        method:  "PUT",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(DEFAULT_NOTIFICATION_SETTINGS),
+      });
+    } catch (e) {
+      console.error("[notification-settings] Failed to reset on server:", e);
+    } finally {
+      setSaving(false);
+    }
   }, []);
 
   return (
-    <NotificationSettingsContext.Provider value={{ settings, updateSettings, resetSettings }}>
+    <NotificationSettingsContext.Provider value={{ settings, updateSettings, resetSettings, saving }}>
       {children}
     </NotificationSettingsContext.Provider>
   );

@@ -20905,27 +20905,27 @@ var require_router = __commonJS({
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var methods = METHODS.map((method) => method.toLowerCase());
-    module.exports = Router32;
+    module.exports = Router33;
     module.exports.Route = Route;
-    function Router32(options) {
-      if (!(this instanceof Router32)) {
-        return new Router32(options);
+    function Router33(options) {
+      if (!(this instanceof Router33)) {
+        return new Router33(options);
       }
       const opts = options || {};
-      function router32(req, res, next) {
-        router32.handle(req, res, next);
+      function router33(req, res, next) {
+        router33.handle(req, res, next);
       }
-      Object.setPrototypeOf(router32, this);
-      router32.caseSensitive = opts.caseSensitive;
-      router32.mergeParams = opts.mergeParams;
-      router32.params = {};
-      router32.strict = opts.strict;
-      router32.stack = [];
-      return router32;
+      Object.setPrototypeOf(router33, this);
+      router33.caseSensitive = opts.caseSensitive;
+      router33.mergeParams = opts.mergeParams;
+      router33.params = {};
+      router33.strict = opts.strict;
+      router33.stack = [];
+      return router33;
     }
-    Router32.prototype = function() {
+    Router33.prototype = function() {
     };
-    Router32.prototype.param = function param2(name2, fn) {
+    Router33.prototype.param = function param2(name2, fn) {
       if (!name2) {
         throw new TypeError("argument name is required");
       }
@@ -20945,7 +20945,7 @@ var require_router = __commonJS({
       params.push(fn);
       return this;
     };
-    Router32.prototype.handle = function handle(req, res, callback) {
+    Router33.prototype.handle = function handle(req, res, callback) {
       if (!callback) {
         throw new TypeError("argument callback is required");
       }
@@ -21072,7 +21072,7 @@ var require_router = __commonJS({
         }
       }
     };
-    Router32.prototype.use = function use(handler) {
+    Router33.prototype.use = function use(handler) {
       let offset = 0;
       let path = "/";
       if (typeof handler !== "function") {
@@ -21105,7 +21105,7 @@ var require_router = __commonJS({
       }
       return this;
     };
-    Router32.prototype.route = function route(path) {
+    Router33.prototype.route = function route(path) {
       const route2 = new Route(path);
       const layer = new Layer(path, {
         sensitive: this.caseSensitive,
@@ -21120,7 +21120,7 @@ var require_router = __commonJS({
       return route2;
     };
     methods.concat("all").forEach(function(method) {
-      Router32.prototype[method] = function(path) {
+      Router33.prototype[method] = function(path) {
         const route = this.route(path);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
@@ -21303,13 +21303,13 @@ var require_application = __commonJS({
     var compileTrust = require_utils3().compileTrust;
     var resolve2 = __require("node:path").resolve;
     var once = require_once();
-    var Router32 = require_router();
+    var Router33 = require_router();
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var app3 = exports = module.exports = {};
     var trustProxyDefaultSymbol = "@@symbol:trust_proxy_default";
     app3.init = function init() {
-      var router32 = null;
+      var router33 = null;
       this.cache = /* @__PURE__ */ Object.create(null);
       this.engines = /* @__PURE__ */ Object.create(null);
       this.settings = /* @__PURE__ */ Object.create(null);
@@ -21318,13 +21318,13 @@ var require_application = __commonJS({
         configurable: true,
         enumerable: true,
         get: function getrouter() {
-          if (router32 === null) {
-            router32 = new Router32({
+          if (router33 === null) {
+            router33 = new Router33({
               caseSensitive: this.enabled("case sensitive routing"),
               strict: this.enabled("strict routing")
             });
           }
-          return router32;
+          return router33;
         }
       });
     };
@@ -21395,15 +21395,15 @@ var require_application = __commonJS({
       if (fns.length === 0) {
         throw new TypeError("app.use() requires a middleware function");
       }
-      var router32 = this.router;
+      var router33 = this.router;
       fns.forEach(function(fn2) {
         if (!fn2 || !fn2.handle || !fn2.set) {
-          return router32.use(path, fn2);
+          return router33.use(path, fn2);
         }
         debug(".use app under %s", path);
         fn2.mountpath = path;
         fn2.parent = this;
-        router32.use(path, function mounted_app(req, res, next) {
+        router33.use(path, function mounted_app(req, res, next) {
           var orig = req.app;
           fn2.handle(req, res, function(err) {
             Object.setPrototypeOf(req, orig.request);
@@ -23976,7 +23976,7 @@ var require_express = __commonJS({
     var EventEmitter2 = __require("node:events").EventEmitter;
     var mixin = require_merge_descriptors();
     var proto = require_application();
-    var Router32 = require_router();
+    var Router33 = require_router();
     var req = require_request();
     var res = require_response();
     exports = module.exports = createApplication;
@@ -23998,8 +23998,8 @@ var require_express = __commonJS({
     exports.application = proto;
     exports.request = req;
     exports.response = res;
-    exports.Route = Router32.Route;
-    exports.Router = Router32;
+    exports.Route = Router33.Route;
+    exports.Router = Router33;
     exports.json = bodyParser.json;
     exports.raw = bodyParser.raw;
     exports.static = require_serve_static();
@@ -133609,7 +133609,7 @@ var require_mongoose2 = __commonJS({
 })();
 
 // src/app.ts
-var import_express32 = __toESM(require_express2(), 1);
+var import_express33 = __toESM(require_express2(), 1);
 var import_cors = __toESM(require_lib3(), 1);
 var import_cookie_parser = __toESM(require_cookie_parser(), 1);
 var import_pino_http = __toESM(require_logger(), 1);
@@ -133618,7 +133618,7 @@ import { dirname, resolve, join } from "node:path";
 import { existsSync } from "node:fs";
 
 // src/routes/index.ts
-var import_express31 = __toESM(require_express2(), 1);
+var import_express32 = __toESM(require_express2(), 1);
 
 // src/routes/health.ts
 var import_express = __toESM(require_express2(), 1);
@@ -143192,6 +143192,7 @@ function drizzle(...params) {
 var schema_exports = {};
 __export(schema_exports, {
   apiKeysTable: () => apiKeysTable,
+  appSettingsTable: () => appSettingsTable,
   bookingCountersTable: () => bookingCountersTable,
   bookingRefundsTable: () => bookingRefundsTable,
   bookingsTable: () => bookingsTable,
@@ -155002,6 +155003,13 @@ var couponUsageTable = pgTable("coupon_usage", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
 });
 
+// ../../lib/db/src/schema/settings.ts
+var appSettingsTable = pgTable("app_settings", {
+  namespace: text("namespace").primaryKey(),
+  data: text("data").notNull().default("{}"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+});
+
 // ../../lib/db/src/index.ts
 var { Pool: Pool3 } = esm_default;
 if (!process.env.DATABASE_URL) {
@@ -166756,42 +166764,89 @@ router30.get("/coupons/usage", async (_req, res) => {
 });
 var coupons_default = router30;
 
-// src/routes/index.ts
+// src/routes/settings.ts
+var import_express31 = __toESM(require_express2(), 1);
+init_drizzle_orm();
 var router31 = (0, import_express31.Router)();
-router31.use(health_default);
-router31.use(auth_default);
-router31.use(admin_default);
-router31.use(admin_notify_default);
-router31.use(flights_default);
-router31.use(buses_default);
-router31.use(hotels_default);
-router31.use(packages_default);
-router31.use(bookings_default);
-router31.use("/payments", payments_default);
-router31.use("/tickets", tickets_default);
-router31.use("/send-whatsapp", whatsapp_default);
-router31.use("/itinerary-pdf", itinerary_pdf_default);
-router31.use("/holiday-whatsapp", holiday_whatsapp_default);
-router31.use("/followup", followup_default);
-router31.use(leads_default);
-router31.use(holiday_packages_default);
-router31.use(enquiries_default);
-router31.use(push_default);
-router31.use(currency_default);
-router31.use(marketing_default);
-router31.use(admin_bookings_default);
-router31.use(book_flight_default);
-router31.use(verify_payment_default);
-router31.use(tripjack_default);
-router31.use(tripjackRoutes_default);
-router31.use(tbo_default);
-router31.use(test_comms_default);
-router31.use(users_default);
-router31.use(coupons_default);
-var routes_default = router31;
+var VALID_NAMESPACES = /* @__PURE__ */ new Set(["branding", "site", "website", "notification"]);
+router31.get("/settings/:namespace", async (req, res) => {
+  const ns = req.params.namespace?.toLowerCase();
+  if (!VALID_NAMESPACES.has(ns)) {
+    res.status(400).json({ error: "Invalid namespace" });
+    return;
+  }
+  try {
+    const [row] = await db.select().from(appSettingsTable).where(eq(appSettingsTable.namespace, ns)).limit(1);
+    const data = row ? JSON.parse(row.data) : {};
+    res.json(data);
+  } catch (err) {
+    logger.error({ err, ns }, "[settings] GET failed");
+    res.status(500).json({ error: "Failed to fetch settings" });
+  }
+});
+router31.put("/settings/:namespace", async (req, res) => {
+  const ns = req.params.namespace?.toLowerCase();
+  if (!VALID_NAMESPACES.has(ns)) {
+    res.status(400).json({ error: "Invalid namespace" });
+    return;
+  }
+  try {
+    const body = req.body;
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      res.status(400).json({ error: "Body must be a JSON object" });
+      return;
+    }
+    const json3 = JSON.stringify(body);
+    await db.insert(appSettingsTable).values({ namespace: ns, data: json3, updatedAt: /* @__PURE__ */ new Date() }).onConflictDoUpdate({
+      target: appSettingsTable.namespace,
+      set: { data: json3, updatedAt: /* @__PURE__ */ new Date() }
+    });
+    logger.info({ ns }, "[settings] saved");
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err, ns }, "[settings] PUT failed");
+    res.status(500).json({ error: "Failed to save settings" });
+  }
+});
+var settings_default = router31;
+
+// src/routes/index.ts
+var router32 = (0, import_express32.Router)();
+router32.use(health_default);
+router32.use(auth_default);
+router32.use(admin_default);
+router32.use(admin_notify_default);
+router32.use(flights_default);
+router32.use(buses_default);
+router32.use(hotels_default);
+router32.use(packages_default);
+router32.use(bookings_default);
+router32.use("/payments", payments_default);
+router32.use("/tickets", tickets_default);
+router32.use("/send-whatsapp", whatsapp_default);
+router32.use("/itinerary-pdf", itinerary_pdf_default);
+router32.use("/holiday-whatsapp", holiday_whatsapp_default);
+router32.use("/followup", followup_default);
+router32.use(leads_default);
+router32.use(holiday_packages_default);
+router32.use(enquiries_default);
+router32.use(push_default);
+router32.use(currency_default);
+router32.use(marketing_default);
+router32.use(admin_bookings_default);
+router32.use(book_flight_default);
+router32.use(verify_payment_default);
+router32.use(tripjack_default);
+router32.use(tripjackRoutes_default);
+router32.use(tbo_default);
+router32.use(test_comms_default);
+router32.use(users_default);
+router32.use(coupons_default);
+router32.use(settings_default);
+var routes_default = router32;
 
 // src/app.ts
-var app2 = (0, import_express32.default)();
+var app2 = (0, import_express33.default)();
 app2.use(
   (0, import_pino_http.default)({
     logger,
@@ -166818,15 +166873,15 @@ app2.use(
   })
 );
 app2.use((0, import_cookie_parser.default)());
-app2.use(import_express32.default.json());
-app2.use(import_express32.default.urlencoded({ extended: true }));
+app2.use(import_express33.default.json());
+app2.use(import_express33.default.urlencoded({ extended: true }));
 app2.use("/api", routes_default);
 if (process.env.NODE_ENV === "production") {
   const currentDir = dirname(fileURLToPath(import.meta.url));
   const staticDir = resolve(currentDir, "../../travel-booking/dist/public");
   if (existsSync(staticDir)) {
     logger.info({ staticDir }, "Serving frontend static files");
-    app2.use(import_express32.default.static(staticDir, { maxAge: "1d", index: false }));
+    app2.use(import_express33.default.static(staticDir, { maxAge: "1d", index: false }));
     app2.use((_req, res) => {
       res.sendFile(join(staticDir, "index.html"));
     });

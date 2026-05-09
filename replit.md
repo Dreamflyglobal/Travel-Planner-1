@@ -49,6 +49,8 @@ A comprehensive travel booking website offering flights, hotels, buses, and holi
 - `lib/booking-session.ts`: Typed utility for managing pending booking sessions in `localStorage`.
 - `artifacts/travel-booking/src/pages/admin/api-keys-section.tsx`: API Keys Management UI.
 - `artifacts/api-server/src/routes/holiday-packages.ts`: Holiday package pricing and category logic.
+- `artifacts/api-server/src/routes/settings.ts`: Global admin settings API (`GET/PUT /api/settings/:namespace`).
+- `lib/db/src/schema/settings.ts`: `app_settings` table — one row per namespace (branding, site, website, notification).
 
 ## Architecture decisions
 
@@ -57,6 +59,7 @@ A comprehensive travel booking website offering flights, hotels, buses, and holi
 - **Separated Booking Flow**: Passenger/guest details are collected on specific booking pages, but payment is handled on a dedicated, separate `/booking/payment` page, allowing for consistent payment processing across all booking types.
 - **Client-Side Persistence for B2B/Coupons**: Features like B2B agent state, coupons, and historical bookings leverage `localStorage`/`sessionStorage` for persistence across sessions, minimizing backend dependency for these client-side specific features.
 - **Dynamic Pricing for Holiday Packages**: Implemented a sophisticated dynamic pricing engine for holiday packages considering package type, seasonality, and admin overrides, with a clear `pricingBreakdown` provided.
+- **DB-Backed Admin Settings**: All four settings namespaces (branding, site, website, notification) are stored in the `app_settings` PostgreSQL table via `GET/PUT /api/settings/:namespace`. Frontend contexts fetch from DB on mount and on window focus — changes made on any device appear everywhere. localStorage is used as an immediate-render cache only.
 
 ## Product
 

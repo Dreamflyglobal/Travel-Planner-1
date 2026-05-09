@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useState,
+  useRef,
   type ReactNode,
 } from "react";
 
@@ -21,128 +22,145 @@ export type WebsiteSettings = {
   maintenanceMessage: string;
 };
 
+const NAMESPACE = "website";
+const CACHE_KEY = "website_settings_cache";
+
 export const DEFAULT_WEBSITE_SETTINGS: WebsiteSettings = {
-  facebookUrl: "",
-  instagramUrl: "",
-  twitterUrl: "",
-  whatsappEnabled: false,
-  whatsappNumber: "",
-  bannerEnabled: false,
-  bannerText: "",
-  bannerOffer: "",
-  bannerImage: "",
-  maintenanceMode: false,
+  facebookUrl:        "",
+  instagramUrl:       "",
+  twitterUrl:         "",
+  whatsappEnabled:    false,
+  whatsappNumber:     "",
+  bannerEnabled:      false,
+  bannerText:         "",
+  bannerOffer:        "",
+  bannerImage:        "",
+  maintenanceMode:    false,
   maintenanceMessage: "We're upgrading the experience. We'll be back shortly.",
 };
 
-const STORAGE_KEY = "website_settings_v1";
+function sanitize(raw: Partial<WebsiteSettings>): WebsiteSettings {
+  const d = DEFAULT_WEBSITE_SETTINGS;
+  return {
+    facebookUrl:        typeof raw.facebookUrl === "string"        ? raw.facebookUrl        : d.facebookUrl,
+    instagramUrl:       typeof raw.instagramUrl === "string"       ? raw.instagramUrl       : d.instagramUrl,
+    twitterUrl:         typeof raw.twitterUrl === "string"         ? raw.twitterUrl         : d.twitterUrl,
+    whatsappEnabled:    typeof raw.whatsappEnabled === "boolean"   ? raw.whatsappEnabled    : d.whatsappEnabled,
+    whatsappNumber:     typeof raw.whatsappNumber === "string"     ? raw.whatsappNumber     : d.whatsappNumber,
+    bannerEnabled:      typeof raw.bannerEnabled === "boolean"     ? raw.bannerEnabled      : d.bannerEnabled,
+    bannerText:         typeof raw.bannerText === "string"         ? raw.bannerText         : d.bannerText,
+    bannerOffer:        typeof raw.bannerOffer === "string"        ? raw.bannerOffer        : d.bannerOffer,
+    bannerImage:        typeof raw.bannerImage === "string"        ? raw.bannerImage        : d.bannerImage,
+    maintenanceMode:    typeof raw.maintenanceMode === "boolean"   ? raw.maintenanceMode    : d.maintenanceMode,
+    maintenanceMessage: typeof raw.maintenanceMessage === "string" && raw.maintenanceMessage.trim()
+                          ? raw.maintenanceMessage
+                          : d.maintenanceMessage,
+  };
+}
 
-function loadWebsiteSettings(): WebsiteSettings {
-  if (typeof window === "undefined") return DEFAULT_WEBSITE_SETTINGS;
+function readCache(): WebsiteSettings {
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = window.localStorage.getItem(CACHE_KEY);
     if (!raw) return DEFAULT_WEBSITE_SETTINGS;
-    const parsed = JSON.parse(raw) as Partial<WebsiteSettings>;
-    return {
-      facebookUrl:
-        typeof parsed.facebookUrl === "string"
-          ? parsed.facebookUrl
-          : DEFAULT_WEBSITE_SETTINGS.facebookUrl,
-      instagramUrl:
-        typeof parsed.instagramUrl === "string"
-          ? parsed.instagramUrl
-          : DEFAULT_WEBSITE_SETTINGS.instagramUrl,
-      twitterUrl:
-        typeof parsed.twitterUrl === "string"
-          ? parsed.twitterUrl
-          : DEFAULT_WEBSITE_SETTINGS.twitterUrl,
-      whatsappEnabled:
-        typeof parsed.whatsappEnabled === "boolean"
-          ? parsed.whatsappEnabled
-          : DEFAULT_WEBSITE_SETTINGS.whatsappEnabled,
-      whatsappNumber:
-        typeof parsed.whatsappNumber === "string"
-          ? parsed.whatsappNumber
-          : DEFAULT_WEBSITE_SETTINGS.whatsappNumber,
-      bannerEnabled:
-        typeof parsed.bannerEnabled === "boolean"
-          ? parsed.bannerEnabled
-          : DEFAULT_WEBSITE_SETTINGS.bannerEnabled,
-      bannerText:
-        typeof parsed.bannerText === "string"
-          ? parsed.bannerText
-          : DEFAULT_WEBSITE_SETTINGS.bannerText,
-      bannerOffer:
-        typeof parsed.bannerOffer === "string"
-          ? parsed.bannerOffer
-          : DEFAULT_WEBSITE_SETTINGS.bannerOffer,
-      bannerImage:
-        typeof parsed.bannerImage === "string"
-          ? parsed.bannerImage
-          : DEFAULT_WEBSITE_SETTINGS.bannerImage,
-      maintenanceMode:
-        typeof parsed.maintenanceMode === "boolean"
-          ? parsed.maintenanceMode
-          : DEFAULT_WEBSITE_SETTINGS.maintenanceMode,
-      maintenanceMessage:
-        typeof parsed.maintenanceMessage === "string"
-          ? parsed.maintenanceMessage
-          : DEFAULT_WEBSITE_SETTINGS.maintenanceMessage,
-    };
+    return sanitize(JSON.parse(raw) as Partial<WebsiteSettings>);
   } catch {
     return DEFAULT_WEBSITE_SETTINGS;
   }
 }
 
+function writeCache(s: WebsiteSettings) {
+  try { window.localStorage.setItem(CACHE_KEY, JSON.stringify(s)); } catch { /* noop */ }
+}
+
 type WebsiteSettingsContextValue = {
   settings: WebsiteSettings;
-  updateSettings: (patch: Partial<WebsiteSettings>) => void;
-  resetSettings: () => void;
+  updateSettings: (patch: Partial<WebsiteSettings>) => Promise<void>;
+  resetSettings:  () => Promise<void>;
+  saving: boolean;
 };
 
-const WebsiteSettingsContext = createContext<
-  WebsiteSettingsContextValue | undefined
->(undefined);
+const WebsiteSettingsContext = createContext<WebsiteSettingsContextValue | undefined>(undefined);
 
 export function WebsiteSettingsProvider({ children }: { children: ReactNode }) {
-  const [settings, setSettings] = useState<WebsiteSettings>(() =>
-    loadWebsiteSettings(),
-  );
+  const [settings, setSettings] = useState<WebsiteSettings>(() => readCache());
+  const [saving, setSaving] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
+
+  async function fetchFromServer(signal?: AbortSignal): Promise<WebsiteSettings | null> {
+    try {
+      const res = await fetch(`/api/settings/${NAMESPACE}`, { signal });
+      if (!res.ok) return null;
+      const json = await res.json() as Partial<WebsiteSettings>;
+      if (!json || typeof json !== "object") return null;
+      return sanitize(json);
+    } catch {
+      return null;
+    }
+  }
+
+  async function loadFromServer() {
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    const fresh = await fetchFromServer(ctrl.signal);
+    if (fresh) {
+      setSettings(fresh);
+      writeCache(fresh);
+    }
+  }
 
   useEffect(() => {
-    function handleStorage(e: StorageEvent) {
-      if (e.key !== STORAGE_KEY) return;
-      setSettings(loadWebsiteSettings());
-    }
-    window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
+    loadFromServer();
+    function onFocus() { loadFromServer(); }
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      abortRef.current?.abort();
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const updateSettings = useCallback((patch: Partial<WebsiteSettings>) => {
-    setSettings((prev) => {
-      const next: WebsiteSettings = { ...prev, ...patch };
-      try {
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-      } catch (e) {
-        console.error("[website-settings] Failed to save:", e);
-      }
-      return next;
-    });
-  }, []);
-
-  const resetSettings = useCallback(() => {
+  const updateSettings = useCallback(async (patch: Partial<WebsiteSettings>) => {
+    const next = sanitize({ ...settings, ...patch });
+    setSettings(next);
+    writeCache(next);
+    setSaving(true);
     try {
-      window.localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      /* noop */
+      const res = await fetch(`/api/settings/${NAMESPACE}`, {
+        method:  "PUT",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(next),
+      });
+      if (!res.ok) throw new Error(await res.text());
+    } catch (e) {
+      console.error("[website-settings] Failed to persist to server:", e);
+    } finally {
+      setSaving(false);
     }
+  }, [settings]);
+
+  const resetSettings = useCallback(async () => {
     setSettings(DEFAULT_WEBSITE_SETTINGS);
+    writeCache(DEFAULT_WEBSITE_SETTINGS);
+    try { window.localStorage.removeItem(CACHE_KEY); } catch { /* noop */ }
+    setSaving(true);
+    try {
+      await fetch(`/api/settings/${NAMESPACE}`, {
+        method:  "PUT",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(DEFAULT_WEBSITE_SETTINGS),
+      });
+    } catch (e) {
+      console.error("[website-settings] Failed to reset on server:", e);
+    } finally {
+      setSaving(false);
+    }
   }, []);
 
   return (
-    <WebsiteSettingsContext.Provider
-      value={{ settings, updateSettings, resetSettings }}
-    >
+    <WebsiteSettingsContext.Provider value={{ settings, updateSettings, resetSettings, saving }}>
       {children}
     </WebsiteSettingsContext.Provider>
   );
@@ -152,9 +170,10 @@ export function useWebsiteSettings(): WebsiteSettingsContextValue {
   const ctx = useContext(WebsiteSettingsContext);
   if (!ctx) {
     return {
-      settings: DEFAULT_WEBSITE_SETTINGS,
-      updateSettings: () => {},
-      resetSettings: () => {},
+      settings:       DEFAULT_WEBSITE_SETTINGS,
+      updateSettings: async () => {},
+      resetSettings:  async () => {},
+      saving:         false,
     };
   }
   return ctx;
