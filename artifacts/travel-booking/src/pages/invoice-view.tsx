@@ -515,7 +515,6 @@ export default function InvoiceView() {
                   <img
                     src={branding.logoUrl}
                     alt={company.name}
-                    crossOrigin="anonymous"
                     className="w-16 h-16 rounded-2xl object-contain bg-white p-1 shrink-0 shadow-xl"
                   />
                 ) : (
@@ -956,7 +955,6 @@ export default function InvoiceView() {
               <img
                 src={branding.logoUrl}
                 alt={company.name}
-                crossOrigin="anonymous"
                 className="w-12 h-12 rounded-2xl object-contain bg-white p-1 mx-auto mb-4 shadow-lg"
               />
             ) : (
