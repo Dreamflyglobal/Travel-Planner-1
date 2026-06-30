@@ -17,22 +17,24 @@ function toAbsoluteUrl(url: string): string {
 async function preloadAllImages(element: HTMLElement): Promise<void> {
   const imgs = Array.from(element.querySelectorAll<HTMLImageElement>("img"));
 
-  await Promise.all(
-    imgs.map((img) => {
-      // Fix relative src → absolute so html2canvas can fetch it
-      if (img.src && !img.src.startsWith("data:") && !img.src.startsWith("http")) {
-        img.src = toAbsoluteUrl(img.src);
-      }
-      if (img.complete && img.naturalWidth > 0) return Promise.resolve();
-      return new Promise<void>((resolve) => {
-        img.addEventListener("load",  () => resolve(), { once: true });
-        img.addEventListener("error", () => resolve(), { once: true }); // don't block on failure
-      });
-    }),
-  );
+  const loadOne = (img: HTMLImageElement): Promise<void> => {
+    // Fix relative src → absolute so html2canvas can fetch it cross-origin
+    if (img.src && !img.src.startsWith("data:") && !img.src.startsWith("http")) {
+      img.src = toAbsoluteUrl(img.src);
+    }
+    if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      img.addEventListener("load",  () => resolve(), { once: true });
+      img.addEventListener("error", () => resolve(), { once: true }); // never block on broken images
+    });
+  };
+
+  // Race image loading against a 8 s timeout so a stuck request never hangs the PDF
+  const timeout = new Promise<void>((resolve) => setTimeout(resolve, 8000));
+  await Promise.race([Promise.all(imgs.map(loadOne)), timeout]);
 
   // Wait for web fonts (Inter, etc.) to be available before capturing text
-  await document.fonts.ready;
+  try { await document.fonts.ready; } catch { /* noop */ }
 }
 
 /**

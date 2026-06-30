@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useBranding } from "@/contexts/branding-context";
 import { useRoute, useSearch, Link } from "wouter";
 import {
@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { invoiceNumber as buildInvoiceNumber } from "@/lib/invoice";
 import { sanitizeLocation, formatRoute } from "@/lib/location-utils";
 import { captureElementAsPDF } from "@/lib/html-pdf";
+import { useToast } from "@/hooks/use-toast";
 
 // ── Seat label converter ──────────────────────────────────────────────────────
 const SEAT_COLS = ["A", "B", "C", "D"];
@@ -353,6 +354,7 @@ export default function InvoiceView() {
   const [downloading, setDownloading] = useState(false);
   const printAreaRef = useRef<HTMLDivElement>(null);
   const { branding } = useBranding();
+  const { toast } = useToast();
   const company = { ...COMPANY, name: branding.companyName, brand: branding.companyName };
 
   useEffect(() => {
@@ -375,6 +377,28 @@ export default function InvoiceView() {
       .catch(() => setNotFound(true));
   }, [bookingId]);
 
+  const handlePrint = () => window.print();
+
+  const handleDownload = useCallback(async () => {
+    if (!invoice || !printAreaRef.current) {
+      toast({ variant: "destructive", title: "Not ready", description: "Invoice is still loading. Please try again." });
+      return;
+    }
+    setDownloading(true);
+    try {
+      await captureElementAsPDF(
+        printAreaRef.current,
+        `DreamFlyGlobal-Invoice-${invoice.bookingId}.pdf`,
+      );
+      toast({ title: "Invoice downloaded", description: "Invoice downloaded successfully." });
+    } catch (err) {
+      console.error("[InvoiceView] PDF generation failed:", err);
+      toast({ variant: "destructive", title: "Download failed", description: "Could not generate PDF. Please try again." });
+    } finally {
+      setDownloading(false);
+    }
+  }, [invoice, toast]);
+
   // Auto-download when ?download=1 is in the URL (triggered from other pages)
   useEffect(() => {
     if (autoDownload && invoice && printAreaRef.current) {
@@ -382,22 +406,7 @@ export default function InvoiceView() {
       const t = setTimeout(() => { void handleDownload(); }, 800);
       return () => clearTimeout(t);
     }
-  }, [autoDownload, invoice]);
-
-  const handlePrint = () => window.print();
-
-  const handleDownload = async () => {
-    if (!invoice || !printAreaRef.current) return;
-    setDownloading(true);
-    try {
-      await captureElementAsPDF(
-        printAreaRef.current,
-        `DreamFlyGlobal-Invoice-${invoice.bookingId}.pdf`,
-      );
-    } finally {
-      setDownloading(false);
-    }
-  };
+  }, [autoDownload, invoice, handleDownload]);
 
   const handleEmail = () => {
     if (!invoice) return;
@@ -482,7 +491,7 @@ export default function InvoiceView() {
             </Button>
             <Button size="sm" onClick={handleDownload} disabled={downloading} className="gap-1.5 text-xs bg-orange-500 hover:bg-orange-600 disabled:opacity-70">
               {downloading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-              {downloading ? "Generating…" : "Download PDF"}
+              {downloading ? "Generating PDF..." : "Download PDF"}
             </Button>
           </div>
         </div>
@@ -914,7 +923,7 @@ export default function InvoiceView() {
               className="flex-col h-20 gap-2 rounded-2xl border-orange-200 hover:bg-orange-50 hover:border-orange-300 disabled:opacity-70"
             >
               {downloading ? <Loader2 className="w-5 h-5 text-orange-500 animate-spin" /> : <Download className="w-5 h-5 text-orange-500" />}
-              <span className="text-xs font-bold text-slate-700">{downloading ? "Generating…" : "Download PDF"}</span>
+              <span className="text-xs font-bold text-slate-700">{downloading ? "Generating PDF..." : "Download PDF"}</span>
             </Button>
             <a
               href={waShareUrl(invoice.bookingId, invoiceNo, invoice.totalAmount, typeLabel(invoice.bookingType))}
