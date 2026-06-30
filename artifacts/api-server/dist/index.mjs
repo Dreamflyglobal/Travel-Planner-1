@@ -165227,8 +165227,13 @@ function sanitizeLocation(raw) {
   s2 = s2.replace(/\s*\([A-Z]{3,4}\)\s*/g, " ");
   s2 = s2.replace(/\s+[A-Z]{3}$/, "");
   s2 = s2.replace(/\s+/g, " ").trim();
+  const tokens = s2.split(" ").filter(Boolean);
+  if (tokens.length >= 4 && tokens.every((t2) => /^[A-Za-z]$/.test(t2))) {
+    s2 = tokens.join("");
+  }
   const isAllCaps = s2 === s2.toUpperCase() && /[A-Z]/.test(s2);
-  if (isAllCaps) {
+  const isAllLower = s2 === s2.toLowerCase() && /[a-z]/.test(s2);
+  if (isAllCaps || isAllLower) {
     s2 = s2.split(" ").map((w) => w.length > 0 ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : "").join(" ");
   }
   return s2;
