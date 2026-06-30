@@ -12,8 +12,6 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { useBranding } from "@/contexts/branding-context";
 import { migrateBookingTitles } from "@/lib/migrate-bookings";
-import { generateInvoicePDF } from "@/lib/invoice";
-import { sanitizeBookingTitle } from "@/lib/location-utils";
 import { 
   AlertDialog,
   AlertDialogAction,
@@ -31,7 +29,6 @@ export default function Bookings() {
   const { isAuthenticated, user } = useAuth();
   const { branding } = useBranding();
   const { toast } = useToast();
-  const [downloadingId, setDownloadingId] = useState<string | number | null>(null);
   
   // Fetch bookings filtered by current user via GET /api/bookings?userId=&phone=
   const { data: bookings, isLoading, refetch } = useQuery({
@@ -154,59 +151,10 @@ export default function Bookings() {
     }
   };
 
-  const handleDownloadTicket = async (booking: any) => {
+  const handleDownloadTicket = (booking: any) => {
     const bid = booking.id || booking.bookingId || booking.referenceId;
-    setDownloadingId(bid);
-
-    try {
-      const bType = (booking.type || booking.bookingType || "flight") as "flight" | "bus" | "hotel" | "package";
-      await generateInvoicePDF({
-        bookingId:       String(booking.bookingId || `BKG-${bid}`),
-        bookingType:     bType,
-        passengerName:   booking.passengerName  || booking.customerName  || "Passenger",
-        passengerEmail:  booking.passengerEmail || booking.customerEmail || "",
-        passengerPhone:  booking.passengerPhone || booking.customerPhone || "",
-        passengers:      booking.passengers || 1,
-        travelDate:      booking.travelDate || new Date().toISOString(),
-        checkoutDate:    booking.checkoutDate,
-        totalAmount:     booking.amount || booking.totalAmount || booking.totalPrice || 0,
-        paymentId:       booking.paymentId || booking.details?.paymentId || "N/A",
-        paymentStatus:   booking.paymentStatus || booking.status || "paid",
-        timestamp:       booking.createdAt || booking.bookingDate || booking.timestamp || new Date().toISOString(),
-        title:           sanitizeBookingTitle(booking.title || booking.details?.title || `${bType} Booking`),
-        logoDataUrl:     branding.logoUrl ?? undefined,
-        selectedSeats:   booking.selectedSeats,
-        roomType:        booking.roomType,
-        // Hotel
-        hotelName:       booking.hotelName,
-        hotelCity:       booking.hotelCity,
-        hotelNights:     booking.hotelNights,
-        hotelRooms:      booking.hotelRooms,
-        hotelAdults:     booking.hotelAdults,
-        // Flight
-        flightAirline:   booking.flightAirline   || booking.details?.flightInfo?.airline,
-        flightNumber:    booking.flightNumber    || booking.details?.flightInfo?.flightNumber,
-        flightFrom:      booking.flightFrom      || booking.details?.flightInfo?.from,
-        flightTo:        booking.flightTo        || booking.details?.flightInfo?.to,
-        flightDeparture: booking.flightDeparture || booking.details?.flightInfo?.departure,
-        flightArrival:   booking.flightArrival   || booking.details?.flightInfo?.arrival,
-        flightDuration:  booking.flightDuration  || booking.details?.flightInfo?.duration,
-        // Bus
-        busOperator:     booking.busOperator     || booking.details?.busInfo?.operator,
-        busType:         booking.busType         || booking.details?.busInfo?.busType,
-        busFrom:         booking.busFrom         || booking.details?.busInfo?.from,
-        busTo:           booking.busTo           || booking.details?.busInfo?.to,
-        busBoardingPoint:booking.busBoardingPoint|| booking.details?.busInfo?.boarding_point,
-        busDroppingPoint:booking.busDroppingPoint|| booking.details?.busInfo?.dropping_point,
-        busDeparture:    booking.busDeparture    || booking.details?.busInfo?.departure,
-        busArrival:      booking.busArrival      || booking.details?.busInfo?.arrival,
-      });
-      toast({ title: "Invoice Downloaded!", description: "Your PDF invoice has been downloaded." });
-    } catch {
-      toast({ variant: "destructive", title: "Download Failed", description: "Could not generate the PDF. Please try again." });
-    } finally {
-      setDownloadingId(null);
-    }
+    const invoiceId = String(booking.bookingId || `BKG-${bid}`);
+    window.open(`/invoice/${encodeURIComponent(invoiceId)}?download=1`, "_blank");
   };
 
   const getIcon = (type: string) => {
@@ -407,14 +355,9 @@ export default function Bookings() {
                         variant="outline"
                         size="sm"
                         onClick={() => handleDownloadTicket(booking)}
-                        disabled={downloadingId === bookingId}
                         className="text-blue-600 border-blue-200 hover:bg-blue-50 hover:border-blue-300"
                       >
-                        {downloadingId === bookingId ? (
-                          <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Generating…</>
-                        ) : (
-                          <><Download className="w-3.5 h-3.5 mr-1.5" />Download PDF</>
-                        )}
+                        <Download className="w-3.5 h-3.5 mr-1.5" />Download PDF
                       </Button>
                     )}
                   </div>

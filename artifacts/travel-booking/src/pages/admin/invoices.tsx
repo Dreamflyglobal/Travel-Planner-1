@@ -18,7 +18,6 @@ import {
 } from "lucide-react";
 import { sanitizeLocation, formatRoute } from "@/lib/location-utils";
 import {
-  generateInvoicePDF,
   openWhatsAppConfirmation,
   openEmailConfirmation,
   invoiceNumber,
@@ -468,13 +467,9 @@ export default function AdminInvoices() {
     setLocation(`/invoice/${b.bookingRef || b.id}`);
   }
 
-  async function handleDownload(b: ApiBooking) {
-    try {
-      await generateInvoicePDF(bookingToInvoiceData(b, branding.logoUrl));
-      toast({ title: "Invoice Downloaded", description: `${getInvNumber(b)} — ${b.passengerName}` });
-    } catch {
-      toast({ title: "Download Failed", variant: "destructive" });
-    }
+  function handleDownload(b: ApiBooking) {
+    const invoiceId = b.bookingRef || b.id;
+    window.open(`/invoice/${encodeURIComponent(String(invoiceId))}?download=1`, "_blank");
   }
 
   function handlePrint(b: ApiBooking) {

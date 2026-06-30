@@ -1,16 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useBranding } from "@/contexts/branding-context";
-import { useRoute, Link } from "wouter";
+import { useRoute, useSearch, Link } from "wouter";
 import {
   Printer, Download, ArrowLeft, CheckCircle, Plane, Bus,
   Building2, Map, MapPin, Clock, Calendar, Luggage, Users,
   BedDouble, AlertTriangle, XCircle, Phone, Mail, CreditCard,
   Hash, Star, Share2, MessageCircle, Tag, Navigation,
-  ChevronRight, Shield, Info, Globe,
+  ChevronRight, Shield, Info, Globe, Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { generateInvoicePDF, invoiceNumber as buildInvoiceNumber } from "@/lib/invoice";
+import { invoiceNumber as buildInvoiceNumber } from "@/lib/invoice";
 import { sanitizeLocation, formatRoute } from "@/lib/location-utils";
+import { captureElementAsPDF } from "@/lib/html-pdf";
 
 // ── Seat label converter ──────────────────────────────────────────────────────
 const SEAT_COLS = ["A", "B", "C", "D"];
@@ -343,9 +344,14 @@ function RouteChip({ label, place, time, sublabel, color, mapQuery }: {
 // ── Main component ────────────────────────────────────────────────────────────
 export default function InvoiceView() {
   const [, params] = useRoute("/invoice/:bookingId");
-  const bookingId = params?.bookingId ?? "";
-  const [invoice, setInvoice] = useState<BookingInvoice | null>(null);
-  const [notFound, setNotFound] = useState(false);
+  const bookingId  = params?.bookingId ?? "";
+  const search     = useSearch();
+  const autoDownload = new URLSearchParams(search).get("download") === "1";
+
+  const [invoice,     setInvoice]     = useState<BookingInvoice | null>(null);
+  const [notFound,    setNotFound]    = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const printAreaRef = useRef<HTMLDivElement>(null);
   const { branding } = useBranding();
   const company = { ...COMPANY, name: branding.companyName, brand: branding.companyName };
 
@@ -369,12 +375,29 @@ export default function InvoiceView() {
       .catch(() => setNotFound(true));
   }, [bookingId]);
 
-  const handlePrint    = () => window.print();
+  // Auto-download when ?download=1 is in the URL (triggered from other pages)
+  useEffect(() => {
+    if (autoDownload && invoice && printAreaRef.current) {
+      // Small delay to ensure full render + fonts loaded
+      const t = setTimeout(() => { void handleDownload(); }, 800);
+      return () => clearTimeout(t);
+    }
+  }, [autoDownload, invoice]);
+
+  const handlePrint = () => window.print();
+
   const handleDownload = async () => {
-    if (!invoice) return;
-    await generateInvoicePDF({ ...invoice, logoDataUrl: branding.logoUrl ?? undefined });
+    if (!invoice || !printAreaRef.current) return;
+    setDownloading(true);
+    try {
+      const invoiceNo = invoice.invoiceNumber || buildInvoiceNumber(invoice.bookingId, invoice.bookingType);
+      await captureElementAsPDF(printAreaRef.current, `Invoice-${invoiceNo}.pdf`);
+    } finally {
+      setDownloading(false);
+    }
   };
-  const handleEmail    = () => {
+
+  const handleEmail = () => {
     if (!invoice) return;
     const sub = `Your ${typeLabel(invoice.bookingType)} Confirmation — ${invoice.bookingId}`;
     const body = `Hi,\n\nYour booking is confirmed!\n\nBooking ID: ${invoice.bookingId}\nView Invoice: ${window.location.href}\n\nThank you for booking with ${company.name}.`;
@@ -455,15 +478,16 @@ export default function InvoiceView() {
             <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1.5 text-xs">
               <Printer className="w-3.5 h-3.5" /> Print
             </Button>
-            <Button size="sm" onClick={handleDownload} className="gap-1.5 text-xs bg-orange-500 hover:bg-orange-600">
-              <Download className="w-3.5 h-3.5" /> Download PDF
+            <Button size="sm" onClick={handleDownload} disabled={downloading} className="gap-1.5 text-xs bg-orange-500 hover:bg-orange-600 disabled:opacity-70">
+              {downloading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+              {downloading ? "Generating…" : "Download PDF"}
             </Button>
           </div>
         </div>
       </div>
 
       {/* ── Invoice paper ─────────────────────────────────────────────────────── */}
-      <div className="max-w-3xl mx-auto my-6 print:my-0 bg-white shadow-2xl print:shadow-none rounded-3xl print:rounded-none overflow-hidden">
+      <div ref={printAreaRef} className="max-w-3xl mx-auto my-6 print:my-0 bg-white shadow-2xl print:shadow-none rounded-3xl print:rounded-none overflow-hidden">
 
         {/* ══ HEADER ══════════════════════════════════════════════════════════ */}
         <div className="relative overflow-hidden" style={{ background: "linear-gradient(135deg, #0f172a 0%, #1e293b 55%, #0f172a 100%)" }}>
@@ -875,10 +899,11 @@ export default function InvoiceView() {
             <Button
               variant="outline"
               onClick={handleDownload}
-              className="flex-col h-20 gap-2 rounded-2xl border-orange-200 hover:bg-orange-50 hover:border-orange-300"
+              disabled={downloading}
+              className="flex-col h-20 gap-2 rounded-2xl border-orange-200 hover:bg-orange-50 hover:border-orange-300 disabled:opacity-70"
             >
-              <Download className="w-5 h-5 text-orange-500" />
-              <span className="text-xs font-bold text-slate-700">Download PDF</span>
+              {downloading ? <Loader2 className="w-5 h-5 text-orange-500 animate-spin" /> : <Download className="w-5 h-5 text-orange-500" />}
+              <span className="text-xs font-bold text-slate-700">{downloading ? "Generating…" : "Download PDF"}</span>
             </Button>
             <a
               href={waShareUrl(invoice.bookingId, invoiceNo, invoice.totalAmount, typeLabel(invoice.bookingType))}

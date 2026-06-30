@@ -1,4 +1,3 @@
-import { APP_NAME } from "@/lib/app-config";
 import { useState, useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { Link, useParams, useLocation } from "wouter";
@@ -27,7 +26,6 @@ import {
   Loader2,
   Send,
 } from "lucide-react";
-import { generateInvoicePDF } from "@/lib/invoice";
 import { sanitizeLocation, formatRoute } from "@/lib/location-utils";
 import { useBranding } from "@/contexts/branding-context";
 import { Badge } from "@/components/ui/badge";
@@ -292,50 +290,9 @@ export default function BookingDetail() {
   };
   const accent = typeAccent();
 
-  const handleDownloadPDF = async () => {
+  const handleDownloadPDF = () => {
     if (!booking) return;
-    await generateInvoicePDF({
-      bookingId,
-      bookingType,
-      passengerName:   booking.passengerName   || booking.customerName   || "Guest",
-      passengerEmail:  booking.passengerEmail  || booking.customerEmail  || "",
-      passengerPhone:  booking.passengerPhone  || booking.customerPhone  || "",
-      passengers:      booking.passengers      || 1,
-      travelDate:      booking.travelDate      || booking.bookingDate    || new Date().toISOString(),
-      checkoutDate:    booking.checkoutDate,
-      totalAmount,
-      paymentId:       booking.paymentId       || booking.orderId        || "N/A",
-      paymentStatus:   bookingStatus,
-      timestamp:       booking.timestamp       || booking.createdAt      || booking.bookingDate || new Date().toISOString(),
-      title:           booking.title           || booking.details?.title || "Booking",
-      logoDataUrl:     branding.logoUrl ?? undefined,
-      selectedSeats:   booking.selectedSeats,
-      roomType:        booking.roomType,
-      // Hotel
-      hotelName:       booking.hotelName,
-      hotelCity:       booking.hotelCity,
-      hotelNights:     booking.hotelNights,
-      hotelRooms:      booking.hotelRooms,
-      hotelAdults:     booking.hotelAdults,
-      // Flight
-      flightAirline:   booking.flightAirline,
-      flightNumber:    booking.flightNumber,
-      flightFrom:      booking.flightFrom,
-      flightTo:        booking.flightTo,
-      flightDeparture: booking.flightDeparture,
-      flightArrival:   booking.flightArrival,
-      flightDuration:  booking.flightDuration,
-      // Bus
-      busOperator:     booking.busOperator,
-      busType:         booking.busType,
-      busFrom:         booking.busFrom,
-      busTo:           booking.busTo,
-      busBoardingPoint:booking.busBoardingPoint,
-      busDroppingPoint:booking.busDroppingPoint,
-      busDeparture:    booking.busDeparture,
-      busArrival:      booking.busArrival,
-    });
-    toast({ title: "Invoice Downloaded", description: `${APP_NAME} branded PDF invoice saved.` });
+    window.open(`/invoice/${encodeURIComponent(bookingId)}?download=1`, "_blank");
   };
 
   const handleCancel = async () => {

@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/auth-context";
 import { popUnseenRewardNotifications } from "@/lib/referral";
-import { generateInvoicePDF, openWhatsAppConfirmation, openEmailConfirmation } from "@/lib/invoice";
+import { openWhatsAppConfirmation, openEmailConfirmation } from "@/lib/invoice";
 import { useBranding } from "@/contexts/branding-context";
 import { API_CONFIG } from "@/lib/api-config";
 
@@ -239,22 +239,9 @@ export default function PaymentSuccess() {
       default:
         return <Calendar className="w-8 h-8" />;
     }
-  };  const handleDownloadTicket = async () => {
+  };  const handleDownloadTicket = () => {
     if (!bookingDetails) return;
-    try {
-      await generateInvoicePDF({ ...bookingDetails, logoDataUrl: branding.logoUrl ?? undefined });
-      toast({
-        title: "Invoice Downloaded!",
-        description: `${APP_NAME} branded invoice for ${bookingDetails.bookingId} saved as PDF.`,
-      });
-    } catch (error) {
-      console.error("Error generating invoice:", error);
-      toast({
-        variant: "destructive",
-        title: "Download Failed",
-        description: "There was an error generating the invoice. Please try again.",
-      });
-    }
+    window.open(`/invoice/${encodeURIComponent(bookingDetails.bookingId)}?download=1`, "_blank");
   };
 
   const handleEmailTicket = () => {
