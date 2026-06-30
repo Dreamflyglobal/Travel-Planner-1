@@ -390,8 +390,10 @@ export default function InvoiceView() {
     if (!invoice || !printAreaRef.current) return;
     setDownloading(true);
     try {
-      const invoiceNo = invoice.invoiceNumber || buildInvoiceNumber(invoice.bookingId, invoice.bookingType);
-      await captureElementAsPDF(printAreaRef.current, `Invoice-${invoiceNo}.pdf`);
+      await captureElementAsPDF(
+        printAreaRef.current,
+        `DreamFlyGlobal-Invoice-${invoice.bookingId}.pdf`,
+      );
     } finally {
       setDownloading(false);
     }

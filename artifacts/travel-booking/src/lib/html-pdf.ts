@@ -59,5 +59,16 @@ export async function captureElementAsPDF(
     }
   }
 
-  pdf.save(filename);
+  // Force a file download (never open in browser tab)
+  const pdfBytes = pdf.output("arraybuffer");
+  const blob     = new Blob([pdfBytes], { type: "application/pdf" });
+  const url      = URL.createObjectURL(blob);
+  const a        = document.createElement("a");
+  a.href         = url;
+  a.download     = filename;
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 100);
 }
