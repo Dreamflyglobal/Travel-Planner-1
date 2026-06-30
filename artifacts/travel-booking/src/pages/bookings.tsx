@@ -12,6 +12,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { useBranding } from "@/contexts/branding-context";
 import { migrateBookingTitles } from "@/lib/migrate-bookings";
+import { sanitizeBookingTitle } from "@/lib/location-utils";
 import { 
   AlertDialog,
   AlertDialogAction,
