@@ -2,6 +2,40 @@ import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 
 /**
+ * Converts any URL to an absolute URL so html2canvas can fetch it.
+ */
+function toAbsoluteUrl(url: string): string {
+  if (!url) return url;
+  if (url.startsWith("data:") || url.startsWith("http://") || url.startsWith("https://")) return url;
+  return window.location.origin + (url.startsWith("/") ? url : `/${url}`);
+}
+
+/**
+ * Preloads all <img> tags inside element and waits for document fonts.
+ * This ensures html2canvas captures logos and images instead of broken icons.
+ */
+async function preloadAllImages(element: HTMLElement): Promise<void> {
+  const imgs = Array.from(element.querySelectorAll<HTMLImageElement>("img"));
+
+  await Promise.all(
+    imgs.map((img) => {
+      // Fix relative src → absolute so html2canvas can fetch it
+      if (img.src && !img.src.startsWith("data:") && !img.src.startsWith("http")) {
+        img.src = toAbsoluteUrl(img.src);
+      }
+      if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+      return new Promise<void>((resolve) => {
+        img.addEventListener("load",  () => resolve(), { once: true });
+        img.addEventListener("error", () => resolve(), { once: true }); // don't block on failure
+      });
+    }),
+  );
+
+  // Wait for web fonts (Inter, etc.) to be available before capturing text
+  await document.fonts.ready;
+}
+
+/**
  * Captures a DOM element and saves it as a multi-page A4 PDF.
  * Uses html2canvas at 2× scale for crisp output.
  *
@@ -12,6 +46,9 @@ export async function captureElementAsPDF(
   element: HTMLElement,
   filename = "invoice.pdf",
 ): Promise<void> {
+  // Ensure logo + all images are fully loaded before capture
+  await preloadAllImages(element);
+
   const canvas = await html2canvas(element, {
     scale: 2,
     useCORS: true,
