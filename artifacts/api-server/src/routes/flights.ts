@@ -459,7 +459,46 @@ router.post("/flights", async (req, res): Promise<void> => {
       onward?.[0]?.traceId        ||
       "";
 
-    const flights = onward.map((item, idx) => mapTripJackFlight(item, idx, f0, t0, traceId));
+    const rawFlights = onward.map((item, idx) => mapTripJackFlight(item, idx, f0, t0, traceId));
+
+    // ── Group duplicate fare variants into a single flight card ──────────────
+    // TripJack frequently returns the same physical flight (same airline, flight
+    // number, departure, arrival) as multiple separate items — one per fare type
+    // (Published, NDC, Flex, Corporate, etc.).  We merge them so the UI shows one
+    // card per unique flight with all fare options inside the selection modal.
+    const groupMap = new Map<string, typeof rawFlights[0]>();
+
+    for (const flight of rawFlights) {
+      // Normalise flight number: strip whitespace so "6E 123" and "6E123" collide
+      const normFlight = (flight.flightNumber || "").replace(/\s+/g, "").toUpperCase();
+      const key = `${(flight.airlineCode || "").toUpperCase()}|${normFlight}|${flight.departureTime}|${flight.arrivalTime}`;
+
+      const existing = groupMap.get(key);
+      if (!existing) {
+        groupMap.set(key, { ...flight });
+      } else {
+        // Merge fareOptions — append new ones, de-duplicate by fareId
+        const seenFareIds = new Set(existing.fareOptions?.map((f: any) => f.fareId) ?? []);
+        for (const fo of flight.fareOptions ?? []) {
+          if (!seenFareIds.has(fo.fareId)) {
+            existing.fareOptions = [...(existing.fareOptions ?? []), fo];
+            seenFareIds.add(fo.fareId);
+          }
+        }
+        // Re-sort merged fareOptions cheapest-first
+        existing.fareOptions?.sort((a: any, b: any) => a.totalFare - b.totalFare);
+
+        // Keep the lowest price as the card display price
+        const cheapest = existing.fareOptions?.[0];
+        if (cheapest && cheapest.totalFare < existing.price) {
+          existing.price       = cheapest.totalFare;
+          existing.resultIndex = cheapest.resultIndex || existing.resultIndex;
+        }
+      }
+    }
+
+    // Assign stable sequential ids and convert map → array
+    const flights = Array.from(groupMap.values()).map((f, idx) => ({ ...f, id: idx + 1 }));
 
     if (!traceId) {
       // Log top-level keys so we can identify where traceId lives on the sandbox.
@@ -470,7 +509,10 @@ router.post("/flights", async (req, res): Promise<void> => {
       );
     }
 
-    logger.info(`[flights/tripjack] ${logLabel}: ${flights.length} flights (${cabinClass}, A${adultCount}C${childCount}I${infantCount}) | traceId: ${traceId || "(none)"}`);
+    logger.info(
+      `[flights/tripjack] ${logLabel}: ${rawFlights.length} raw → ${flights.length} unique flights` +
+      ` (${cabinClass}, A${adultCount}C${childCount}I${infantCount}) | traceId: ${traceId || "(none)"}`,
+    );
 
     res.json({ flights, total: flights.length, source: "tripjack", traceId });
   } catch (err: any) {

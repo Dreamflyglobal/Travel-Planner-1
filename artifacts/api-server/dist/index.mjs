@@ -164397,7 +164397,31 @@ router5.post("/flights", async (req, res) => {
     const { fromIata: f0, toIata: t0 } = resolvedRoutes[0];
     const onward = data?.searchResult?.tripInfos?.ONWARD || data?.tripInfos?.ONWARD || [];
     const traceId = data?.searchResult?.traceId || data?.traceId || data?.data?.traceId || onward?.[0]?.traceId || "";
-    const flights = onward.map((item, idx) => mapTripJackFlight(item, idx, f0, t0, traceId));
+    const rawFlights = onward.map((item, idx) => mapTripJackFlight(item, idx, f0, t0, traceId));
+    const groupMap = /* @__PURE__ */ new Map();
+    for (const flight of rawFlights) {
+      const normFlight = (flight.flightNumber || "").replace(/\s+/g, "").toUpperCase();
+      const key = `${(flight.airlineCode || "").toUpperCase()}|${normFlight}|${flight.departureTime}|${flight.arrivalTime}`;
+      const existing = groupMap.get(key);
+      if (!existing) {
+        groupMap.set(key, { ...flight });
+      } else {
+        const seenFareIds = new Set(existing.fareOptions?.map((f3) => f3.fareId) ?? []);
+        for (const fo of flight.fareOptions ?? []) {
+          if (!seenFareIds.has(fo.fareId)) {
+            existing.fareOptions = [...existing.fareOptions ?? [], fo];
+            seenFareIds.add(fo.fareId);
+          }
+        }
+        existing.fareOptions?.sort((a, b) => a.totalFare - b.totalFare);
+        const cheapest = existing.fareOptions?.[0];
+        if (cheapest && cheapest.totalFare < existing.price) {
+          existing.price = cheapest.totalFare;
+          existing.resultIndex = cheapest.resultIndex || existing.resultIndex;
+        }
+      }
+    }
+    const flights = Array.from(groupMap.values()).map((f3, idx) => ({ ...f3, id: idx + 1 }));
     if (!traceId) {
       const topKeys = Object.keys(data || {}).join(", ");
       const srKeys = Object.keys(data?.searchResult || {}).join(", ");
@@ -164405,7 +164429,9 @@ router5.post("/flights", async (req, res) => {
         `[flights/tripjack] traceId not found \u2014 top-level keys: [${topKeys}] | searchResult keys: [${srKeys}]`
       );
     }
-    logger.info(`[flights/tripjack] ${logLabel}: ${flights.length} flights (${cabinClass}, A${adultCount}C${childCount}I${infantCount}) | traceId: ${traceId || "(none)"}`);
+    logger.info(
+      `[flights/tripjack] ${logLabel}: ${rawFlights.length} raw \u2192 ${flights.length} unique flights (${cabinClass}, A${adultCount}C${childCount}I${infantCount}) | traceId: ${traceId || "(none)"}`
+    );
     res.json({ flights, total: flights.length, source: "tripjack", traceId });
   } catch (err) {
     logger.error("[flights/tripjack] Request failed:", err.message);
