@@ -123,7 +123,12 @@ export function MarkupProvider({ children }: { children: ReactNode }) {
     load();
     const onFocus = () => { void load(); };
     window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
+    // Periodic sync: propagate markup changes to all open tabs automatically
+    const intervalId = setInterval(() => { void load(); }, 60_000);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      clearInterval(intervalId);
+    };
   }, [load]);
 
   const saveSimpleMarkup = useCallback(async (value: number, type: "fixed" | "percentage") => {

@@ -141578,7 +141578,7 @@ var import_express34 = __toESM(require_express2(), 1);
 var import_cors = __toESM(require_lib3(), 1);
 var import_cookie_parser = __toESM(require_cookie_parser(), 1);
 var import_pino_http = __toESM(require_logger(), 1);
-import { fileURLToPath } from "node:url";
+import { fileURLToPath as fileURLToPath2 } from "node:url";
 import { dirname, resolve, join } from "node:path";
 import { existsSync } from "node:fs";
 
@@ -174844,8 +174844,10 @@ import crypto5 from "node:crypto";
 
 // src/lib/uploads.ts
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import fs from "node:fs";
-var UPLOADS_DIR = process.env["UPLOADS_DIR"] ?? path.resolve(process.cwd(), "uploads");
+var _moduleDir = path.dirname(fileURLToPath(import.meta.url));
+var UPLOADS_DIR = process.env["UPLOADS_DIR"] ?? path.resolve(_moduleDir, "../uploads");
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 // src/routes/upload.ts
@@ -174985,7 +174987,7 @@ app2.use(import_express34.default.urlencoded({ extended: true, limit: "20mb" }))
 app2.use("/uploads", import_express34.default.static(UPLOADS_DIR, { maxAge: "7d" }));
 app2.use("/api", routes_default);
 if (process.env.NODE_ENV === "production") {
-  const currentDir = dirname(fileURLToPath(import.meta.url));
+  const currentDir = dirname(fileURLToPath2(import.meta.url));
   const staticDir = resolve(currentDir, "../../travel-booking/dist/public");
   if (existsSync(staticDir)) {
     logger.info({ staticDir }, "Serving frontend static files");

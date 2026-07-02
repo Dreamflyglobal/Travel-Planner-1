@@ -388,9 +388,7 @@ export function Navbar() {
                   {/* Mobile Logo */}
                   <div className="p-6 border-b">
                     <Link href="/" className="flex items-center space-x-2">
-                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center">
-                        <Sparkles className="h-6 w-6 text-white" />
-                      </div>
+                      <BrandLogo logoUrl={branding.logoUrl} companyName={branding.companyName} />
                       <span className="font-bold text-xl bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                         {branding.companyName}
                       </span>

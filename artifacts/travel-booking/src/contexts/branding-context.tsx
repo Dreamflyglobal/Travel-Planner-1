@@ -64,10 +64,15 @@ function applyFavicon(faviconUrl: string | null) {
   if (faviconUrl?.startsWith("data:")) {
     const m = /^data:([^;]+);/.exec(faviconUrl);
     if (m?.[1]) link.type = m[1];
+    link.href = href;
   } else if (href.endsWith(".svg")) {
     link.type = "image/svg+xml";
+    // Cache-bust so browsers reload the favicon immediately after an update
+    link.href = `${href}?v=${Date.now()}`;
+  } else {
+    // Cache-bust file-based favicons (png, ico, etc.)
+    link.href = `${href}?v=${Date.now()}`;
   }
-  link.href = href;
   document.head.appendChild(link);
 }
 
@@ -118,10 +123,13 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
     function onFocus() { loadFromServer(); }
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onFocus);
+    // Periodic sync: keep all open tabs/devices in sync even without a focus event
+    const intervalId = setInterval(() => { void loadFromServer(); }, 30_000);
     return () => {
       abortRef.current?.abort();
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onFocus);
+      clearInterval(intervalId);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

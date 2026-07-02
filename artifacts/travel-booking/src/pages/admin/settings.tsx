@@ -203,11 +203,15 @@ export default function AdminSettings() {
       }
 
       const url = await uploadImageFile(processed, kind);
-      if (kind === "logo") patchBranding({ logoUrl: url });
-      else patchBranding({ faviconUrl: url });
+      const patch = kind === "logo" ? { logoUrl: url } : { faviconUrl: url };
+      // Update local draft immediately (without marking as dirty — auto-saved below)
+      setBrandingDraft((prev) => ({ ...prev, ...patch }));
+      // Persist to DB straight away so the change is live site-wide without
+      // requiring the user to also click "Save Changes"
+      await updateBranding(patch);
       toast({
         title: `${kind === "logo" ? "Logo" : "Favicon"} uploaded`,
-        description: "Click Save Changes to apply it across the site.",
+        description: `${kind === "logo" ? "Logo" : "Favicon"} is now live across the site.`,
       });
     } catch (err: any) {
       toast({
