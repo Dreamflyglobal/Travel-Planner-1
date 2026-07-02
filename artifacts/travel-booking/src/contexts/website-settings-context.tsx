@@ -128,14 +128,13 @@ export function WebsiteSettingsProvider({ children }: { children: ReactNode }) {
     writeCache(next);
     setSaving(true);
     try {
+      const token = (() => { try { return localStorage.getItem("admin_token") ?? localStorage.getItem("b2c_token"); } catch { return null; } })();
       const res = await fetch(`/api/settings/${NAMESPACE}`, {
         method:  "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body:    JSON.stringify(next),
       });
-      if (!res.ok) throw new Error(await res.text());
-    } catch (e) {
-      console.error("[website-settings] Failed to persist to server:", e);
+      if (!res.ok) throw new Error(await res.text().catch(() => `HTTP ${res.status}`));
     } finally {
       setSaving(false);
     }

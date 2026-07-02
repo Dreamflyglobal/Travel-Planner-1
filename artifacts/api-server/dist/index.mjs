@@ -163013,6 +163013,24 @@ function requireAuth(req, res, next) {
     return res.status(401).json({ error: "Invalid or expired token" });
   }
 }
+function requireAdmin(req, res, next) {
+  const header = req.headers.authorization;
+  if (!header?.startsWith("Bearer ")) {
+    res.status(401).json({ error: "Admin authentication required" });
+    return;
+  }
+  try {
+    const payload = verifyToken(header.slice(7));
+    if (payload.role !== "admin") {
+      res.status(403).json({ error: "Admin access required" });
+      return;
+    }
+    req.jwtUser = payload;
+    next();
+  } catch {
+    res.status(401).json({ error: "Invalid or expired token" });
+  }
+}
 
 // src/lib/marketing-scheduler.ts
 init_drizzle_orm();
@@ -168689,7 +168707,7 @@ init_drizzle_orm();
 
 // src/lib/admin-auth.ts
 var COOKIE_NAME2 = "admin_session";
-function requireAdmin(req, res, next) {
+function requireAdmin2(req, res, next) {
   const cookieToken = req.cookies?.[COOKIE_NAME2];
   const headerToken = req.headers.authorization?.startsWith("Bearer ") ? req.headers.authorization.slice(7) : void 0;
   const raw = cookieToken || headerToken;
@@ -168806,7 +168824,7 @@ function buildNotificationData(b) {
     hotelNights: d.nights || void 0
   };
 }
-router22.get("/admin/bookings", requireAdmin, async (req, res) => {
+router22.get("/admin/bookings", requireAdmin2, async (req, res) => {
   try {
     const search = req.query.search?.trim() ?? "";
     const status = req.query.status?.trim() ?? "";
@@ -168854,7 +168872,7 @@ router22.get("/admin/bookings", requireAdmin, async (req, res) => {
     return res.status(500).json({ success: false, error: "Failed to load bookings" });
   }
 });
-router22.get("/admin/bookings/:id", requireAdmin, async (req, res) => {
+router22.get("/admin/bookings/:id", requireAdmin2, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) {
@@ -168871,7 +168889,7 @@ router22.get("/admin/bookings/:id", requireAdmin, async (req, res) => {
     return res.status(500).json({ success: false, error: "Failed to load booking" });
   }
 });
-router22.put("/admin/bookings/:id/status", requireAdmin, async (req, res) => {
+router22.put("/admin/bookings/:id/status", requireAdmin2, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) {
@@ -168923,7 +168941,7 @@ async function loadRazorpayCreds() {
   }
   return { keyId, keySecret, source };
 }
-router22.post("/admin/refund", requireAdmin, async (req, res) => {
+router22.post("/admin/refund", requireAdmin2, async (req, res) => {
   const adminEmail = req.admin?.email ?? "admin";
   try {
     const paymentId = String(req.body?.paymentId ?? "").trim();
@@ -169034,7 +169052,7 @@ router22.post("/admin/refund", requireAdmin, async (req, res) => {
     return res.status(500).json({ success: false, error: "Refund failed" });
   }
 });
-router22.post("/admin/bookings/:id/resend", requireAdmin, async (req, res) => {
+router22.post("/admin/bookings/:id/resend", requireAdmin2, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) {
@@ -169067,7 +169085,7 @@ router22.post("/admin/bookings/:id/resend", requireAdmin, async (req, res) => {
     return res.status(500).json({ success: false, error: "Resend failed" });
   }
 });
-router22.post("/admin/bookings/:id/mark-failed", requireAdmin, async (req, res) => {
+router22.post("/admin/bookings/:id/mark-failed", requireAdmin2, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ success: false, error: "Invalid booking id" });
@@ -169156,7 +169174,7 @@ router22.post("/admin/bookings/:id/mark-failed", requireAdmin, async (req, res) 
     return res.status(500).json({ success: false, error: "Failed to mark booking as failed" });
   }
 });
-router22.get("/admin/refund-logs", requireAdmin, async (req, res) => {
+router22.get("/admin/refund-logs", requireAdmin2, async (req, res) => {
   try {
     const limit = Math.min(Number(req.query.limit ?? 200), 500);
     const offset = Math.max(Number(req.query.offset ?? 0), 0);
@@ -169199,7 +169217,7 @@ router22.get("/admin/refund-logs", requireAdmin, async (req, res) => {
     return res.status(500).json({ success: false, error: "Failed to load refund logs" });
   }
 });
-router22.post("/admin/bookings/:id/notes", requireAdmin, async (req, res) => {
+router22.post("/admin/bookings/:id/notes", requireAdmin2, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) {
@@ -174810,7 +174828,30 @@ router31.get("/settings/:namespace", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch settings" });
   }
 });
-router31.put("/settings/:namespace", async (req, res) => {
+router31.get("/settings/verify/all", requireAdmin, async (_req, res) => {
+  try {
+    const rows = await db.select().from(appSettingsTable);
+    const result = {};
+    for (const row of rows) {
+      try {
+        result[row.namespace] = JSON.parse(row.data);
+      } catch {
+        result[row.namespace] = row.data;
+      }
+    }
+    res.json({
+      ok: true,
+      count: rows.length,
+      namespaces: Object.keys(result),
+      settings: result,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    });
+  } catch (err) {
+    logger.error({ err }, "[settings] verify/all failed");
+    res.status(500).json({ error: "Failed to fetch settings" });
+  }
+});
+router31.put("/settings/:namespace", requireAdmin, async (req, res) => {
   const ns = req.params.namespace?.toLowerCase();
   if (!VALID_NAMESPACES.has(ns)) {
     res.status(400).json({ error: "Invalid namespace" });
@@ -174891,7 +174932,7 @@ var uploadFavicon = (0, import_multer.default)({
   fileFilter
 });
 var router32 = (0, import_express32.Router)();
-router32.post("/upload/logo", uploadLogo.single("file"), (req, res) => {
+router32.post("/upload/logo", requireAdmin, uploadLogo.single("file"), (req, res) => {
   if (!req.file) {
     res.status(400).json({ error: "No file received." });
     return;
@@ -174899,7 +174940,7 @@ router32.post("/upload/logo", uploadLogo.single("file"), (req, res) => {
   const url3 = `/uploads/${req.file.filename}`;
   res.json({ url: url3 });
 });
-router32.post("/upload/favicon", uploadFavicon.single("file"), (req, res) => {
+router32.post("/upload/favicon", requireAdmin, uploadFavicon.single("file"), (req, res) => {
   if (!req.file) {
     res.status(400).json({ error: "No file received." });
     return;

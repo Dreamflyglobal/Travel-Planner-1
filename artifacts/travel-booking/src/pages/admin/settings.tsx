@@ -123,9 +123,14 @@ const CURRENCIES: { value: Currency; label: string }[] = [
 ];
 
 async function uploadImageFile(file: File, kind: "logo" | "favicon"): Promise<string> {
+  const token = (() => { try { return localStorage.getItem("admin_token") ?? undefined; } catch { return undefined; } })();
   const formData = new FormData();
   formData.append("file", file);
-  const res = await fetch(`/api/upload/${kind}`, { method: "POST", body: formData });
+  const res = await fetch(`/api/upload/${kind}`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
   if (!res.ok) {
     const err = await res.json().catch(() => ({})) as { error?: string };
     throw new Error(err.error ?? `Upload failed (${res.status})`);
@@ -245,15 +250,23 @@ export default function AdminSettings() {
       return;
     }
 
-    await Promise.all([
-      updateBranding(brandingDraft),
-      updateSettings(siteDraft),
-    ]);
-    setDirty(false);
-    toast({
-      title: "Settings saved",
-      description: "All your changes are now live across all devices.",
-    });
+    try {
+      await Promise.all([
+        updateBranding(brandingDraft),
+        updateSettings(siteDraft),
+      ]);
+      setDirty(false);
+      toast({
+        title: "Settings saved",
+        description: "All your changes are now live across all devices.",
+      });
+    } catch (err: any) {
+      toast({
+        title: "Save failed",
+        description: err?.message ?? "Could not save settings. Please check your connection and try again.",
+        variant: "destructive",
+      });
+    }
   }
 
   function handleDiscard() {
@@ -763,11 +776,15 @@ function NotificationSettingsSection() {
       toast({ title: "Popup message required", description: "Enter the message to show in the popup.", variant: "destructive" });
       return;
     }
-    await updateSettings(draft);
-    setDirty(false);
-    setSavedFlash(true);
-    setTimeout(() => setSavedFlash(false), 3000);
-    toast({ title: "Notification settings saved", description: "Your notification preferences are now active across all devices." });
+    try {
+      await updateSettings(draft);
+      setDirty(false);
+      setSavedFlash(true);
+      setTimeout(() => setSavedFlash(false), 3000);
+      toast({ title: "Notification settings saved", description: "Your notification preferences are now active across all devices." });
+    } catch (err: any) {
+      toast({ title: "Save failed", description: err?.message ?? "Could not save notification settings. Please try again.", variant: "destructive" });
+    }
   }
 
   async function handleReset() {
@@ -1089,14 +1106,18 @@ function WebsiteSettingsSection() {
         return;
       }
     }
-    await updateSettings(draft);
-    setDirty(false);
-    setSavedFlash(true);
-    setTimeout(() => setSavedFlash(false), 3000);
-    toast({
-      title: "Website settings saved",
-      description: "Your changes are now live across all devices.",
-    });
+    try {
+      await updateSettings(draft);
+      setDirty(false);
+      setSavedFlash(true);
+      setTimeout(() => setSavedFlash(false), 3000);
+      toast({
+        title: "Website settings saved",
+        description: "Your changes are now live across all devices.",
+      });
+    } catch (err: any) {
+      toast({ title: "Save failed", description: err?.message ?? "Could not save website settings. Please try again.", variant: "destructive" });
+    }
   }
 
   async function handleReset() {

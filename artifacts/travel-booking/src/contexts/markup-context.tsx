@@ -42,13 +42,13 @@ async function fetchSetting<T>(ns: string, fallback: T): Promise<T> {
 }
 
 async function putSetting(ns: string, data: unknown): Promise<void> {
-  try {
-    await fetch(`/api/settings/${ns}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-  } catch { /* noop */ }
+  const token = (() => { try { return localStorage.getItem("admin_token") ?? localStorage.getItem("b2c_token"); } catch { return null; } })();
+  const res = await fetch(`/api/settings/${ns}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(await res.text().catch(() => `HTTP ${res.status}`));
 }
 
 interface MarkupContextValue {
@@ -68,6 +68,21 @@ interface MarkupContextValue {
 const MarkupContext = createContext<MarkupContextValue | null>(null);
 
 export function MarkupProvider({ children }: { children: ReactNode }) {
+  // Pre-warm module-level pricing caches from localStorage synchronously so
+  // getMarkupSettings() / getHiddenMarkupSettings() return correct values on
+  // the very first render — before the async DB fetch in load() completes.
+  useState(() => {
+    try {
+      const cfRaw = localStorage.getItem("markup_settings_v2");
+      if (cfRaw) warmConvenienceFeeCache(normalizeMU(JSON.parse(cfRaw) as Partial<MarkupSettings>));
+      const hmRaw = localStorage.getItem("hidden_markup_v1");
+      if (hmRaw) warmHiddenMarkupCache(normalizeMU(JSON.parse(hmRaw) as Partial<MarkupSettings>));
+      const amRaw = localStorage.getItem("agent_markup_v1");
+      if (amRaw) warmAgentMarkupCache(normalizeMU(JSON.parse(amRaw) as Partial<MarkupSettings>));
+    } catch { /* noop */ }
+    return null;
+  });
+
   const [simpleMarkup, setSimpleMarkup] = useState<number>(() => {
     try { return parseFloat(localStorage.getItem("markup") || "0"); } catch { return 0; }
   });

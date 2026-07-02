@@ -24,21 +24,29 @@ export function MarkupManager() {
   const { toast } = useToast();
 
   const saveMarkup = async () => {
-    await saveSimpleMarkup(markup, markupType);
-    toast({
-      title: "Markup Saved!",
-      description: `${markupType === "percentage" ? markup + "%" : "₹" + markup} markup will be applied to all bookings.`,
-    });
-    setIsOpen(false);
+    try {
+      await saveSimpleMarkup(markup, markupType);
+      toast({
+        title: "Markup Saved!",
+        description: `${markupType === "percentage" ? markup + "%" : "₹" + markup} markup will be applied to all bookings.`,
+      });
+      setIsOpen(false);
+    } catch (err: any) {
+      toast({ title: "Save failed", description: err?.message ?? "Could not save markup. Please try again.", variant: "destructive" });
+    }
   };
 
   const resetMarkup = async () => {
-    setMarkup(0);
-    await saveSimpleMarkup(0, markupType);
-    toast({
-      title: "Markup Reset",
-      description: "Markup has been removed from all bookings.",
-    });
+    try {
+      setMarkup(0);
+      await saveSimpleMarkup(0, markupType);
+      toast({
+        title: "Markup Reset",
+        description: "Markup has been removed from all bookings.",
+      });
+    } catch (err: any) {
+      toast({ title: "Reset failed", description: err?.message ?? "Could not reset markup. Please try again.", variant: "destructive" });
+    }
   };
 
   return (

@@ -3,6 +3,7 @@ import multer from "multer";
 import path from "node:path";
 import crypto from "node:crypto";
 import { UPLOADS_DIR } from "../lib/uploads.js";
+import { requireAdmin } from "../middlewares/auth.js";
 
 const ALLOWED_MIME: Record<string, string> = {
   "image/png":                "png",
@@ -55,7 +56,7 @@ const uploadFavicon = multer({
 
 const router = Router();
 
-router.post("/upload/logo", uploadLogo.single("file"), (req, res) => {
+router.post("/upload/logo", requireAdmin, uploadLogo.single("file"), (req, res) => {
   if (!req.file) {
     res.status(400).json({ error: "No file received." });
     return;
@@ -64,7 +65,7 @@ router.post("/upload/logo", uploadLogo.single("file"), (req, res) => {
   res.json({ url });
 });
 
-router.post("/upload/favicon", uploadFavicon.single("file"), (req, res) => {
+router.post("/upload/favicon", requireAdmin, uploadFavicon.single("file"), (req, res) => {
   if (!req.file) {
     res.status(400).json({ error: "No file received." });
     return;

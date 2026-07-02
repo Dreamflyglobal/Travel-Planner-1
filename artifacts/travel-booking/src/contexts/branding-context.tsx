@@ -11,6 +11,13 @@ export type BrandingSettings = {
 const NAMESPACE = "branding";
 const CACHE_KEY = "branding_settings_cache";
 
+function getAdminAuthHeader(): Record<string, string> {
+  try {
+    const token = localStorage.getItem("admin_token") ?? localStorage.getItem("b2c_token");
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch { return {}; }
+}
+
 export const DEFAULT_BRANDING: BrandingSettings = {
   companyName: APP_NAME,
   tagline:     APP_TAGLINE,
@@ -147,15 +154,14 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
     try {
       const res = await fetch(`/api/settings/${NAMESPACE}`, {
         method:  "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAdminAuthHeader() },
         body:    JSON.stringify(next),
       });
-      if (!res.ok) throw new Error(await res.text());
-    } catch (e) {
-      console.error("[branding] Failed to persist to server:", e);
+      if (!res.ok) throw new Error(await res.text().catch(() => `HTTP ${res.status}`));
     } finally {
       setSaving(false);
     }
+    // errors propagate to caller so the admin UI can show a real error toast
   }, [branding]);
 
   const resetBranding = useCallback(async () => {
