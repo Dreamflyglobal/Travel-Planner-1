@@ -7,6 +7,7 @@ import { dirname, resolve, join } from "node:path";
 import { existsSync } from "node:fs";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { UPLOADS_DIR } from "./lib/uploads.js";
 
 const app: Express = express();
 
@@ -42,6 +43,11 @@ app.use(cookieParser());
 // data URLs (stored directly in the settings DB) can be saved without a 413.
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true, limit: "20mb" }));
+
+// ── Uploaded assets (logos, favicons) ────────────────────────────────────────
+// Served at /uploads/<filename> in both dev and production.
+// In dev the Vite proxy already forwards /uploads → port 8080.
+app.use("/uploads", express.static(UPLOADS_DIR, { maxAge: "7d" }));
 
 // ── API routes (/api/*) ──────────────────────────────────────────────────────
 app.use("/api", router);

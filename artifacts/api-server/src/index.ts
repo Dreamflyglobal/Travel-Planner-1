@@ -5,6 +5,7 @@ import { recoverPendingFollowUps } from "./lib/followup-scheduler.js";
 import { seedPackagesIfEmpty } from "./routes/holiday-packages.js";
 import { startDailyOfferCron } from "./lib/marketing-scheduler.js";
 import { connectMongoDB } from "./config/db.js";
+import { migrateLogoToFile } from "./lib/migrate-logo.js";
 
 const rawPort = process.env["PORT"] || "3000";
 
@@ -35,4 +36,10 @@ app.listen(port, (err) => {
   );
 
   startDailyOfferCron();
+
+  // One-time migration: convert any data-URL logos stored in the DB to files
+  // so the branding API response is small and the logo URL can be cached.
+  migrateLogoToFile().catch((e) =>
+    logger.warn({ err: e }, "Logo migration failed (non-critical)")
+  );
 });

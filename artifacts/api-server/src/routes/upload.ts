@@ -1,21 +1,22 @@
 import { Router } from "express";
 import multer from "multer";
 import path from "node:path";
+import crypto from "node:crypto";
+import { UPLOADS_DIR } from "../lib/uploads.js";
 
 const ALLOWED_MIME: Record<string, string> = {
   "image/png":                "png",
   "image/jpeg":               "jpeg",
   "image/jpg":                "jpeg",
   "image/webp":               "webp",
-  "image/svg+xml":            "svg+xml",
+  "image/svg+xml":            "svg",
   "image/gif":                "gif",
-  "image/x-icon":             "x-icon",
-  "image/vnd.microsoft.icon": "vnd.microsoft.icon",
+  "image/x-icon":             "ico",
+  "image/vnd.microsoft.icon": "ico",
 };
 
 const MAX_LOGO_BYTES    = 5  * 1024 * 1024;
 const MAX_FAVICON_BYTES = 2  * 1024 * 1024;
-const RAW_CAP_BYTES     = 20 * 1024 * 1024;
 
 function fileFilter(
   _req: Express.Request,
@@ -29,24 +30,28 @@ function fileFilter(
   }
 }
 
+function makeStorage(prefix: string) {
+  return multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
+    filename: (_req, file, cb) => {
+      const ext = ALLOWED_MIME[file.mimetype] ?? path.extname(file.originalname).replace(".", "") ?? "bin";
+      const rand = crypto.randomBytes(6).toString("hex");
+      cb(null, `${prefix}-${Date.now()}-${rand}.${ext}`);
+    },
+  });
+}
+
 const uploadLogo = multer({
-  storage: multer.memoryStorage(),
-  limits:  { fileSize: Math.min(MAX_LOGO_BYTES, RAW_CAP_BYTES) },
+  storage: makeStorage("logo"),
+  limits:  { fileSize: MAX_LOGO_BYTES },
   fileFilter,
 });
 
 const uploadFavicon = multer({
-  storage: multer.memoryStorage(),
-  limits:  { fileSize: Math.min(MAX_FAVICON_BYTES, RAW_CAP_BYTES) },
+  storage: makeStorage("favicon"),
+  limits:  { fileSize: MAX_FAVICON_BYTES },
   fileFilter,
 });
-
-function toDataUrl(file: Express.Multer.File): string {
-  const subtype = ALLOWED_MIME[file.mimetype] ?? path.extname(file.originalname).replace(".", "");
-  const mimeType = subtype.includes("/") ? `image/${subtype}` : file.mimetype;
-  const b64 = file.buffer.toString("base64");
-  return `data:${mimeType};base64,${b64}`;
-}
 
 const router = Router();
 
@@ -55,7 +60,7 @@ router.post("/upload/logo", uploadLogo.single("file"), (req, res) => {
     res.status(400).json({ error: "No file received." });
     return;
   }
-  const url = toDataUrl(req.file);
+  const url = `/uploads/${req.file.filename}`;
   res.json({ url });
 });
 
@@ -64,7 +69,7 @@ router.post("/upload/favicon", uploadFavicon.single("file"), (req, res) => {
     res.status(400).json({ error: "No file received." });
     return;
   }
-  const url = toDataUrl(req.file);
+  const url = `/uploads/${req.file.filename}`;
   res.json({ url });
 });
 
