@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AutocompleteInput } from "@/components/autocomplete-input";
 import { citySuggestions, busCitySuggestions, hotelCitySuggestions, packageDestinations } from "@/lib/city-suggestions";
 import { loadAirports, searchAirports, type AirportEntry, type AirportSuggestion } from "@/lib/airport-search";
-import { Plane, Bus, Building2, Map, Car, Compass, Train, Search, ArrowLeftRight, Users, ChevronDown, Plus, Minus, X } from "lucide-react";
+import { Plane, Bus, Building2, Map, Compass, Train, Search, ArrowLeftRight, Users, ChevronDown, Plus, Minus, X } from "lucide-react";
 
 interface SearchTabsProps {
   defaultTab?: "flights" | "hotels" | "buses" | "packages" | "cars" | "trains" | "activities";
@@ -196,7 +196,8 @@ export function SearchTabs({
             onTabChange?.(val);
           }}
         >
-          <TabsList className="grid grid-cols-4 gap-1 p-1 h-auto sm:grid-cols-7 sm:h-14 bg-gray-100/80 rounded-lg">
+          {/* Cars tab is temporarily hidden — restore by uncommenting the TabsTrigger below */}
+          <TabsList className="grid grid-cols-3 gap-1 p-1 h-auto sm:grid-cols-6 sm:h-14 bg-gray-100/80 rounded-lg">
             <TabsTrigger value="flights" className="flex flex-col items-center justify-center gap-0.5 py-2 px-1 h-auto sm:flex-row sm:gap-1.5 sm:px-2 sm:py-1 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary text-xs sm:text-sm font-semibold rounded-md w-full">
               <Plane className="w-4 h-4 shrink-0" /><span>Flights</span>
             </TabsTrigger>
@@ -209,9 +210,7 @@ export function SearchTabs({
             <TabsTrigger value="packages" className="flex flex-col items-center justify-center gap-0.5 py-2 px-1 h-auto sm:flex-row sm:gap-1.5 sm:px-2 sm:py-1 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary text-xs sm:text-sm font-semibold rounded-md w-full">
               <Map className="w-4 h-4 shrink-0" /><span>Holidays</span>
             </TabsTrigger>
-            <TabsTrigger value="cars" className="col-start-1 sm:col-auto flex flex-col items-center justify-center gap-0.5 py-2 px-1 h-auto sm:flex-row sm:gap-1.5 sm:px-2 sm:py-1 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary text-xs sm:text-sm font-semibold rounded-md w-full">
-              <Car className="w-4 h-4 shrink-0" /><span>Cars</span>
-            </TabsTrigger>
+            {/* <TabsTrigger value="cars" ...> temporarily hidden — uncomment to restore */}
             <TabsTrigger value="trains" className="flex flex-col items-center justify-center gap-0.5 py-2 px-1 h-auto sm:flex-row sm:gap-1.5 sm:px-2 sm:py-1 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-primary text-xs sm:text-sm font-semibold rounded-md w-full">
               <Train className="w-4 h-4 shrink-0" /><span>Trains</span>
             </TabsTrigger>
