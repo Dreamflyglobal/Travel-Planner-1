@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { eq } from "drizzle-orm";
-import { db, appSettingsTable } from "@workspace/db";
+import { AppSettingsModel } from "../models/app-settings.model.js";
 import { logger } from "./logger.js";
 import { UPLOADS_DIR } from "./uploads.js";
 
@@ -24,15 +23,10 @@ async function dataUrlToFile(dataUrl: string, prefix: string): Promise<string | 
 
 export async function migrateLogoToFile(): Promise<void> {
   try {
-    const [row] = await db
-      .select()
-      .from(appSettingsTable)
-      .where(eq(appSettingsTable.namespace, "branding"))
-      .limit(1);
+    const doc = await AppSettingsModel.findOne({ namespace: "branding" });
+    if (!doc) return;
 
-    if (!row) return;
-
-    const data: BrandingRow = JSON.parse(row.data);
+    const data = (doc.data ?? {}) as BrandingRow;
     let changed = false;
 
     if (typeof data.logoUrl === "string" && data.logoUrl.startsWith("data:")) {
@@ -55,16 +49,11 @@ export async function migrateLogoToFile(): Promise<void> {
 
     if (!changed) return;
 
-    const json = JSON.stringify(data);
-    await db
-      .insert(appSettingsTable)
-      .values({ namespace: "branding", data: json, updatedAt: new Date() })
-      .onConflictDoUpdate({
-        target: appSettingsTable.namespace,
-        set: { data: json, updatedAt: new Date() },
-      });
+    doc.data = data;
+    doc.updatedAt = new Date();
+    await doc.save();
 
-    logger.info("[migrate-logo] Branding settings updated in DB");
+    logger.info("[migrate-logo] Branding settings updated in MongoDB");
   } catch (err) {
     logger.warn({ err }, "[migrate-logo] Non-critical: migration failed, will retry on next start");
   }
