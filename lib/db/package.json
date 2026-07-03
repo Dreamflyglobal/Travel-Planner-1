@@ -16,6 +16,7 @@
     "seed": "node --import tsx/esm src/seed.ts"
   },
   "dependencies": {
+    "dotenv": "^16.6.1",
     "drizzle-orm": "^0.43.1",
     "drizzle-zod": "^0.8.3",
     "pg": "^8.20.0",

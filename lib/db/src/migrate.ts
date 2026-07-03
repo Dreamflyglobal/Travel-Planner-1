@@ -1,56 +1,66 @@
 /**
- * Safe migration runner — handles two scenarios:
+ * Dream Fly Global — Database Migration Runner
  *
- * 1. Fresh database (DigitalOcean, CI, new env):
- *    Tables do not exist → runs all migrations in order.
+ * Handles two scenarios automatically:
  *
- * 2. Existing database (created via `db:push` in dev):
- *    Tables exist but drizzle's tracking table doesn't →
- *    baseline-stamps all migrations as "applied" in the correct
- *    drizzle schema, then migrate() skips them cleanly.
+ *   1. Fresh database (new DigitalOcean droplet, CI):
+ *      Tables don't exist → all migrations run in order.
+ *
+ *   2. Existing database (created via `pnpm db:push` in dev):
+ *      Tables exist but drizzle's tracking table doesn't →
+ *      baseline-stamps all migrations as applied, then future
+ *      migrations run normally.
  *
  * Run:  pnpm db:migrate
- *   or: pnpm --filter @workspace/db run migrate
+ *
+ * DATABASE_URL is loaded automatically from the project root .env file.
+ * If DATABASE_URL is already set in the environment (platform injection),
+ * the .env file value is ignored (override: false).
  */
+
+import { config as dotenvConfig } from "dotenv";
+import { fileURLToPath } from "url";
+import path from "path";
+
+// Load .env from project root before importing db (which checks DATABASE_URL)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenvConfig({ path: path.resolve(__dirname, "../../../.env"), override: false });
 
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { db, pool } from "./index.js";
-import { fileURLToPath } from "url";
 import { createHash } from "crypto";
 import { readFileSync } from "fs";
-import path from "path";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 const migrationsFolder = path.join(__dirname, "../migrations");
 
-// drizzle-orm defaults — must match PgDialect.migrate()
+// Must match drizzle-orm's PgDialect.migrate() defaults exactly
 const DRIZZLE_SCHEMA = "drizzle";
 const DRIZZLE_TABLE  = "__drizzle_migrations";
 const FULL_TABLE     = `"${DRIZZLE_SCHEMA}"."${DRIZZLE_TABLE}"`;
 
-// ── helpers ──────────────────────────────────────────────────────────────────
+// ── helpers ───────────────────────────────────────────────────────────────────
 
 async function tableExistsInSchema(schema: string, table: string): Promise<boolean> {
   const r = await pool.query(
     `SELECT 1 FROM information_schema.tables
      WHERE table_schema = $1 AND table_name = $2 LIMIT 1`,
-    [schema, table]
+    [schema, table],
   );
   return (r.rowCount ?? 0) > 0;
 }
 
-async function publicTableExists(name: string): Promise<boolean> {
-  return tableExistsInSchema("public", name);
-}
-
-/** drizzle-orm hash = SHA-256 of raw SQL file bytes (no normalization) */
+/**
+ * Hash formula used by drizzle-orm internally:
+ * SHA-256 of the raw SQL file bytes — no normalization.
+ * Must match exactly or migrate() won't recognise the stamp.
+ */
 function migrationHash(rawSql: string): string {
   return createHash("sha256").update(rawSql).digest("hex");
 }
 
 async function stampAllMigrations(): Promise<void> {
-  // Ensure drizzle schema + tracking table exist (mirrors what migrate() does)
+  // Mirror what drizzle-orm's migrate() creates so hashes are recognised
   await pool.query(`CREATE SCHEMA IF NOT EXISTS "${DRIZZLE_SCHEMA}"`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS ${FULL_TABLE} (
@@ -72,11 +82,10 @@ async function stampAllMigrations(): Promise<void> {
 
     await pool.query(
       `INSERT INTO ${FULL_TABLE} (hash, created_at) VALUES ($1, $2)`,
-      [hash, entry.when]
+      [hash, entry.when],
     );
     console.log(`  📌  Stamped: ${entry.tag}`);
-    console.log(`       hash  : ${hash.slice(0, 16)}…`);
-    console.log(`       when  : ${entry.when}`);
+    console.log(`       hash : ${hash.slice(0, 16)}…`);
   }
 }
 
@@ -87,10 +96,10 @@ async function main(): Promise<void> {
   console.log("─".repeat(52));
 
   try {
-    const trackingExists  = await tableExistsInSchema(DRIZZLE_SCHEMA, DRIZZLE_TABLE);
-    const appTablesExist  = await publicTableExists("users");
+    const trackingExists = await tableExistsInSchema(DRIZZLE_SCHEMA, DRIZZLE_TABLE);
+    const appTablesExist = await tableExistsInSchema("public", "users");
 
-    // Check whether tracking table has any stamped rows
+    // Tracking table may exist but be empty (e.g. from a previous failed run)
     let trackingHasRows = false;
     if (trackingExists) {
       const r = await pool.query(`SELECT 1 FROM ${FULL_TABLE} LIMIT 1`);
@@ -98,15 +107,12 @@ async function main(): Promise<void> {
     }
 
     if (appTablesExist && !trackingHasRows) {
-      // Existing push-created DB (or previous failed run left an empty table)
-      // → baseline-stamp so migrate() sees them as already applied
-      console.log("  ℹ️   Existing database detected (from db:push).");
-      console.log("  📌  Baseline-stamping migrations into drizzle schema…");
+      console.log("  ℹ️   Existing database detected.");
+      console.log("  📌  Baseline-stamping migrations so future runs are incremental…");
       console.log("");
       await stampAllMigrations();
       console.log("");
-      console.log("  ✅  Baseline complete.");
-      console.log("      Future schema changes will run via migrate() normally.");
+      console.log("  ✅  Baseline complete — future migrations will run normally.");
     } else if (!appTablesExist) {
       console.log("  🆕  Fresh database — all migrations will be applied.");
     } else {
@@ -116,8 +122,9 @@ async function main(): Promise<void> {
     console.log("");
     console.log("▶   Running drizzle-orm migrate()…");
 
-    // Applies any migration whose folderMillis > lastDbMigration.created_at
-    // On a stamped DB this is a no-op; on a fresh DB this creates all tables.
+    // On a stamped DB: no-op (all folderMillis ≤ last created_at).
+    // On a fresh DB: creates all 21 tables.
+    // On subsequent runs: applies only new migrations.
     await migrate(db, { migrationsFolder });
 
     console.log("");
