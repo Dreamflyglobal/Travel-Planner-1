@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
-import { AppSettingsModel } from "../models/app-settings.model.js";
+import { eq } from "drizzle-orm";
+import { db, appSettingsTable } from "@workspace/db";
 import { logger } from "../lib/logger.js";
 import { requireAdmin } from "../middlewares/auth.js";
 
@@ -22,8 +23,15 @@ router.get("/settings/:namespace", async (req, res): Promise<void> => {
     return;
   }
   try {
-    const doc = await AppSettingsModel.findOne({ namespace: ns }).lean();
-    res.json(doc?.data ?? {});
+    const rows = await db
+      .select()
+      .from(appSettingsTable)
+      .where(eq(appSettingsTable.namespace, ns))
+      .limit(1);
+
+    const row = rows[0];
+    const data = row ? JSON.parse(row.data) : {};
+    res.json(data);
   } catch (err) {
     logger.error({ err, ns }, "[settings] GET failed");
     res.status(500).json({ error: "Failed to fetch settings" });
@@ -33,14 +41,14 @@ router.get("/settings/:namespace", async (req, res): Promise<void> => {
 // ── GET /settings/verify/all  (admin only) ────────────────────────────────────
 router.get("/settings/verify/all", requireAdmin, async (_req, res): Promise<void> => {
   try {
-    const docs = await AppSettingsModel.find({}).lean();
+    const rows = await db.select().from(appSettingsTable);
     const result: Record<string, unknown> = {};
-    for (const doc of docs) {
-      result[doc.namespace] = doc.data;
+    for (const row of rows) {
+      result[row.namespace] = JSON.parse(row.data);
     }
     res.json({
       ok: true,
-      count: docs.length,
+      count: rows.length,
       namespaces: Object.keys(result),
       settings: result,
       timestamp: new Date().toISOString(),
@@ -65,13 +73,22 @@ router.put("/settings/:namespace", requireAdmin, async (req, res): Promise<void>
       return;
     }
 
-    await AppSettingsModel.findOneAndUpdate(
-      { namespace: ns },
-      { $set: { namespace: ns, data: body, updatedAt: new Date() } },
-      { upsert: true, new: true, setDefaultsOnInsert: true },
-    );
+    await db
+      .insert(appSettingsTable)
+      .values({
+        namespace: ns,
+        data: JSON.stringify(body),
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: appSettingsTable.namespace,
+        set: {
+          data: JSON.stringify(body),
+          updatedAt: new Date(),
+        },
+      });
 
-    logger.info({ ns }, "[settings] saved to MongoDB");
+    logger.info({ ns }, "[settings] saved to PostgreSQL");
     res.json({ ok: true });
   } catch (err) {
     logger.error({ err, ns }, "[settings] PUT failed");

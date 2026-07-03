@@ -11,8 +11,7 @@ A comprehensive travel booking website offering flights, hotels, buses, and holi
 - `pnpm --filter @workspace/api-server run dev`: Run the API server locally.
 
 **Environment Variables for Production:**
-- `DATABASE_URL`: PostgreSQL connection string (required for core app data — bookings, users, coupons, agents, etc.).
-- `MONGO_URI`: MongoDB Atlas connection string (required for admin settings — branding, site, website, notification, markup, convenience fee). Set this on the DigitalOcean server's `.env` (loaded via `dotenv/config`) and in PM2's environment. The server logs `MongoDB Connected ✅` on success; if `MONGO_URI` is missing it logs a warning and settings routes will error until it's set.
+- `DATABASE_URL`: PostgreSQL connection string (required — all app data lives here).
 - `HOTELBEDS_API_KEY`: HotelBeds API key.
 - `HOTELBEDS_SECRET`: HotelBeds secret.
 - `TRIPJACK_API_KEY`: TripJack API key.
@@ -31,7 +30,7 @@ A comprehensive travel booking website offering flights, hotels, buses, and holi
 - **Package manager**: pnpm
 - **TypeScript version**: 5.9
 - **API framework**: Express 5
-- **Database**: PostgreSQL + Drizzle ORM (core app data); MongoDB Atlas + Mongoose (admin settings namespace only — branding, site, website, notification, markup, convenience fee)
+- **Database**: PostgreSQL + Drizzle ORM (all data — bookings, users, coupons, agents, admin settings)
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
 - **API codegen**: Orval
 - **Build**: esbuild (CJS bundle)
@@ -50,10 +49,8 @@ A comprehensive travel booking website offering flights, hotels, buses, and holi
 - `lib/booking-session.ts`: Typed utility for managing pending booking sessions in `localStorage`.
 - `artifacts/travel-booking/src/pages/admin/api-keys-section.tsx`: API Keys Management UI.
 - `artifacts/api-server/src/routes/holiday-packages.ts`: Holiday package pricing and category logic.
-- `artifacts/api-server/src/routes/settings.ts`: Global admin settings API (`GET/PUT /api/settings/:namespace`) — backed by MongoDB Atlas via Mongoose.
-- `artifacts/api-server/src/models/app-settings.model.ts`: Mongoose model for the `app_settings` MongoDB collection — one document per namespace.
-- `artifacts/api-server/src/config/db.ts`: MongoDB Atlas connection (`connectMongoDB`) using `MONGO_URI`.
-- `lib/db/src/schema/settings.ts`: legacy Drizzle/Postgres `app_settings` table — no longer used at runtime (settings now live in MongoDB); kept only for historical reference.
+- `artifacts/api-server/src/routes/settings.ts`: Global admin settings API (`GET/PUT /api/settings/:namespace`) — backed by PostgreSQL via Drizzle.
+- `lib/db/src/schema/settings.ts`: Drizzle `app_settings` table — one row per namespace, `data` column stores JSON as text.
 
 ## Architecture decisions
 
@@ -62,8 +59,8 @@ A comprehensive travel booking website offering flights, hotels, buses, and holi
 - **Separated Booking Flow**: Passenger/guest details are collected on specific booking pages, but payment is handled on a dedicated, separate `/booking/payment` page, allowing for consistent payment processing across all booking types.
 - **Client-Side Persistence for B2B/Coupons**: Features like B2B agent state, coupons, and historical bookings leverage `localStorage`/`sessionStorage` for persistence across sessions, minimizing backend dependency for these client-side specific features.
 - **Dynamic Pricing for Holiday Packages**: Implemented a sophisticated dynamic pricing engine for holiday packages considering package type, seasonality, and admin overrides, with a clear `pricingBreakdown` provided.
-- **MongoDB-Backed Admin Settings**: All admin settings namespaces (branding, site, website, notification, markup_simple, markup_convenience, markup_hidden, markup_agent, paymentmode, autorefund, cms, activities, blocked_users) are stored in the `app_settings` MongoDB Atlas collection (one document per namespace, `{ namespace, data, updatedAt }`) via `GET/PUT /api/settings/:namespace`, protected by `requireAdmin` on writes. Frontend contexts fetch from the API on mount and on window focus — changes made on any device appear everywhere. localStorage is used as an immediate-render cache only, never as the source of truth. Core app data (bookings, users, coupons, agents) remains on PostgreSQL/Drizzle — this is a deliberate hybrid, not a full migration.
-- **Uploads on Persistent Local Disk**: Logo/favicon uploads are written via multer to `artifacts/api-server/uploads/` (resolved relative to the compiled module, so it works the same in dev and after `pnpm build`), which sits outside `dist/` and therefore survives `git pull` → `pnpm build` → `pm2 restart`. Only the resulting `/uploads/<file>` URL is stored in MongoDB — never raw file bytes or base64 data URLs.
+- **PostgreSQL-Only Admin Settings**: All admin settings namespaces (branding, site, website, notification, markup_simple, markup_convenience, markup_hidden, markup_agent, paymentmode, autorefund, cms, activities, blocked_users) are stored in the `app_settings` PostgreSQL table (one row per namespace, `{ namespace, data TEXT, updatedAt }`) via `GET/PUT /api/settings/:namespace`, protected by `requireAdmin` on writes. The `data` column stores JSON as text and is parsed/stringified at the route layer. Frontend contexts fetch from the API on mount and on window focus — changes made on any device appear everywhere. localStorage is used as an immediate-render cache only, never as the source of truth.
+- **Uploads on Persistent Local Disk**: Logo/favicon uploads are written via multer to `artifacts/api-server/uploads/` (resolved relative to the compiled module, so it works the same in dev and after `pnpm build`), which sits outside `dist/` and therefore survives `git pull` → `pnpm build` → `pm2 restart`. Only the resulting `/uploads/<file>` URL is stored in PostgreSQL — never raw file bytes or base64 data URLs.
 
 ## Product
 
@@ -87,6 +84,7 @@ _Populate as you build_
 - **Local Storage Reliance**: Many client-side features (B2B agents, coupons, pending bookings) rely heavily on `localStorage`/`sessionStorage`. Clearing browser storage will reset these states.
 - **Abandoned Lead Timer**: The 2-minute timer for flight abandoned leads starts after passenger details are entered. Ensure proper handling if payment takes longer or is interrupted.
 - **Admin Login**: Hardcoded admin credentials have been removed. Use `/master-admin/login` with `ADMIN_EMAIL` and `ADMIN_PASSWORD` from environment variables.
+- **Settings JSON**: The `app_settings.data` column stores JSON as a TEXT string. The route layer handles `JSON.parse`/`JSON.stringify` — never store raw objects in this column directly.
 
 ## Pointers
 

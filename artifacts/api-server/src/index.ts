@@ -4,7 +4,6 @@ import { logger } from "./lib/logger";
 import { recoverPendingFollowUps } from "./lib/followup-scheduler.js";
 import { seedPackagesIfEmpty } from "./routes/holiday-packages.js";
 import { startDailyOfferCron } from "./lib/marketing-scheduler.js";
-import { connectMongoDB } from "./config/db.js";
 import { migrateLogoToFile } from "./lib/migrate-logo.js";
 
 const rawPort = process.env["PORT"] || "3000";
@@ -14,10 +13,6 @@ const port = Number(rawPort);
 if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
-
-// Attempt MongoDB connection before starting the server.
-// connectMongoDB() never throws — it logs errors internally and resolves either way.
-await connectMongoDB();
 
 app.listen(port, (err) => {
   if (err) {
