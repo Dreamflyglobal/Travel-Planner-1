@@ -166513,8 +166513,22 @@ router10.post("/create-order", async (req, res) => {
     logger.info(`[payments] Order created (${mode}) \u2014 ID: ${order.id}  Amount: \u20B9${amount}`);
     return res.json({ success: true, order, key: KEY_ID, keyMode: mode });
   } catch (err) {
-    logger.error("[payments] create-order error:", err?.error?.description || err?.message || err);
-    res.status(500).json({ success: false, error: err?.error?.description || err?.message || "Failed to create order" });
+    const rzpErr = err?.error ?? {};
+    logger.error(
+      {
+        code: rzpErr.code,
+        description: rzpErr.description,
+        source: rzpErr.source,
+        step: rzpErr.step,
+        reason: rzpErr.reason,
+        raw: err?.message
+      },
+      "[payments] create-order failed"
+    );
+    res.status(500).json({
+      success: false,
+      error: rzpErr.description || err?.message || "Failed to create order"
+    });
   }
 });
 router10.post("/verify", async (req, res) => {
@@ -166621,19 +166635,30 @@ router10.post("/webhook", async (req, res) => {
   try {
     const sig = req.headers["x-razorpay-signature"];
     const body = JSON.stringify(req.body);
-    const cfg = await getProviderConfig();
-    const KEY_SEC = cfg.paymentKeySecret;
-    if (KEY_SEC) {
-      const expected = crypto2.createHmac("sha256", KEY_SEC).update(body).digest("hex");
+    const WEBHOOK_SECRET = process.env["RAZORPAY_WEBHOOK_SECRET"];
+    if (!WEBHOOK_SECRET) {
+      logger.warn(
+        "[payments] RAZORPAY_WEBHOOK_SECRET not configured \u2014 webhook signature is NOT being verified. Set RAZORPAY_WEBHOOK_SECRET (from Razorpay Dashboard \u2192 Settings \u2192 Webhooks) to enable verification."
+      );
+    } else {
+      if (!sig) {
+        logger.error("[payments] Webhook rejected \u2014 missing x-razorpay-signature header");
+        return res.status(400).json({ error: "Missing webhook signature" });
+      }
+      const expected = crypto2.createHmac("sha256", WEBHOOK_SECRET).update(body).digest("hex");
       if (sig !== expected) {
+        logger.error(
+          { event: req.body?.event },
+          "[payments] Webhook rejected \u2014 signature mismatch (check RAZORPAY_WEBHOOK_SECRET matches the Dashboard value)"
+        );
         return res.status(400).json({ error: "Invalid webhook signature" });
       }
     }
     const { event, payload } = req.body;
-    logger.info(`[payments] Webhook: ${event}`, payload?.payment?.entity?.id ?? "");
+    logger.info(`[payments] Webhook verified: ${event}`, payload?.payment?.entity?.id ?? "");
     res.json({ success: true });
   } catch (err) {
-    logger.error("[payments] webhook error:", err.message);
+    logger.error({ err: err?.message }, "[payments] webhook error");
     res.status(500).json({ error: err.message || "Webhook error" });
   }
 });
