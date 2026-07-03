@@ -2,21 +2,29 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Dream Fly Global — Production startup script
 #
-# Use this as the entrypoint on DigitalOcean (App Platform or Droplet + PM2).
-# It runs schema migrations first, then starts the API server.
+# Use as the entrypoint for:
+#   • DigitalOcean App Platform  →  Run Command: bash scripts/start-production.sh
+#   • Plain bash on a DO Droplet →  bash scripts/start-production.sh
 #
-# Required environment variable:
-#   DATABASE_URL=postgresql://user:password@host:5432/dbname?sslmode=require
+# For PM2 on a Droplet, use ecosystem.config.cjs instead — it handles env
+# loading and process supervision automatically.
 #
-# DigitalOcean App Platform — set in the App Spec:
-#   run_command: bash scripts/start-production.sh
-#
-# DigitalOcean Droplet (PM2) — ecosystem.config.js:
-#   script: "scripts/start-production.sh"
-#   interpreter: "bash"
+# Required: DATABASE_URL must be set before this script runs, either via:
+#   1. A .env file in the project root  (loaded automatically below)
+#   2. Platform environment variables   (DO App Platform, systemd, etc.)
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
+
+# ── 1. Load .env from project root if it exists ──────────────────────────────
+#      Handles comments and blank lines; exports all KEY=VALUE pairs.
+if [ -f ".env" ]; then
+  echo "📄  Loading .env from project root…"
+  set -a
+  # shellcheck source=/dev/null
+  source .env
+  set +a
+fi
 
 echo ""
 echo "══════════════════════════════════════════════════════"
@@ -24,24 +32,26 @@ echo "  Dream Fly Global — Production Boot"
 echo "══════════════════════════════════════════════════════"
 echo ""
 
-# 1. Verify DATABASE_URL is set
+# ── 2. Verify DATABASE_URL ────────────────────────────────────────────────────
 if [ -z "${DATABASE_URL:-}" ]; then
-  echo "❌  DATABASE_URL is not set. Cannot start."
+  echo "❌  DATABASE_URL is not set."
+  echo "    Set it in .env or as a platform environment variable."
   exit 1
 fi
 echo "✅  DATABASE_URL is configured."
 echo ""
 
-# 2. Run database migrations (idempotent — safe to run on every deploy)
-echo "▶  Running database migrations…"
+# ── 3. Run database migrations (idempotent — safe on every deploy) ────────────
+echo "▶   Running database migrations…"
 pnpm db:migrate
 echo ""
 
-# 3. (Optional) Seed default data on first boot
-#    Uncomment the next line to seed on every deploy (safe — uses ON CONFLICT DO NOTHING):
+# ── 4. (Optional) Seed default data ──────────────────────────────────────────
+#       Uncomment on first deploy to pre-populate settings, counters, etc.
+#       Safe to run repeatedly (uses ON CONFLICT DO NOTHING).
 # pnpm db:seed
 
-# 4. Start the API server
-echo "▶  Starting API server…"
+# ── 5. Start the API server ───────────────────────────────────────────────────
+echo "▶   Starting API server on port ${PORT:-3000}…"
 echo ""
 exec node artifacts/api-server/dist/index.mjs
