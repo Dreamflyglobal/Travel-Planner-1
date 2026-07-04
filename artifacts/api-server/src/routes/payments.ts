@@ -43,8 +43,23 @@ router.post("/create-order", async (req, res) => {
     const KEY_SEC = cfg.paymentKeySecret;
     const mode    = resolveKeyMode(KEY_ID, KEY_SEC);
 
+    // Log key loading so we can verify correct env vars are picked up.
+    // Shows prefix + masked suffix — never logs the full secret.
+    logger.info(
+      {
+        keyMode:       mode,
+        keyIdPrefix:   KEY_ID   ? `${KEY_ID.slice(0, 14)}***`   : "(empty)",
+        keySecLoaded:  KEY_SEC  ? `${KEY_SEC.slice(0, 6)}***`    : "(empty)",
+        keyIdSource:   KEY_ID   ? (KEY_ID === process.env["RAZORPAY_KEY_ID"] ? "env" : "db") : "none",
+      },
+      "[payments] create-order — key check",
+    );
+
     if (mode !== "test" && mode !== "live") {
-      logger.error("[payments] RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET not configured");
+      logger.error(
+        { keyIdPrefix: KEY_ID ? `${KEY_ID.slice(0, 14)}***` : "(empty)", keySecLoaded: !!KEY_SEC },
+        "[payments] RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET not configured or unrecognised prefix",
+      );
       return res.status(503).json({
         success: false,
         error:   "Payment gateway is not configured. Please contact support.",
@@ -52,6 +67,18 @@ router.post("/create-order", async (req, res) => {
     }
 
     const amountPaise = Math.round(Number(amount) * 100);
+
+    logger.info(
+      {
+        url:        "https://api.razorpay.com/v1/orders",
+        keyMode:    mode,
+        amountINR:  amount,
+        amountPaise,
+        currency,
+      },
+      "[payments] calling Razorpay orders.create",
+    );
+
     const rzp   = buildRazorpayClient(KEY_ID, KEY_SEC)!;
     const order = await rzp.orders.create({
       amount:   amountPaise,
@@ -59,26 +86,47 @@ router.post("/create-order", async (req, res) => {
       receipt:  receipt || `rcpt_${Date.now()}`,
       notes:    notes   || {},
     });
-    logger.info(`[payments] Order created (${mode}) — ID: ${order.id}  Amount: ₹${amount}`);
+
+    logger.info(
+      { keyMode: mode, orderId: order.id, amountINR: amount },
+      "[payments] Razorpay order created ✓",
+    );
     return res.json({ success: true, order, key: KEY_ID, keyMode: mode });
 
   } catch (err: any) {
-    // Razorpay SDK errors carry the exact reason in err.error (code, description, source, step, reason)
-    const rzpErr = err?.error ?? {};
+    // Razorpay SDK errors:
+    //   err.statusCode  — HTTP status returned by Razorpay (e.g. 401, 400)
+    //   err.error       — parsed Razorpay error body { code, description, source, step, reason }
+    const rzpErr    = err?.error ?? {};
+    const httpStatus = err?.statusCode ?? 500;
+
     logger.error(
       {
+        httpStatus,
+        url:         "https://api.razorpay.com/v1/orders",
         code:        rzpErr.code,
         description: rzpErr.description,
         source:      rzpErr.source,
         step:        rzpErr.step,
         reason:      rzpErr.reason,
-        raw:         err?.message,
+        field:       rzpErr.field,
+        rawMessage:  err?.message,
+        fullError:   JSON.stringify(err?.error ?? err ?? null),
       },
-      "[payments] create-order failed",
+      "[payments] create-order FAILED",
     );
-    res.status(500).json({
-      success: false,
-      error:   rzpErr.description || err?.message || "Failed to create order",
+
+    res.status(httpStatus >= 400 && httpStatus < 600 ? httpStatus : 500).json({
+      success:    false,
+      error:      rzpErr.description || err?.message || "Failed to create order",
+      razorpay: {
+        httpStatus,
+        code:        rzpErr.code        || null,
+        description: rzpErr.description || null,
+        source:      rzpErr.source      || null,
+        step:        rzpErr.step        || null,
+        reason:      rzpErr.reason      || null,
+      },
     });
   }
 });
