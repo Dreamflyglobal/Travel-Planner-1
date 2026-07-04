@@ -55,7 +55,212 @@ import {
   ToggleLeft,
   RefreshCcw,
   ShieldCheck,
+  AlertTriangle,
+  XCircle,
+  Loader2,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
+
+// ── Razorpay connection checker ───────────────────────────────────────────────
+
+type RazorpayCheckResult = {
+  keyMode:    "test" | "live" | "demo";
+  maskedKeyId: string;
+  connected:  boolean;
+  httpStatus: number | null;
+  razorpay: {
+    code:        string | null;
+    description: string | null;
+    source:      string | null;
+    step:        string | null;
+    reason:      string | null;
+  } | null;
+  warning: string | null;
+  error:   string | null;
+};
+
+function getAdminToken(): string | undefined {
+  try {
+    return (
+      localStorage.getItem("admin_token") ||
+      localStorage.getItem("admin_jwt")   ||
+      localStorage.getItem("jwt_token")   ||
+      undefined
+    );
+  } catch { return undefined; }
+}
+
+function RazorpayChecker() {
+  const [loading,  setLoading]  = useState(false);
+  const [result,   setResult]   = useState<RazorpayCheckResult | null>(null);
+  const [fetchErr, setFetchErr] = useState<string | null>(null);
+
+  async function runCheck() {
+    setLoading(true);
+    setResult(null);
+    setFetchErr(null);
+    try {
+      const token = getAdminToken();
+      const resp  = await fetch("/api/payments/check-config", {
+        credentials: "include",
+        headers:     token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const data = await resp.json() as RazorpayCheckResult;
+      setResult(data);
+    } catch (err: any) {
+      setFetchErr(err?.message ?? "Could not reach the server");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const modeBadge = (mode: string) => {
+    if (mode === "live") return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300">
+        LIVE
+      </span>
+    );
+    if (mode === "test") return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-300">
+        TEST
+      </span>
+    );
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-300">
+        NOT SET
+      </span>
+    );
+  };
+
+  return (
+    <div className="space-y-3 pt-2">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium text-slate-700">Razorpay Connection</p>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={runCheck}
+          disabled={loading}
+          data-testid="button-test-razorpay"
+        >
+          {loading
+            ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Testing…</>
+            : <><Wifi className="w-4 h-4 mr-2" />Test Connection</>}
+        </Button>
+      </div>
+
+      {fetchErr && (
+        <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800">
+          <XCircle className="w-4 h-4 mt-0.5 shrink-0 text-red-600" />
+          <span>{fetchErr}</span>
+        </div>
+      )}
+
+      {result && (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 divide-y divide-slate-200 text-sm">
+
+          {/* Status row */}
+          <div className="flex items-center justify-between px-4 py-3">
+            <span className="text-slate-600 font-medium">Status</span>
+            {result.connected ? (
+              <span className="flex items-center gap-1.5 text-emerald-700 font-semibold">
+                <CheckCircle2 className="w-4 h-4" />
+                Connected
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5 text-red-700 font-semibold">
+                <WifiOff className="w-4 h-4" />
+                Failed
+              </span>
+            )}
+          </div>
+
+          {/* Key ID row */}
+          <div className="flex items-center justify-between px-4 py-3">
+            <span className="text-slate-600">Key ID</span>
+            <code className="text-xs font-mono bg-slate-100 border border-slate-200 px-2 py-0.5 rounded text-slate-800">
+              {result.maskedKeyId}
+            </code>
+          </div>
+
+          {/* Mode row */}
+          <div className="flex items-center justify-between px-4 py-3">
+            <span className="text-slate-600">Mode</span>
+            {modeBadge(result.keyMode)}
+          </div>
+
+          {/* HTTP status — only shown on failure */}
+          {!result.connected && result.httpStatus !== null && (
+            <div className="flex items-center justify-between px-4 py-3">
+              <span className="text-slate-600">HTTP Status</span>
+              <code className="text-xs font-mono bg-red-50 border border-red-200 px-2 py-0.5 rounded text-red-800">
+                {result.httpStatus}
+              </code>
+            </div>
+          )}
+
+          {/* Razorpay error details — only on failure */}
+          {!result.connected && result.razorpay && (
+            <div className="px-4 py-3 space-y-2">
+              <p className="text-slate-600 font-medium">Razorpay Error</p>
+              <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+                {result.razorpay.code && (
+                  <>
+                    <span className="text-slate-500">Code</span>
+                    <code className="font-mono text-red-700">{result.razorpay.code}</code>
+                  </>
+                )}
+                {result.razorpay.description && (
+                  <>
+                    <span className="text-slate-500">Message</span>
+                    <span className="text-red-800 font-medium">{result.razorpay.description}</span>
+                  </>
+                )}
+                {result.razorpay.reason && (
+                  <>
+                    <span className="text-slate-500">Reason</span>
+                    <span className="text-slate-700">{result.razorpay.reason}</span>
+                  </>
+                )}
+                {result.razorpay.step && (
+                  <>
+                    <span className="text-slate-500">Step</span>
+                    <span className="text-slate-700">{result.razorpay.step}</span>
+                  </>
+                )}
+                {result.razorpay.source && (
+                  <>
+                    <span className="text-slate-500">Source</span>
+                    <span className="text-slate-700">{result.razorpay.source}</span>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Generic error (no razorpay block, e.g. keys not set) */}
+          {!result.connected && !result.razorpay && result.error && (
+            <div className="px-4 py-3 text-xs text-red-800">
+              {result.error}
+            </div>
+          )}
+
+        </div>
+      )}
+
+      {/* Warning banner */}
+      {result?.warning && (
+        <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-900">
+          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
+          <span>{result.warning}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const MAX_LOGO_BYTES    = 5  * 1024 * 1024;
 const MAX_FAVICON_BYTES = 2  * 1024 * 1024;
@@ -550,6 +755,11 @@ export default function AdminSettings() {
               <p className="text-emerald-800">
                 <strong>Razorpay Key ID and Secret</strong> are configured securely via environment variables on the server.
               </p>
+            </div>
+
+            {/* ── Razorpay connection test ── */}
+            <div className="border-t border-slate-200 pt-4">
+              <RazorpayChecker />
             </div>
           </CardContent>
         </Card>

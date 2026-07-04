@@ -5,6 +5,7 @@ import Razorpay    from "razorpay";
 import { sendAllBookingNotifications, type BookingNotificationData } from "../lib/notification-service.js";
 import { scheduleBookingFollowUp }    from "../lib/marketing-scheduler.js";
 import { getProviderConfig }          from "../lib/provider-config.js";
+import { requireAdmin }               from "../lib/admin-auth.js";
 
 const router = Router();
 
@@ -298,6 +299,121 @@ router.post("/webhook", async (req, res) => {
   } catch (err: any) {
     logger.error({ err: err?.message }, "[payments] webhook error");
     res.status(500).json({ error: err.message || "Webhook error" });
+  }
+});
+
+/**
+ * GET /api/payments/check-config
+ *
+ * Admin-only endpoint that verifies Razorpay credentials are loaded and
+ * that they actually authenticate against the Razorpay API.
+ *
+ * Makes a minimal GET /v1/payments?count=1 call — read-only, no side effects.
+ *
+ * Returns:
+ *   { keyMode, maskedKeyId, connected, httpStatus, razorpay: { code, description, ... }, warning }
+ */
+router.get("/check-config", requireAdmin, async (_req, res) => {
+  const cfg     = await getProviderConfig();
+  const KEY_ID  = cfg.paymentKeyId;
+  const KEY_SEC = cfg.paymentKeySecret;
+  const mode    = resolveKeyMode(KEY_ID, KEY_SEC);
+
+  // Mask: show first 8 chars then "***" — e.g. "rzp_test***"
+  const maskedKeyId = KEY_ID
+    ? `${KEY_ID.slice(0, 8)}***`
+    : "(not set)";
+
+  // Warning: test key used but could be in production context
+  const warning: string | null =
+    mode === "test"
+      ? "Test key detected — switch to a live key (rzp_live_…) before going to production."
+      : mode === "demo"
+      ? "No Razorpay keys configured. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET."
+      : null;
+
+  logger.info(
+    {
+      keyMode:      mode,
+      maskedKeyId,
+      keyIdSource:  KEY_ID ? (KEY_ID === process.env["RAZORPAY_KEY_ID"] ? "env" : "db") : "none",
+      keySecLoaded: KEY_SEC ? `${KEY_SEC.slice(0, 6)}***` : "(empty)",
+    },
+    "[payments/check-config] key check",
+  );
+
+  if (mode === "demo") {
+    return res.json({
+      keyMode:    "demo",
+      maskedKeyId,
+      connected:  false,
+      httpStatus: null,
+      razorpay:   null,
+      warning,
+      error:      "RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET are not set or have an unrecognised prefix.",
+    });
+  }
+
+  // Make a lightweight read-only API call to verify credentials
+  try {
+    const auth = Buffer.from(`${KEY_ID}:${KEY_SEC}`).toString("base64");
+    const resp = await fetch(
+      "https://api.razorpay.com/v1/payments?count=1&skip=0",
+      { headers: { Authorization: `Basic ${auth}` } },
+    );
+
+    const body = await resp.json().catch(() => ({})) as Record<string, any>;
+    const rzpErr = body?.error ?? null;
+
+    logger.info(
+      {
+        keyMode:    mode,
+        maskedKeyId,
+        httpStatus: resp.status,
+        connected:  resp.ok,
+        code:       rzpErr?.code        ?? null,
+        description: rzpErr?.description ?? null,
+        source:     rzpErr?.source      ?? null,
+        step:       rzpErr?.step        ?? null,
+        reason:     rzpErr?.reason      ?? null,
+      },
+      resp.ok
+        ? "[payments/check-config] Razorpay connection verified ✓"
+        : "[payments/check-config] Razorpay connection FAILED",
+    );
+
+    return res.json({
+      keyMode:    mode,
+      maskedKeyId,
+      connected:  resp.ok,
+      httpStatus: resp.status,
+      razorpay:   rzpErr
+        ? {
+            code:        rzpErr.code        ?? null,
+            description: rzpErr.description ?? null,
+            source:      rzpErr.source      ?? null,
+            step:        rzpErr.step        ?? null,
+            reason:      rzpErr.reason      ?? null,
+          }
+        : null,
+      warning,
+      error: resp.ok ? null : (rzpErr?.description ?? `HTTP ${resp.status}`),
+    });
+
+  } catch (err: any) {
+    logger.error(
+      { keyMode: mode, maskedKeyId, err: err?.message },
+      "[payments/check-config] network error reaching Razorpay",
+    );
+    return res.status(502).json({
+      keyMode:    mode,
+      maskedKeyId,
+      connected:  false,
+      httpStatus: null,
+      razorpay:   null,
+      warning,
+      error:      `Network error: ${err?.message ?? "could not reach Razorpay API"}`,
+    });
   }
 });
 

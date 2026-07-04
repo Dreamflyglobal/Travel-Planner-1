@@ -91257,6 +91257,86 @@ router10.post("/webhook", async (req, res) => {
     res.status(500).json({ error: err.message || "Webhook error" });
   }
 });
+router10.get("/check-config", requireAdmin, async (_req, res) => {
+  const cfg = await getProviderConfig();
+  const KEY_ID = cfg.paymentKeyId;
+  const KEY_SEC = cfg.paymentKeySecret;
+  const mode = resolveKeyMode(KEY_ID, KEY_SEC);
+  const maskedKeyId = KEY_ID ? `${KEY_ID.slice(0, 8)}***` : "(not set)";
+  const warning = mode === "test" ? "Test key detected \u2014 switch to a live key (rzp_live_\u2026) before going to production." : mode === "demo" ? "No Razorpay keys configured. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET." : null;
+  logger.info(
+    {
+      keyMode: mode,
+      maskedKeyId,
+      keyIdSource: KEY_ID ? KEY_ID === process.env["RAZORPAY_KEY_ID"] ? "env" : "db" : "none",
+      keySecLoaded: KEY_SEC ? `${KEY_SEC.slice(0, 6)}***` : "(empty)"
+    },
+    "[payments/check-config] key check"
+  );
+  if (mode === "demo") {
+    return res.json({
+      keyMode: "demo",
+      maskedKeyId,
+      connected: false,
+      httpStatus: null,
+      razorpay: null,
+      warning,
+      error: "RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET are not set or have an unrecognised prefix."
+    });
+  }
+  try {
+    const auth = Buffer.from(`${KEY_ID}:${KEY_SEC}`).toString("base64");
+    const resp = await fetch(
+      "https://api.razorpay.com/v1/payments?count=1&skip=0",
+      { headers: { Authorization: `Basic ${auth}` } }
+    );
+    const body = await resp.json().catch(() => ({}));
+    const rzpErr = body?.error ?? null;
+    logger.info(
+      {
+        keyMode: mode,
+        maskedKeyId,
+        httpStatus: resp.status,
+        connected: resp.ok,
+        code: rzpErr?.code ?? null,
+        description: rzpErr?.description ?? null,
+        source: rzpErr?.source ?? null,
+        step: rzpErr?.step ?? null,
+        reason: rzpErr?.reason ?? null
+      },
+      resp.ok ? "[payments/check-config] Razorpay connection verified \u2713" : "[payments/check-config] Razorpay connection FAILED"
+    );
+    return res.json({
+      keyMode: mode,
+      maskedKeyId,
+      connected: resp.ok,
+      httpStatus: resp.status,
+      razorpay: rzpErr ? {
+        code: rzpErr.code ?? null,
+        description: rzpErr.description ?? null,
+        source: rzpErr.source ?? null,
+        step: rzpErr.step ?? null,
+        reason: rzpErr.reason ?? null
+      } : null,
+      warning,
+      error: resp.ok ? null : rzpErr?.description ?? `HTTP ${resp.status}`
+    });
+  } catch (err) {
+    logger.error(
+      { keyMode: mode, maskedKeyId, err: err?.message },
+      "[payments/check-config] network error reaching Razorpay"
+    );
+    return res.status(502).json({
+      keyMode: mode,
+      maskedKeyId,
+      connected: false,
+      httpStatus: null,
+      razorpay: null,
+      warning,
+      error: `Network error: ${err?.message ?? "could not reach Razorpay API"}`
+    });
+  }
+});
 var payments_default = router10;
 
 // src/routes/tickets.ts
