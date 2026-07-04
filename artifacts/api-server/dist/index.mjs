@@ -87497,36 +87497,82 @@ function verifyToken(token) {
   return import_jsonwebtoken.default.verify(token, JWT_SECRET);
 }
 
+// src/lib/admin-auth.ts
+var COOKIE_NAME = "admin_session";
+function requireAdmin(req, res, next) {
+  const cookieToken = req.cookies?.[COOKIE_NAME];
+  const authHeader = req.headers.authorization;
+  const headerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : void 0;
+  const raw = cookieToken || headerToken;
+  const source = cookieToken ? "cookie" : headerToken ? "header" : "none";
+  logger.debug(
+    {
+      path: req.originalUrl,
+      method: req.method,
+      hasAuthHeader: !!authHeader,
+      hasCookie: !!cookieToken,
+      tokenSource: source
+    },
+    "[requireAdmin] incoming request"
+  );
+  if (!raw) {
+    logger.warn(
+      { path: req.originalUrl, method: req.method },
+      "[requireAdmin] rejected \u2014 no cookie or Authorization header present"
+    );
+    res.status(401).json({ success: false, error: "Not authenticated \u2014 please log in to the admin panel." });
+    return;
+  }
+  try {
+    const payload = verifyToken(raw);
+    if (payload.role !== "admin") {
+      logger.warn(
+        { path: req.originalUrl, method: req.method, role: payload.role, tokenSource: source },
+        "[requireAdmin] rejected \u2014 token verified but role is not admin"
+      );
+      res.status(403).json({ success: false, error: "Admin access required." });
+      return;
+    }
+    logger.debug(
+      { path: req.originalUrl, method: req.method, email: payload.email, tokenSource: source },
+      "[requireAdmin] authenticated"
+    );
+    req.adminUser = payload;
+    next();
+  } catch (err) {
+    logger.warn(
+      { path: req.originalUrl, method: req.method, tokenSource: source, err: err?.message },
+      "[requireAdmin] rejected \u2014 JWT verification failed (invalid or expired token)"
+    );
+    res.status(401).json({ success: false, error: "Session expired \u2014 please log in again." });
+  }
+}
+
 // src/middlewares/auth.ts
 function requireAuth(req, res, next) {
   const header = req.headers.authorization;
+  logger.debug(
+    { path: req.originalUrl, method: req.method, hasAuthHeader: !!header },
+    "[requireAuth] incoming request"
+  );
   if (!header?.startsWith("Bearer ")) {
+    logger.warn({ path: req.originalUrl, method: req.method }, "[requireAuth] rejected \u2014 no Authorization header");
     return res.status(401).json({ error: "Authentication required" });
   }
   try {
     const token = header.slice(7);
     req.jwtUser = verifyToken(token);
+    logger.debug(
+      { path: req.originalUrl, userId: req.jwtUser.userId, role: req.jwtUser.role },
+      "[requireAuth] authenticated"
+    );
     next();
-  } catch {
+  } catch (err) {
+    logger.warn(
+      { path: req.originalUrl, method: req.method, err: err?.message },
+      "[requireAuth] rejected \u2014 invalid or expired token"
+    );
     return res.status(401).json({ error: "Invalid or expired token" });
-  }
-}
-function requireAdmin(req, res, next) {
-  const header = req.headers.authorization;
-  if (!header?.startsWith("Bearer ")) {
-    res.status(401).json({ error: "Admin authentication required" });
-    return;
-  }
-  try {
-    const payload = verifyToken(header.slice(7));
-    if (payload.role !== "admin") {
-      res.status(403).json({ error: "Admin access required" });
-      return;
-    }
-    req.jwtUser = payload;
-    next();
-  } catch {
-    res.status(401).json({ error: "Invalid or expired token" });
   }
 }
 
@@ -88420,7 +88466,7 @@ var auth_default = router2;
 // src/routes/admin.ts
 var import_express3 = __toESM(require_express2(), 1);
 var router3 = (0, import_express3.Router)();
-var COOKIE_NAME = "admin_session";
+var COOKIE_NAME2 = "admin_session";
 var COOKIE_OPTS = {
   httpOnly: true,
   sameSite: "lax",
@@ -88444,7 +88490,7 @@ router3.post("/admin/login", async (req, res) => {
     return res.status(401).json({ success: false, error: "Invalid credentials" });
   }
   const token = signToken({ userId: 0, role: "admin", email: ADMIN_EMAIL });
-  res.cookie(COOKIE_NAME, token, COOKIE_OPTS);
+  res.cookie(COOKIE_NAME2, token, COOKIE_OPTS);
   return res.json({
     success: true,
     token,
@@ -88466,7 +88512,7 @@ router3.post("/auth/login-admin", async (req, res) => {
     return res.status(401).json({ success: false, error: "Invalid credentials" });
   }
   const token = signToken({ userId: 0, role: "admin", email: ADMIN_EMAIL });
-  res.cookie(COOKIE_NAME, token, COOKIE_OPTS);
+  res.cookie(COOKIE_NAME2, token, COOKIE_OPTS);
   return res.json({
     success: true,
     token,
@@ -88474,7 +88520,7 @@ router3.post("/auth/login-admin", async (req, res) => {
   });
 });
 router3.post("/admin/logout", (_req, res) => {
-  res.clearCookie(COOKIE_NAME, { path: "/" });
+  res.clearCookie(COOKIE_NAME2, { path: "/" });
   res.json({ success: true });
 });
 var admin_default = router3;
@@ -93240,31 +93286,6 @@ var marketing_default = router21;
 // src/routes/admin-bookings.ts
 var import_express22 = __toESM(require_express2(), 1);
 init_drizzle_orm();
-
-// src/lib/admin-auth.ts
-var COOKIE_NAME2 = "admin_session";
-function requireAdmin2(req, res, next) {
-  const cookieToken = req.cookies?.[COOKIE_NAME2];
-  const headerToken = req.headers.authorization?.startsWith("Bearer ") ? req.headers.authorization.slice(7) : void 0;
-  const raw = cookieToken || headerToken;
-  if (!raw) {
-    res.status(401).json({ success: false, error: "Not authenticated \u2014 please log in to the admin panel." });
-    return;
-  }
-  try {
-    const payload = verifyToken(raw);
-    if (payload.role !== "admin") {
-      res.status(403).json({ success: false, error: "Admin access required." });
-      return;
-    }
-    req.adminUser = payload;
-    next();
-  } catch {
-    res.status(401).json({ success: false, error: "Session expired \u2014 please log in again." });
-  }
-}
-
-// src/routes/admin-bookings.ts
 var router22 = (0, import_express22.Router)();
 var ALLOWED_STATUSES = ["pending", "confirmed", "cancelled", "refunded", "booking_failed"];
 function isAllowedStatus(s) {
@@ -93360,7 +93381,7 @@ function buildNotificationData(b) {
     hotelNights: d.nights || void 0
   };
 }
-router22.get("/admin/bookings", requireAdmin2, async (req, res) => {
+router22.get("/admin/bookings", requireAdmin, async (req, res) => {
   try {
     const search = req.query.search?.trim() ?? "";
     const status = req.query.status?.trim() ?? "";
@@ -93408,7 +93429,7 @@ router22.get("/admin/bookings", requireAdmin2, async (req, res) => {
     return res.status(500).json({ success: false, error: "Failed to load bookings" });
   }
 });
-router22.get("/admin/bookings/:id", requireAdmin2, async (req, res) => {
+router22.get("/admin/bookings/:id", requireAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) {
@@ -93425,7 +93446,7 @@ router22.get("/admin/bookings/:id", requireAdmin2, async (req, res) => {
     return res.status(500).json({ success: false, error: "Failed to load booking" });
   }
 });
-router22.put("/admin/bookings/:id/status", requireAdmin2, async (req, res) => {
+router22.put("/admin/bookings/:id/status", requireAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) {
@@ -93454,7 +93475,7 @@ router22.put("/admin/bookings/:id/status", requireAdmin2, async (req, res) => {
     return res.status(500).json({ success: false, error: "Failed to update status" });
   }
 });
-router22.put("/admin/bookings/:id/convert-lead", requireAdmin2, async (req, res) => {
+router22.put("/admin/bookings/:id/convert-lead", requireAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) {
@@ -93531,7 +93552,7 @@ async function loadRazorpayCreds() {
   }
   return { keyId, keySecret, source };
 }
-router22.post("/admin/refund", requireAdmin2, async (req, res) => {
+router22.post("/admin/refund", requireAdmin, async (req, res) => {
   const adminEmail = req.admin?.email ?? "admin";
   try {
     const paymentId = String(req.body?.paymentId ?? "").trim();
@@ -93642,7 +93663,7 @@ router22.post("/admin/refund", requireAdmin2, async (req, res) => {
     return res.status(500).json({ success: false, error: "Refund failed" });
   }
 });
-router22.post("/admin/bookings/:id/resend", requireAdmin2, async (req, res) => {
+router22.post("/admin/bookings/:id/resend", requireAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) {
@@ -93675,7 +93696,7 @@ router22.post("/admin/bookings/:id/resend", requireAdmin2, async (req, res) => {
     return res.status(500).json({ success: false, error: "Resend failed" });
   }
 });
-router22.post("/admin/bookings/:id/mark-failed", requireAdmin2, async (req, res) => {
+router22.post("/admin/bookings/:id/mark-failed", requireAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ success: false, error: "Invalid booking id" });
@@ -93764,7 +93785,7 @@ router22.post("/admin/bookings/:id/mark-failed", requireAdmin2, async (req, res)
     return res.status(500).json({ success: false, error: "Failed to mark booking as failed" });
   }
 });
-router22.get("/admin/refund-logs", requireAdmin2, async (req, res) => {
+router22.get("/admin/refund-logs", requireAdmin, async (req, res) => {
   try {
     const limit = Math.min(Number(req.query.limit ?? 200), 500);
     const offset = Math.max(Number(req.query.offset ?? 0), 0);
@@ -93807,7 +93828,7 @@ router22.get("/admin/refund-logs", requireAdmin2, async (req, res) => {
     return res.status(500).json({ success: false, error: "Failed to load refund logs" });
   }
 });
-router22.post("/admin/bookings/:id/notes", requireAdmin2, async (req, res) => {
+router22.post("/admin/bookings/:id/notes", requireAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) {
@@ -99525,7 +99546,7 @@ var uploadFavicon = (0, import_multer.default)({
   fileFilter
 });
 var router32 = (0, import_express32.Router)();
-router32.post("/upload/logo", requireAdmin2, uploadLogo.single("file"), (req, res) => {
+router32.post("/upload/logo", requireAdmin, uploadLogo.single("file"), (req, res) => {
   if (!req.file) {
     res.status(400).json({ error: "No file received." });
     return;
@@ -99533,7 +99554,7 @@ router32.post("/upload/logo", requireAdmin2, uploadLogo.single("file"), (req, re
   const url3 = `/uploads/${req.file.filename}`;
   res.json({ url: url3 });
 });
-router32.post("/upload/favicon", requireAdmin2, uploadFavicon.single("file"), (req, res) => {
+router32.post("/upload/favicon", requireAdmin, uploadFavicon.single("file"), (req, res) => {
   if (!req.file) {
     res.status(400).json({ error: "No file received." });
     return;
