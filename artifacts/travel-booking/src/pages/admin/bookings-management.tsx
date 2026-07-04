@@ -111,6 +111,7 @@ function getAuthHeader(): Record<string, string> {
   if (typeof window === "undefined") return {};
   try {
     const token =
+      window.localStorage.getItem("admin_token") ||
       window.localStorage.getItem("admin_jwt") ||
       window.localStorage.getItem("jwt_token");
     return token ? { Authorization: `Bearer ${token}` } : {};

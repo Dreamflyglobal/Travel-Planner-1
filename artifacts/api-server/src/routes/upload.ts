@@ -3,7 +3,7 @@ import multer from "multer";
 import path from "node:path";
 import crypto from "node:crypto";
 import { UPLOADS_DIR } from "../lib/uploads.js";
-import { requireAdmin } from "../middlewares/auth.js";
+import { requireAdmin } from "../lib/admin-auth.js";
 
 const ALLOWED_MIME: Record<string, string> = {
   "image/png":                "png",

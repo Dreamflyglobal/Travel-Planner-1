@@ -123,11 +123,22 @@ const CURRENCIES: { value: Currency; label: string }[] = [
 ];
 
 async function uploadImageFile(file: File, kind: "logo" | "favicon"): Promise<string> {
-  const token = (() => { try { return localStorage.getItem("admin_token") ?? undefined; } catch { return undefined; } })();
+  // Read from current key first, then fall back to legacy keys
+  const token = (() => {
+    try {
+      return (
+        localStorage.getItem("admin_token") ||
+        localStorage.getItem("admin_jwt") ||
+        localStorage.getItem("jwt_token") ||
+        undefined
+      );
+    } catch { return undefined; }
+  })();
   const formData = new FormData();
   formData.append("file", file);
   const res = await fetch(`/api/upload/${kind}`, {
     method: "POST",
+    credentials: "include",                          // sends admin_session cookie
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: formData,
   });

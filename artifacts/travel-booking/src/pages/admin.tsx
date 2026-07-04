@@ -2721,7 +2721,9 @@ function AdminBookingDetailSheet({
 
   function getAuthHeader(): Record<string, string> {
     const token =
-      localStorage.getItem("admin_jwt") || localStorage.getItem("jwt_token");
+      localStorage.getItem("admin_token") ||
+      localStorage.getItem("admin_jwt") ||
+      localStorage.getItem("jwt_token");
     return token ? { Authorization: `Bearer ${token}` } : {};
   }
 

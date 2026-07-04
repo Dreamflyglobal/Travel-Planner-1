@@ -99525,7 +99525,7 @@ var uploadFavicon = (0, import_multer.default)({
   fileFilter
 });
 var router32 = (0, import_express32.Router)();
-router32.post("/upload/logo", requireAdmin, uploadLogo.single("file"), (req, res) => {
+router32.post("/upload/logo", requireAdmin2, uploadLogo.single("file"), (req, res) => {
   if (!req.file) {
     res.status(400).json({ error: "No file received." });
     return;
@@ -99533,7 +99533,7 @@ router32.post("/upload/logo", requireAdmin, uploadLogo.single("file"), (req, res
   const url3 = `/uploads/${req.file.filename}`;
   res.json({ url: url3 });
 });
-router32.post("/upload/favicon", requireAdmin, uploadFavicon.single("file"), (req, res) => {
+router32.post("/upload/favicon", requireAdmin2, uploadFavicon.single("file"), (req, res) => {
   if (!req.file) {
     res.status(400).json({ error: "No file received." });
     return;
