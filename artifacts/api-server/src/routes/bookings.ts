@@ -93,21 +93,45 @@ async function findOrCreateUser(
 router.get("/stats/summary", async (_req, res): Promise<void> => {
   const allBookings = await db.select().from(bookingsTable);
 
-  const flightBookings = allBookings.filter((b) => b.bookingType === "flight").length;
-  const busBookings = allBookings.filter((b) => b.bookingType === "bus").length;
-  const hotelBookings = allBookings.filter((b) => b.bookingType === "hotel").length;
-  const packageBookings = allBookings.filter((b) => b.bookingType === "package").length;
-  const totalRevenue = allBookings.reduce((sum, b) => sum + Number(b.totalPrice), 0);
+  // ── Revenue: ONLY bookings where payment was collected ───────────────────
+  // paymentStatus = "paid" is the single source of truth.
+  // PENDING, FAILED, CANCELLED, REFUNDED bookings contribute ₹0 to revenue.
+  const paidBookings = allBookings.filter((b) => b.paymentStatus === "paid");
+  const totalRevenue = paidBookings.reduce((sum, b) => sum + Number(b.totalPrice), 0);
+
+  // ── Status breakdown for dashboard cards ─────────────────────────────────
+  const successfulBookings = paidBookings.filter(
+    (b) =>
+      (b.bookingStatus === "confirmed" || b.status === "confirmed") &&
+      b.status !== "cancelled" &&
+      b.status !== "refunded",
+  ).length;
+
+  const pendingLeads = allBookings.filter(
+    (b) => b.paymentStatus === "pending" || b.bookingStatus === "pending",
+  ).length;
+
+  const failedPayments = allBookings.filter(
+    (b) => b.paymentStatus === "failed" || b.status === "booking_failed",
+  ).length;
+
+  const cancelledBookings = allBookings.filter(
+    (b) => b.status === "cancelled" || b.status === "refunded",
+  ).length;
 
   res.json(
     GetStatsSummaryResponse.parse({
-      totalBookings: allBookings.length,
-      flightBookings,
-      busBookings,
-      hotelBookings,
-      packageBookings,
+      totalBookings:    allBookings.length,
+      flightBookings:   allBookings.filter((b) => b.bookingType === "flight").length,
+      busBookings:      allBookings.filter((b) => b.bookingType === "bus").length,
+      hotelBookings:    allBookings.filter((b) => b.bookingType === "hotel").length,
+      packageBookings:  allBookings.filter((b) => b.bookingType === "package").length,
       totalRevenue,
-    })
+      successfulBookings,
+      pendingLeads,
+      failedPayments,
+      cancelledBookings,
+    }),
   );
 });
 

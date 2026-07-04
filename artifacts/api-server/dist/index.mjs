@@ -70266,7 +70266,11 @@ var GetStatsSummaryResponse = objectType({
   busBookings: numberType(),
   hotelBookings: numberType(),
   packageBookings: numberType(),
-  totalRevenue: numberType()
+  totalRevenue: numberType(),
+  successfulBookings: numberType(),
+  pendingLeads: numberType(),
+  failedPayments: numberType(),
+  cancelledBookings: numberType()
 });
 var GetPopularDestinationsResponseItem = objectType({
   id: numberType(),
@@ -89819,19 +89823,32 @@ async function findOrCreateUser(phone, email3, name2) {
 }
 router9.get("/stats/summary", async (_req, res) => {
   const allBookings = await db.select().from(bookingsTable);
-  const flightBookings = allBookings.filter((b) => b.bookingType === "flight").length;
-  const busBookings = allBookings.filter((b) => b.bookingType === "bus").length;
-  const hotelBookings = allBookings.filter((b) => b.bookingType === "hotel").length;
-  const packageBookings = allBookings.filter((b) => b.bookingType === "package").length;
-  const totalRevenue = allBookings.reduce((sum2, b) => sum2 + Number(b.totalPrice), 0);
+  const paidBookings = allBookings.filter((b) => b.paymentStatus === "paid");
+  const totalRevenue = paidBookings.reduce((sum2, b) => sum2 + Number(b.totalPrice), 0);
+  const successfulBookings = paidBookings.filter(
+    (b) => (b.bookingStatus === "confirmed" || b.status === "confirmed") && b.status !== "cancelled" && b.status !== "refunded"
+  ).length;
+  const pendingLeads = allBookings.filter(
+    (b) => b.paymentStatus === "pending" || b.bookingStatus === "pending"
+  ).length;
+  const failedPayments = allBookings.filter(
+    (b) => b.paymentStatus === "failed" || b.status === "booking_failed"
+  ).length;
+  const cancelledBookings = allBookings.filter(
+    (b) => b.status === "cancelled" || b.status === "refunded"
+  ).length;
   res.json(
     GetStatsSummaryResponse.parse({
       totalBookings: allBookings.length,
-      flightBookings,
-      busBookings,
-      hotelBookings,
-      packageBookings,
-      totalRevenue
+      flightBookings: allBookings.filter((b) => b.bookingType === "flight").length,
+      busBookings: allBookings.filter((b) => b.bookingType === "bus").length,
+      hotelBookings: allBookings.filter((b) => b.bookingType === "hotel").length,
+      packageBookings: allBookings.filter((b) => b.bookingType === "package").length,
+      totalRevenue,
+      successfulBookings,
+      pendingLeads,
+      failedPayments,
+      cancelledBookings
     })
   );
 });

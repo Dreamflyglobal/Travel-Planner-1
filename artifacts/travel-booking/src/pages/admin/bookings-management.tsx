@@ -1112,7 +1112,10 @@ export default function BookingsManagementPage() {
       if (b.status === "cancelled")      t.cancelled++;
       if (b.status === "refunded")       t.refunded++;
       if (b.status === "booking_failed" || b.bookingStatus === "failed") t.failed++;
-      if (b.status === "confirmed" || b.status === "pending") t.revenue += b.amount;
+      // Revenue: ONLY count paid bookings — pending/failed must be excluded
+      if (b.paymentStatus === "paid" && b.status !== "cancelled" && b.status !== "refunded") {
+        t.revenue += b.amount;
+      }
     }
     return t;
   }, [bookings]);
@@ -1301,6 +1304,7 @@ export default function BookingsManagementPage() {
                       <TableHead className="text-right">Amount</TableHead>
                       <TableHead>Payment</TableHead>
                       <TableHead>Booking</TableHead>
+                      <TableHead>Lead Status</TableHead>
                       <TableHead>Refund</TableHead>
                       <TableHead>Travel Date</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
@@ -1343,6 +1347,17 @@ export default function BookingsManagementPage() {
                             <div className="text-[10px] text-red-600 mt-0.5 max-w-[140px] truncate" title={b.failureReason}>
                               {b.failureReason}
                             </div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {b.paymentStatus === "paid" && b.status !== "cancelled" && b.status !== "refunded" && b.status !== "booking_failed" ? (
+                            <Badge variant="outline" className="text-xs bg-teal-50 text-teal-700 border-teal-200">Active</Badge>
+                          ) : b.paymentStatus === "failed" || b.status === "booking_failed" ? (
+                            <Badge variant="outline" className="text-xs bg-red-50 text-red-700 border-red-200">Failed Lead</Badge>
+                          ) : b.status === "cancelled" || b.status === "refunded" ? (
+                            <Badge variant="outline" className="text-xs bg-slate-100 text-slate-600 border-slate-200 capitalize">{b.status}</Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-xs bg-yellow-50 text-yellow-700 border-yellow-200">Pending Lead</Badge>
                           )}
                         </TableCell>
                         <TableCell>

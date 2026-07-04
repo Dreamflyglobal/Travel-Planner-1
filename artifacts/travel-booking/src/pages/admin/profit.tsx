@@ -34,17 +34,15 @@ const getAgentComm    = (b: any): number =>
 const getBookingDate  = (b: any): string =>
   b.createdAt?.slice(0, 10) ?? b.details?.createdAt?.slice(0, 10) ?? b.travelDate ?? "";
 
-// Only include bookings where payment was collected and the booking wasn't later voided
+// Include ONLY bookings where payment was actually collected (paymentStatus = "paid").
+// PENDING, FAILED, CANCELLED, and REFUNDED bookings contribute ₹0 to revenue/profit.
 const isActiveBooking = (b: any): boolean => {
-  const status        = (b.status        || "").toLowerCase();
-  const bookingStatus = (b.bookingStatus || "").toLowerCase();
   const paymentStatus = (b.paymentStatus || "").toLowerCase();
+  const status        = (b.status        || "").toLowerCase();
   return (
-    status !== "booking_failed" &&
-    status !== "refunded" &&
+    paymentStatus === "paid" &&
     status !== "cancelled" &&
-    bookingStatus !== "failed" &&
-    paymentStatus !== "failed"
+    status !== "refunded"
   );
 };
 

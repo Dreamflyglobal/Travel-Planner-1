@@ -615,18 +615,49 @@ export default function AdminDashboard() {
     return "customer";
   };
 
+  // Booking passes this check only when payment was actually collected.
+  // paymentStatus = "paid" is the single source of truth for revenue/profit.
+  const isPaidConfirmed = (b: any): boolean => {
+    const ps = (b.paymentStatus || "").toLowerCase();
+    const s  = (b.status        || "").toLowerCase();
+    return ps === "paid" && s !== "cancelled" && s !== "refunded";
+  };
+
   // Derived stats from real booking data
   const stats = useMemo(() => {
-    const totalRevenue           = adminBookings.reduce((sum, b) => sum + getAmount(b), 0);
-    const totalProfit            = adminBookings.reduce((sum, b) => sum + getFee(b), 0);
-    const totalAgentCommission   = adminBookings.reduce((sum, b) => sum + getAgentCommission(b), 0);
-    const todayBookings          = adminBookings.filter((b) => getBookingDate(b) === todayStr);
-    const thisMonthBookings      = adminBookings.filter((b) => getBookingDate(b).startsWith(thisMonthStr));
+    // Revenue and profit: ONLY from paid bookings
+    const paidBookings           = adminBookings.filter(isPaidConfirmed);
+    const totalRevenue           = paidBookings.reduce((sum, b) => sum + getAmount(b), 0);
+    const totalProfit            = paidBookings.reduce((sum, b) => sum + getFee(b), 0);
+    const totalAgentCommission   = paidBookings.reduce((sum, b) => sum + getAgentCommission(b), 0);
+    const todayBookings          = paidBookings.filter((b) => getBookingDate(b) === todayStr);
+    const thisMonthBookings      = paidBookings.filter((b) => getBookingDate(b).startsWith(thisMonthStr));
 
-    // Split by who made the booking
-    const customerBks = adminBookings.filter((b) => getBookingRole(b) === "customer");
-    const agentBks    = adminBookings.filter((b) => getBookingRole(b) === "agent");
-    const staffBks    = adminBookings.filter((b) => getBookingRole(b) === "staff");
+    // Status counters (over all bookings, not just paid)
+    const successfulBookings = paidBookings.filter((b) => {
+      const s  = (b.status        || "").toLowerCase();
+      const bs = (b.bookingStatus || "").toLowerCase();
+      return s === "confirmed" || bs === "confirmed";
+    }).length;
+    const pendingLeads = adminBookings.filter((b) => {
+      const ps = (b.paymentStatus || "").toLowerCase();
+      const bs = (b.bookingStatus || "").toLowerCase();
+      return ps === "pending" || bs === "pending";
+    }).length;
+    const failedPayments = adminBookings.filter((b) => {
+      const ps = (b.paymentStatus || "").toLowerCase();
+      const s  = (b.status        || "").toLowerCase();
+      return ps === "failed" || s === "booking_failed";
+    }).length;
+    const cancelledBookings = adminBookings.filter((b) => {
+      const s = (b.status || "").toLowerCase();
+      return s === "cancelled" || s === "refunded";
+    }).length;
+
+    // Split by who made the booking (only paid bookings for revenue/profit splits)
+    const customerBks = paidBookings.filter((b) => getBookingRole(b) === "customer");
+    const agentBks    = paidBookings.filter((b) => getBookingRole(b) === "agent");
+    const staffBks    = paidBookings.filter((b) => getBookingRole(b) === "staff");
 
     // Admin profit from each segment
     // - Customer: keeps full customerMarkup + convFee (markupAmount stores customerMarkup)
@@ -654,12 +685,13 @@ export default function AdminDashboard() {
       hotelBookings:       adminBookings.filter((b) => (b.bookingType || b.type) === "hotel").length,
       holidayBookings:     adminBookings.filter((b) => (b.bookingType || b.type) === "package").length,
       busBookings:         adminBookings.filter((b) => (b.bookingType || b.type) === "bus").length,
+      // Financial figures — paid bookings only
       totalRevenue,
       todayRevenue:        todayBookings.reduce((sum, b) => sum + getAmount(b), 0),
       thisMonthRevenue:    thisMonthBookings.reduce((sum, b) => sum + getAmount(b), 0),
       totalProfit,
-      markupProfit:        adminBookings.reduce((sum, b) => sum + getMarkupProfit(b), 0),
-      feeProfit:           adminBookings.reduce((sum, b) => sum + getFeeProfit(b), 0),
+      markupProfit:        paidBookings.reduce((sum, b) => sum + getMarkupProfit(b), 0),
+      feeProfit:           paidBookings.reduce((sum, b) => sum + getFeeProfit(b), 0),
       totalAgentCommission,
       // Role-split profit breakdown
       customerBookings:    customerBks.length,
@@ -672,19 +704,24 @@ export default function AdminDashboard() {
       staffIncentiveTotal,
       netProfit,
       profitByService: {
-        flights:  adminBookings.filter((b) => (b.bookingType || b.type) === "flight").reduce((s, b) => s + getFee(b), 0),
-        hotels:   adminBookings.filter((b) => (b.bookingType || b.type) === "hotel").reduce((s, b) => s + getFee(b), 0),
-        buses:    adminBookings.filter((b) => (b.bookingType || b.type) === "bus").reduce((s, b) => s + getFee(b), 0),
-        packages: adminBookings.filter((b) => (b.bookingType || b.type) === "package").reduce((s, b) => s + getFee(b), 0),
+        flights:  paidBookings.filter((b) => (b.bookingType || b.type) === "flight").reduce((s, b) => s + getFee(b), 0),
+        hotels:   paidBookings.filter((b) => (b.bookingType || b.type) === "hotel").reduce((s, b) => s + getFee(b), 0),
+        buses:    paidBookings.filter((b) => (b.bookingType || b.type) === "bus").reduce((s, b) => s + getFee(b), 0),
+        packages: paidBookings.filter((b) => (b.bookingType || b.type) === "package").reduce((s, b) => s + getFee(b), 0),
       },
       commissionByService: {
-        flights:  adminBookings.filter((b) => (b.bookingType || b.type) === "flight").reduce((s, b) => s + getAgentCommission(b), 0),
-        hotels:   adminBookings.filter((b) => (b.bookingType || b.type) === "hotel").reduce((s, b) => s + getAgentCommission(b), 0),
-        buses:    adminBookings.filter((b) => (b.bookingType || b.type) === "bus").reduce((s, b) => s + getAgentCommission(b), 0),
-        packages: adminBookings.filter((b) => (b.bookingType || b.type) === "package").reduce((s, b) => s + getAgentCommission(b), 0),
+        flights:  paidBookings.filter((b) => (b.bookingType || b.type) === "flight").reduce((s, b) => s + getAgentCommission(b), 0),
+        hotels:   paidBookings.filter((b) => (b.bookingType || b.type) === "hotel").reduce((s, b) => s + getAgentCommission(b), 0),
+        buses:    paidBookings.filter((b) => (b.bookingType || b.type) === "bus").reduce((s, b) => s + getAgentCommission(b), 0),
+        packages: paidBookings.filter((b) => (b.bookingType || b.type) === "package").reduce((s, b) => s + getAgentCommission(b), 0),
       },
+      // Status counters
+      successfulBookings,
+      pendingLeads,
+      failedPayments,
+      cancelledBookings,
     };
-  }, [adminBookings]);
+  }, [adminBookings]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Chart data: last 14 days ────────────────────────────────────────────────
   const chartData = useMemo(() => {

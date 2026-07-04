@@ -33,11 +33,12 @@ const getConvFee = (b: any): number =>
 const getNetProfit = (b: any): number =>
   getMarkup(b) + getConvFee(b) - (Number(b.commissionEarned) || Number(b.details?.commissionEarned) || 0);
 
+// Financial metrics are ONLY computed over bookings where payment was collected.
+// paymentStatus = "paid" is the single source of truth — pending/failed bookings are ₹0.
 const isActive = (b: any): boolean => {
-  const s  = (b.status        || "").toLowerCase();
-  const bs = (b.bookingStatus || "").toLowerCase();
   const ps = (b.paymentStatus || "").toLowerCase();
-  return s !== "booking_failed" && s !== "refunded" && s !== "cancelled" && bs !== "failed" && ps !== "failed";
+  const s  = (b.status        || "").toLowerCase();
+  return ps === "paid" && s !== "cancelled" && s !== "refunded";
 };
 
 const getBookingDate = (b: any): string =>
@@ -205,6 +206,43 @@ export default function AdminAnalytics() {
     [bookingsThisMonth]
   );
 
+  // ── Status breakdown counters ─────────────────────────────────────────────
+  const successfulBookings = useMemo(
+    () => bookings.filter((b) => {
+      const ps = (b.paymentStatus || "").toLowerCase();
+      const s  = (b.status        || "").toLowerCase();
+      const bs = (b.bookingStatus || "").toLowerCase();
+      return ps === "paid" && (s === "confirmed" || bs === "confirmed") && s !== "cancelled" && s !== "refunded";
+    }),
+    [bookings]
+  );
+
+  const pendingLeads = useMemo(
+    () => bookings.filter((b) => {
+      const ps = (b.paymentStatus || "").toLowerCase();
+      const bs = (b.bookingStatus || "").toLowerCase();
+      return ps === "pending" || bs === "pending";
+    }),
+    [bookings]
+  );
+
+  const failedPayments = useMemo(
+    () => bookings.filter((b) => {
+      const ps = (b.paymentStatus || "").toLowerCase();
+      const s  = (b.status        || "").toLowerCase();
+      return ps === "failed" || s === "booking_failed";
+    }),
+    [bookings]
+  );
+
+  const cancelledBookings = useMemo(
+    () => bookings.filter((b) => {
+      const s = (b.status || "").toLowerCase();
+      return s === "cancelled" || s === "refunded";
+    }),
+    [bookings]
+  );
+
   const recent = useMemo(
     () =>
       [...bookings]
@@ -266,8 +304,8 @@ export default function AdminAnalytics() {
           </div>
         ) : (
           <>
-            {/* Top KPI cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+            {/* Top KPI cards — financial (paid bookings only) */}
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
               <StatCard
                 icon={BookOpen}
                 label="Total Bookings"
@@ -278,9 +316,9 @@ export default function AdminAnalytics() {
               />
               <StatCard
                 icon={IndianRupee}
-                label="Revenue (Active)"
+                label="Total Revenue (Paid)"
                 value={formatINR(totalRevenue)}
-                sub={`${formatINR(revenueThisMonth)} this month`}
+                sub={`${formatINR(revenueThisMonth)} this month · paid only`}
                 color="text-green-700"
                 bg="bg-green-100"
               />
@@ -288,25 +326,45 @@ export default function AdminAnalytics() {
                 icon={TrendingUp}
                 label="Net Profit"
                 value={formatINR(totalNetProfit)}
-                sub={`${totalRevenue > 0 ? ((totalNetProfit / totalRevenue) * 100).toFixed(1) : "0.0"}% margin`}
+                sub={`${totalRevenue > 0 ? ((totalNetProfit / totalRevenue) * 100).toFixed(1) : "0.0"}% margin · paid only`}
                 color="text-emerald-700"
                 bg="bg-emerald-100"
               />
+            </div>
+
+            {/* Status breakdown cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <StatCard
                 icon={CheckCircle2}
-                label="Confirmed"
-                value={confirmed.length}
-                sub={`${formatINR(confirmedRevenue)} confirmed revenue`}
+                label="Successful Bookings"
+                value={successfulBookings.length}
+                sub={`${formatINR(successfulBookings.reduce((s, b) => s + getAmount(b), 0))} revenue`}
                 color="text-teal-700"
                 bg="bg-teal-100"
               />
               <StatCard
-                icon={XCircle}
-                label="Cancelled"
-                value={cancelled.length}
-                sub={`${userCount} registered users`}
+                icon={Users}
+                label="Pending Leads"
+                value={pendingLeads.length}
+                sub="Payment not yet completed"
+                color="text-yellow-700"
+                bg="bg-yellow-100"
+              />
+              <StatCard
+                icon={AlertCircle}
+                label="Failed Payments"
+                value={failedPayments.length}
+                sub="Payment failed or rejected"
                 color="text-red-700"
                 bg="bg-red-100"
+              />
+              <StatCard
+                icon={XCircle}
+                label="Cancelled / Refunded"
+                value={cancelledBookings.length}
+                sub={`${userCount} registered users`}
+                color="text-slate-600"
+                bg="bg-slate-100"
               />
             </div>
 
