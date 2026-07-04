@@ -391,10 +391,14 @@ export const GetStatsSummaryResponse = zod.object({
   hotelBookings: zod.number(),
   packageBookings: zod.number(),
   totalRevenue: zod.number(),
+  confirmedRevenue: zod.number(),
   successfulBookings: zod.number(),
   pendingLeads: zod.number(),
   failedPayments: zod.number(),
   cancelledBookings: zod.number(),
+  totalLeads: zod.number(),
+  pendingBookings: zod.number(),
+  failedBookings: zod.number(),
 });
 
 /**

@@ -615,12 +615,11 @@ export default function AdminDashboard() {
     return "customer";
   };
 
-  // Booking passes this check only when payment was actually collected.
-  // paymentStatus = "paid" is the single source of truth for revenue/profit.
+  // Booking passes this check only when it is Confirmed or Completed.
+  // Pending, Failed, Cancelled, and Abandoned bookings contribute ₹0 to revenue/profit.
   const isPaidConfirmed = (b: any): boolean => {
-    const ps = (b.paymentStatus || "").toLowerCase();
-    const s  = (b.status        || "").toLowerCase();
-    return ps === "paid" && s !== "cancelled" && s !== "refunded";
+    const s = (b.status || "").toLowerCase();
+    return s === "confirmed" || s === "completed";
   };
 
   // Derived stats from real booking data
@@ -678,6 +677,23 @@ export default function AdminDashboard() {
     // (agent commission is already excluded since agent bookings store lower markupAmount)
     const netProfit = totalProfit - staffIncentiveTotal;
 
+    // Lead metrics (pending + failed = unconverted leads)
+    const pendingBookings = adminBookings.filter((b) => {
+      const ps = (b.paymentStatus || "").toLowerCase();
+      const s  = (b.status        || "").toLowerCase();
+      return ps === "pending" || s === "pending";
+    }).length;
+    const failedBookings = adminBookings.filter((b) => {
+      const ps = (b.paymentStatus || "").toLowerCase();
+      const s  = (b.status        || "").toLowerCase();
+      return ps === "failed" || s === "booking_failed";
+    }).length;
+    const totalLeads = adminBookings.filter((b) => {
+      const ps = (b.paymentStatus || "").toLowerCase();
+      const s  = (b.status        || "").toLowerCase();
+      return ps === "pending" || ps === "failed" || s === "pending" || s === "booking_failed";
+    }).length;
+
     return {
       totalBookings:       adminBookings.length,
       todayBookings:       todayBookings.length,
@@ -685,8 +701,9 @@ export default function AdminDashboard() {
       hotelBookings:       adminBookings.filter((b) => (b.bookingType || b.type) === "hotel").length,
       holidayBookings:     adminBookings.filter((b) => (b.bookingType || b.type) === "package").length,
       busBookings:         adminBookings.filter((b) => (b.bookingType || b.type) === "bus").length,
-      // Financial figures — paid bookings only
+      // Financial figures — confirmed/completed bookings only
       totalRevenue,
+      confirmedRevenue:    totalRevenue,
       todayRevenue:        todayBookings.reduce((sum, b) => sum + getAmount(b), 0),
       thisMonthRevenue:    thisMonthBookings.reduce((sum, b) => sum + getAmount(b), 0),
       totalProfit,
@@ -720,6 +737,10 @@ export default function AdminDashboard() {
       pendingLeads,
       failedPayments,
       cancelledBookings,
+      // Lead metrics
+      totalLeads,
+      pendingBookings,
+      failedBookings,
     };
   }, [adminBookings]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -732,12 +753,17 @@ export default function AdminDashboard() {
       const key   = d.toISOString().slice(0, 10);
       const label = d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
       const dayBs = adminBookings.filter((b) => getBookingDate(b) === key);
+      // Revenue only from confirmed/completed bookings
+      const confirmedDayBs = dayBs.filter((b) => {
+        const s = (b.status || "").toLowerCase();
+        return s === "confirmed" || s === "completed";
+      });
       days.push({
         date:     key,
         label,
         bookings: dayBs.length,
-        revenue:  dayBs.reduce((s, b) => s + getAmount(b), 0),
-        profit:   dayBs.reduce((s, b) => s + getFee(b), 0),
+        revenue:  confirmedDayBs.reduce((s, b) => s + getAmount(b), 0),
+        profit:   confirmedDayBs.reduce((s, b) => s + getFee(b), 0),
       });
     }
     return days;
@@ -746,10 +772,12 @@ export default function AdminDashboard() {
   // ── CSV Export ──────────────────────────────────────────────────────────────
   const handleExportCSV = () => {
     const rows = [
-      ["Booking ID","Customer","Phone","Email","Type","Route","Date","Base Price","Conv. Fee","Total","Status"],
+      ["Booking ID","Customer","Phone","Email","Type","Route","Date","Base Price","Conv. Fee","Total","Booking Status","Payment Status","In Revenue"],
       ...filteredBookings.map((b) => {
         const fi = b.details?.flightInfo || {};
         const route = fi.from && fi.to ? `${fi.from} → ${fi.to}` : (b.bookingType || b.type || "");
+        const bStatus = (b.status || "").toLowerCase();
+        const inRevenue = bStatus === "confirmed" || bStatus === "completed" ? "Yes" : "No";
         return [
           b.details?.bookingRef || b.bookingId || b.id,
           b.customerName || b.passengerName || "",
@@ -761,7 +789,9 @@ export default function AdminDashboard() {
           getBaseAmt(b),
           getFee(b),
           getAmount(b),
-          b.status || b.details?.status || "paid",
+          b.status || b.details?.status || "",
+          b.paymentStatus || "",
+          inRevenue,
         ];
       }),
     ];
@@ -991,7 +1021,62 @@ export default function AdminDashboard() {
             </Card>
           </div>
 
-          {/* ── Summary Cards Row 2: Profit split by Customer / Agent / Staff ─── */}
+          {/* ── Summary Cards Row 2: Lead / Pipeline Metrics ─────────────────── */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+            <Card className="border-2 border-indigo-200 bg-indigo-50">
+              <CardContent className="p-5 flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-indigo-100 flex items-center justify-center shrink-0">
+                  <BookOpen className="w-6 h-6 text-indigo-600" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-indigo-600 uppercase tracking-wider">Total Leads</p>
+                  <p className="text-3xl font-bold text-indigo-700">{stats.totalLeads}</p>
+                  <p className="text-xs text-indigo-500">Pending + Failed</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-2 border-amber-200 bg-amber-50">
+              <CardContent className="p-5 flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                  <Clock className="w-6 h-6 text-amber-600" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-amber-600 uppercase tracking-wider">Pending Bookings</p>
+                  <p className="text-3xl font-bold text-amber-700">{stats.pendingBookings}</p>
+                  <p className="text-xs text-amber-500">Awaiting payment</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-2 border-red-200 bg-red-50">
+              <CardContent className="p-5 flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
+                  <XCircle className="w-6 h-6 text-red-600" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-red-600 uppercase tracking-wider">Failed Bookings</p>
+                  <p className="text-3xl font-bold text-red-700">{stats.failedBookings}</p>
+                  <p className="text-xs text-red-500">Payment / booking failed</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-2 border-emerald-300 bg-emerald-50">
+              <CardContent className="p-5 flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
+                  <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-emerald-600 uppercase tracking-wider">Confirmed Revenue</p>
+                  <p className="text-xl font-bold text-emerald-700">₹{stats.confirmedRevenue.toLocaleString("en-IN")}</p>
+                  <p className="text-xs text-emerald-500">Confirmed + Completed only</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* ── Summary Cards Row 3: Profit split by Customer / Agent / Staff ─── */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
             <Card
               className="border-2 border-blue-200 bg-blue-50 cursor-pointer hover:shadow-md hover:scale-[1.01] transition-all"

@@ -34,16 +34,11 @@ const getAgentComm    = (b: any): number =>
 const getBookingDate  = (b: any): string =>
   b.createdAt?.slice(0, 10) ?? b.details?.createdAt?.slice(0, 10) ?? b.travelDate ?? "";
 
-// Include ONLY bookings where payment was actually collected (paymentStatus = "paid").
-// PENDING, FAILED, CANCELLED, and REFUNDED bookings contribute ₹0 to revenue/profit.
+// Include ONLY bookings with status = confirmed or completed.
+// PENDING, FAILED, CANCELLED, and ABANDONED bookings contribute ₹0 to revenue/profit.
 const isActiveBooking = (b: any): boolean => {
-  const paymentStatus = (b.paymentStatus || "").toLowerCase();
-  const status        = (b.status        || "").toLowerCase();
-  return (
-    paymentStatus === "paid" &&
-    status !== "cancelled" &&
-    status !== "refunded"
-  );
+  const status = (b.status || "").toLowerCase();
+  return status === "confirmed" || status === "completed";
 };
 
 export default function AdminProfit() {

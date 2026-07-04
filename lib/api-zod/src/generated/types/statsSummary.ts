@@ -13,4 +13,12 @@ export interface StatsSummary {
   hotelBookings: number;
   packageBookings: number;
   totalRevenue: number;
+  confirmedRevenue: number;
+  successfulBookings: number;
+  pendingLeads: number;
+  failedPayments: number;
+  cancelledBookings: number;
+  totalLeads: number;
+  pendingBookings: number;
+  failedBookings: number;
 }

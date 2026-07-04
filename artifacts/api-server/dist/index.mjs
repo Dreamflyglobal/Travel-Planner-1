@@ -70267,10 +70267,14 @@ var GetStatsSummaryResponse = objectType({
   hotelBookings: numberType(),
   packageBookings: numberType(),
   totalRevenue: numberType(),
+  confirmedRevenue: numberType(),
   successfulBookings: numberType(),
   pendingLeads: numberType(),
   failedPayments: numberType(),
-  cancelledBookings: numberType()
+  cancelledBookings: numberType(),
+  totalLeads: numberType(),
+  pendingBookings: numberType(),
+  failedBookings: numberType()
 });
 var GetPopularDestinationsResponseItem = objectType({
   id: numberType(),
@@ -89869,11 +89873,12 @@ async function findOrCreateUser(phone, email3, name2) {
 }
 router9.get("/stats/summary", async (_req, res) => {
   const allBookings = await db.select().from(bookingsTable);
-  const paidBookings = allBookings.filter((b) => b.paymentStatus === "paid");
-  const totalRevenue = paidBookings.reduce((sum2, b) => sum2 + Number(b.totalPrice), 0);
-  const successfulBookings = paidBookings.filter(
-    (b) => (b.bookingStatus === "confirmed" || b.status === "confirmed") && b.status !== "cancelled" && b.status !== "refunded"
-  ).length;
+  const confirmedBookings = allBookings.filter(
+    (b) => b.status === "confirmed" || b.status === "completed"
+  );
+  const confirmedRevenue = confirmedBookings.reduce((sum2, b) => sum2 + Number(b.totalPrice), 0);
+  const totalRevenue = confirmedRevenue;
+  const successfulBookings = confirmedBookings.length;
   const pendingLeads = allBookings.filter(
     (b) => b.paymentStatus === "pending" || b.bookingStatus === "pending"
   ).length;
@@ -89883,6 +89888,15 @@ router9.get("/stats/summary", async (_req, res) => {
   const cancelledBookings = allBookings.filter(
     (b) => b.status === "cancelled" || b.status === "refunded"
   ).length;
+  const pendingBookings = allBookings.filter(
+    (b) => b.paymentStatus === "pending" || b.status === "pending"
+  ).length;
+  const failedBookings = allBookings.filter(
+    (b) => b.paymentStatus === "failed" || b.status === "booking_failed"
+  ).length;
+  const totalLeads = allBookings.filter(
+    (b) => b.paymentStatus === "pending" || b.paymentStatus === "failed" || b.status === "pending" || b.status === "booking_failed"
+  ).length;
   res.json(
     GetStatsSummaryResponse.parse({
       totalBookings: allBookings.length,
@@ -89891,10 +89905,14 @@ router9.get("/stats/summary", async (_req, res) => {
       hotelBookings: allBookings.filter((b) => b.bookingType === "hotel").length,
       packageBookings: allBookings.filter((b) => b.bookingType === "package").length,
       totalRevenue,
+      confirmedRevenue,
       successfulBookings,
       pendingLeads,
       failedPayments,
-      cancelledBookings
+      cancelledBookings,
+      totalLeads,
+      pendingBookings,
+      failedBookings
     })
   );
 });
