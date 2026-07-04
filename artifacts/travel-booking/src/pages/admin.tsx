@@ -55,6 +55,7 @@ import {
   Hash,
   Eye,
   Hotel,
+  Info,
 } from "lucide-react";
 import { getMarkupSettings, getHiddenMarkupSettings, getHiddenMarkupAmount, getAgentMarkupSettings, type MarkupSettings, type MarkupConfig } from "@/lib/pricing";
 import { useMarkupContext } from "@/contexts/markup-context";
@@ -615,11 +616,20 @@ export default function AdminDashboard() {
     return "customer";
   };
 
-  // Booking passes this check only when it is Confirmed or Completed.
-  // Pending, Failed, Cancelled, and Abandoned bookings contribute ₹0 to revenue/profit.
-  const isPaidConfirmed = (b: any): boolean => {
-    const s = (b.status || "").toLowerCase();
-    return s === "confirmed" || s === "completed";
+  // Booking counts toward revenue/totals ONLY when status is confirmed, ticketed, or completed.
+  // Pending, payment_failed, failed, cancelled, refunded → excluded from all revenue & booking counts.
+  const REVENUE_STATUSES_FE = new Set(["confirmed", "ticketed", "completed"]);
+  const isPaidConfirmed = (b: any): boolean =>
+    REVENUE_STATUSES_FE.has((b.status || "").toLowerCase());
+
+  const isLead = (b: any): boolean => {
+    const s  = (b.status        || "").toLowerCase();
+    const ps = (b.paymentStatus || "").toLowerCase();
+    return (
+      s === "pending" || s === "payment_failed" || s === "failed" ||
+      s === "cancelled" || s === "refunded" ||
+      ps === "pending" || ps === "payment_failed" || ps === "failed"
+    );
   };
 
   // Derived stats from real booking data
@@ -632,21 +642,17 @@ export default function AdminDashboard() {
     const todayBookings          = paidBookings.filter((b) => getBookingDate(b) === todayStr);
     const thisMonthBookings      = paidBookings.filter((b) => getBookingDate(b).startsWith(thisMonthStr));
 
-    // Status counters (over all bookings, not just paid)
-    const successfulBookings = paidBookings.filter((b) => {
-      const s  = (b.status        || "").toLowerCase();
-      const bs = (b.bookingStatus || "").toLowerCase();
-      return s === "confirmed" || bs === "confirmed";
-    }).length;
+    // Status counters
+    const successfulBookings = paidBookings.length;
     const pendingLeads = adminBookings.filter((b) => {
       const ps = (b.paymentStatus || "").toLowerCase();
-      const bs = (b.bookingStatus || "").toLowerCase();
-      return ps === "pending" || bs === "pending";
+      const s  = (b.status        || "").toLowerCase();
+      return ps === "pending" || s === "pending";
     }).length;
     const failedPayments = adminBookings.filter((b) => {
       const ps = (b.paymentStatus || "").toLowerCase();
       const s  = (b.status        || "").toLowerCase();
-      return ps === "failed" || s === "booking_failed";
+      return ps === "failed" || ps === "payment_failed" || s === "failed" || s === "payment_failed";
     }).length;
     const cancelledBookings = adminBookings.filter((b) => {
       const s = (b.status || "").toLowerCase();
@@ -677,7 +683,7 @@ export default function AdminDashboard() {
     // (agent commission is already excluded since agent bookings store lower markupAmount)
     const netProfit = totalProfit - staffIncentiveTotal;
 
-    // Lead metrics (pending + failed = unconverted leads)
+    // Lead metrics — pending / payment_failed / failed are leads, not bookings
     const pendingBookings = adminBookings.filter((b) => {
       const ps = (b.paymentStatus || "").toLowerCase();
       const s  = (b.status        || "").toLowerCase();
@@ -686,21 +692,18 @@ export default function AdminDashboard() {
     const failedBookings = adminBookings.filter((b) => {
       const ps = (b.paymentStatus || "").toLowerCase();
       const s  = (b.status        || "").toLowerCase();
-      return ps === "failed" || s === "booking_failed";
+      return ps === "failed" || ps === "payment_failed" || s === "failed" || s === "payment_failed";
     }).length;
-    const totalLeads = adminBookings.filter((b) => {
-      const ps = (b.paymentStatus || "").toLowerCase();
-      const s  = (b.status        || "").toLowerCase();
-      return ps === "pending" || ps === "failed" || s === "pending" || s === "booking_failed";
-    }).length;
+    const totalLeads = adminBookings.filter(isLead).length;
 
     return {
-      totalBookings:       adminBookings.length,
+      // totalBookings counts ONLY confirmed/ticketed/completed — not leads
+      totalBookings:       paidBookings.length,
       todayBookings:       todayBookings.length,
-      flightBookings:      adminBookings.filter((b) => (b.bookingType || b.type) === "flight").length,
-      hotelBookings:       adminBookings.filter((b) => (b.bookingType || b.type) === "hotel").length,
-      holidayBookings:     adminBookings.filter((b) => (b.bookingType || b.type) === "package").length,
-      busBookings:         adminBookings.filter((b) => (b.bookingType || b.type) === "bus").length,
+      flightBookings:      paidBookings.filter((b) => (b.bookingType || b.type) === "flight").length,
+      hotelBookings:       paidBookings.filter((b) => (b.bookingType || b.type) === "hotel").length,
+      holidayBookings:     paidBookings.filter((b) => (b.bookingType || b.type) === "package").length,
+      busBookings:         paidBookings.filter((b) => (b.bookingType || b.type) === "bus").length,
       // Financial figures — confirmed/completed bookings only
       totalRevenue,
       confirmedRevenue:    totalRevenue,
@@ -953,6 +956,15 @@ export default function AdminDashboard() {
         </div>
 
         <div className="container mx-auto px-6 py-8">
+
+          {/* ── Revenue exclusion notice ─────────────────────────────────────── */}
+          <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mb-5 text-sm text-blue-800">
+            <Info className="w-4 h-4 mt-0.5 shrink-0 text-blue-500" />
+            <span>
+              <span className="font-semibold">Revenue calculation notice: </span>
+              Pending, payment-failed, failed, and cancelled bookings are excluded from revenue and booking counts. Only <span className="font-semibold">Confirmed</span>, <span className="font-semibold">Ticketed</span>, and <span className="font-semibold">Completed</span> bookings are counted. Failed or pending payment attempts are stored as Leads.
+            </span>
+          </div>
 
           {/* ── Summary Cards Row 1: Bookings + Revenue ──────────────────────── */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">

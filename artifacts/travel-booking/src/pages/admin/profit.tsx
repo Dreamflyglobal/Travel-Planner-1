@@ -34,12 +34,10 @@ const getAgentComm    = (b: any): number =>
 const getBookingDate  = (b: any): string =>
   b.createdAt?.slice(0, 10) ?? b.details?.createdAt?.slice(0, 10) ?? b.travelDate ?? "";
 
-// Include ONLY bookings with status = confirmed or completed.
-// PENDING, FAILED, CANCELLED, and ABANDONED bookings contribute ₹0 to revenue/profit.
-const isActiveBooking = (b: any): boolean => {
-  const status = (b.status || "").toLowerCase();
-  return status === "confirmed" || status === "completed";
-};
+// Revenue statuses: confirmed, ticketed, completed.
+// Pending, payment_failed, failed, cancelled, refunded → excluded from revenue/profit.
+const REVENUE_STATUSES = new Set(["confirmed", "ticketed", "completed"]);
+const isActiveBooking = (b: any): boolean => REVENUE_STATUSES.has((b.status || "").toLowerCase());
 
 export default function AdminProfit() {
   const [allBookings, setAllBookings] = useState<any[]>([]);

@@ -33,12 +33,10 @@ const getConvFee = (b: any): number =>
 const getNetProfit = (b: any): number =>
   getMarkup(b) + getConvFee(b) - (Number(b.commissionEarned) || Number(b.details?.commissionEarned) || 0);
 
-// Financial metrics are ONLY computed over bookings with status = confirmed or completed.
-// Pending, Failed, Cancelled, and Abandoned bookings contribute ₹0 to revenue.
-const isActive = (b: any): boolean => {
-  const s = (b.status || "").toLowerCase();
-  return s === "confirmed" || s === "completed";
-};
+// Revenue statuses: confirmed, ticketed, completed.
+// Pending, payment_failed, failed, cancelled, refunded → excluded from revenue & totals.
+const REVENUE_STATUSES = new Set(["confirmed", "ticketed", "completed"]);
+const isActive = (b: any): boolean => REVENUE_STATUSES.has((b.status || "").toLowerCase());
 
 const getBookingDate = (b: any): string =>
   b.createdAt?.slice(0, 10) ?? b.details?.createdAt?.slice(0, 10) ?? b.travelDate ?? "";

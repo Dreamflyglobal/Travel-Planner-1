@@ -90,57 +90,69 @@ async function findOrCreateUser(
 
 // ─── routes ──────────────────────────────────────────────────────────────────
 
+// Statuses that count as a real (successful) booking for revenue and totals.
+// Pending, payment_failed, failed, cancelled, refunded → excluded.
+const REVENUE_STATUSES = new Set(["confirmed", "ticketed", "completed"]);
+
+// Statuses that represent unconverted leads (stored but not counted as bookings/revenue).
+const LEAD_STATUSES = new Set(["pending", "payment_failed", "failed", "cancelled", "refunded"]);
+
+const isSuccessful = (b: { status: string | null }): boolean =>
+  REVENUE_STATUSES.has((b.status ?? "").toLowerCase());
+
+const isLead = (b: { status: string | null; paymentStatus: string | null }): boolean => {
+  const s  = (b.status        ?? "").toLowerCase();
+  const ps = (b.paymentStatus ?? "").toLowerCase();
+  return (
+    LEAD_STATUSES.has(s) ||
+    ps === "pending" ||
+    ps === "payment_failed" ||
+    ps === "failed"
+  );
+};
+
 router.get("/stats/summary", async (_req, res): Promise<void> => {
   const allBookings = await db.select().from(bookingsTable);
 
-  // ── Revenue: ONLY bookings with status = confirmed or completed ──────────
-  // Pending, Failed, Cancelled, Abandoned bookings contribute ₹0 to revenue.
-  const confirmedBookings = allBookings.filter(
-    (b) => b.status === "confirmed" || b.status === "completed",
-  );
-  const confirmedRevenue = confirmedBookings.reduce((sum, b) => sum + Number(b.totalPrice), 0);
-  // totalRevenue is an alias for confirmedRevenue (backward compat)
-  const totalRevenue = confirmedRevenue;
+  // ── Revenue: ONLY confirmed / ticketed / completed bookings ───────────────
+  const confirmedBookings = allBookings.filter(isSuccessful);
+  const confirmedRevenue  = confirmedBookings.reduce((sum, b) => sum + Number(b.totalPrice), 0);
+  const totalRevenue      = confirmedRevenue;
 
-  // ── Status breakdown for dashboard cards ─────────────────────────────────
+  // totalBookings = only successful bookings (not leads / cancelled)
   const successfulBookings = confirmedBookings.length;
 
-  const pendingLeads = allBookings.filter(
-    (b) => b.paymentStatus === "pending" || b.bookingStatus === "pending",
-  ).length;
-
-  const failedPayments = allBookings.filter(
-    (b) => b.paymentStatus === "failed" || b.status === "booking_failed",
-  ).length;
-
-  const cancelledBookings = allBookings.filter(
-    (b) => b.status === "cancelled" || b.status === "refunded",
-  ).length;
-
-  // ── Lead metrics (failed + pending = unconverted leads) ───────────────────
+  // ── Lead metrics (pending / payment_failed / failed) ─────────────────────
   const pendingBookings = allBookings.filter(
-    (b) => b.paymentStatus === "pending" || b.status === "pending",
+    (b) => (b.status ?? "").toLowerCase() === "pending" ||
+            (b.paymentStatus ?? "").toLowerCase() === "pending",
   ).length;
 
   const failedBookings = allBookings.filter(
-    (b) => b.paymentStatus === "failed" || b.status === "booking_failed",
+    (b) => (b.status ?? "").toLowerCase() === "failed" ||
+            (b.status ?? "").toLowerCase() === "payment_failed" ||
+            (b.paymentStatus ?? "").toLowerCase() === "failed" ||
+            (b.paymentStatus ?? "").toLowerCase() === "payment_failed",
   ).length;
 
-  const totalLeads = allBookings.filter(
-    (b) =>
-      b.paymentStatus === "pending" ||
-      b.paymentStatus === "failed" ||
-      b.status === "pending" ||
-      b.status === "booking_failed",
+  const cancelledBookings = allBookings.filter(
+    (b) => {
+      const s = (b.status ?? "").toLowerCase();
+      return s === "cancelled" || s === "refunded";
+    },
   ).length;
+
+  const pendingLeads   = pendingBookings;
+  const failedPayments = failedBookings;
+  const totalLeads     = allBookings.filter(isLead).length;
 
   res.json(
     GetStatsSummaryResponse.parse({
-      totalBookings:    allBookings.length,
-      flightBookings:   allBookings.filter((b) => b.bookingType === "flight").length,
-      busBookings:      allBookings.filter((b) => b.bookingType === "bus").length,
-      hotelBookings:    allBookings.filter((b) => b.bookingType === "hotel").length,
-      packageBookings:  allBookings.filter((b) => b.bookingType === "package").length,
+      totalBookings:    successfulBookings,
+      flightBookings:   confirmedBookings.filter((b) => b.bookingType === "flight").length,
+      busBookings:      confirmedBookings.filter((b) => b.bookingType === "bus").length,
+      hotelBookings:    confirmedBookings.filter((b) => b.bookingType === "hotel").length,
+      packageBookings:  confirmedBookings.filter((b) => b.bookingType === "package").length,
       totalRevenue,
       confirmedRevenue,
       successfulBookings,
