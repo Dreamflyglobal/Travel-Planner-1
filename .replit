@@ -19,25 +19,25 @@ args = "Start application"
 name = "API Server"
 author = "agent"
 
+[workflows.workflow.metadata]
+outputType = "console"
+
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "PORT=8080 pnpm --filter @workspace/api-server run dev"
 waitForPort = 8080
 
-[workflows.workflow.metadata]
-outputType = "console"
-
 [[workflows.workflow]]
 name = "Start application"
 author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "PORT=5000 pnpm --filter @workspace/travel-booking run dev"
 waitForPort = 5000
-
-[workflows.workflow.metadata]
-outputType = "webview"
 
 [[ports]]
 localPort = 3000
@@ -45,7 +45,7 @@ externalPort = 6800
 
 [[ports]]
 localPort = 5000
-externalPort = 5000
+externalPort = 80
 
 [[ports]]
 localPort = 5001
@@ -57,11 +57,7 @@ externalPort = 5173
 
 [[ports]]
 localPort = 8080
-externalPort = 80
-
-[[ports]]
-localPort = 8081
-externalPort = 8081
+externalPort = 8080
 
 [[ports]]
 localPort = 8082
@@ -109,6 +105,7 @@ stack = "BEST_EFFORT_FALLBACK"
 ADMIN_EMAIL = "admin@dreamflyglobal.com"
 ADMIN_PASSWORD = "123456"
 SMTP_FROM = "bookings@dreamflyglobal.com"
+JWT_SECRET = "8bbb68133c051eda373b030c6cf18a9ef9fe1a903dc1d3497ef9be18d51a8d30099ce39d62af567892941f12cbc15a9103a11d7915ed7833b08bf312aa85c475"
 
 [nix]
 channel = "stable-25_05"
