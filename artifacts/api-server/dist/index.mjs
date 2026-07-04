@@ -93454,6 +93454,60 @@ router22.put("/admin/bookings/:id/status", requireAdmin2, async (req, res) => {
     return res.status(500).json({ success: false, error: "Failed to update status" });
   }
 });
+router22.put("/admin/bookings/:id/convert-lead", requireAdmin2, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ success: false, error: "Invalid booking id" });
+    }
+    const rows = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, error: "Booking not found" });
+    }
+    const booking = rows[0];
+    if (booking.paymentStatus === "paid" && booking.status === "confirmed") {
+      return res.status(409).json({ success: false, error: "Booking is already confirmed" });
+    }
+    const paymentMethod = String(req.body?.paymentMethod || "manual").trim();
+    const note = String(req.body?.note || "").trim();
+    const adminUser = String(req.adminUser?.email || "admin");
+    const existingDetails = typeof booking.details === "object" && booking.details !== null ? booking.details : {};
+    const conversionLog = {
+      convertedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      convertedBy: adminUser,
+      paymentMethod,
+      note: note || "Manually converted by admin"
+    };
+    const updatedDetails = {
+      ...existingDetails,
+      conversionLog,
+      adminNotes: [
+        ...existingDetails.adminNotes || [],
+        { note: `Lead converted \u2014 ${paymentMethod}${note ? `: ${note}` : ""}`, addedAt: (/* @__PURE__ */ new Date()).toISOString(), addedBy: adminUser }
+      ]
+    };
+    await db.update(bookingsTable).set({
+      paymentStatus: "paid",
+      status: "confirmed",
+      bookingStatus: "confirmed",
+      paymentMethod,
+      details: updatedDetails,
+      // Clear failure markers so the booking is treated as clean
+      failureReason: null,
+      failureCode: null
+    }).where(eq(bookingsTable.id, id));
+    const updated = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
+    const refundMap = await loadRefundsForBookings([id]);
+    logger.info({ id, paymentMethod, adminUser }, "[admin-bookings] lead converted to confirmed booking");
+    return res.json({
+      success: true,
+      booking: shapeBooking(updated[0], refundMap.get(id))
+    });
+  } catch (err) {
+    logger.error({ err }, "[admin-bookings] convert-lead failed");
+    return res.status(500).json({ success: false, error: "Failed to convert lead" });
+  }
+});
 async function loadRazorpayCreds() {
   let dbKey = "";
   let dbSecret = "";

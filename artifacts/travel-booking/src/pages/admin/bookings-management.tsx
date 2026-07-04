@@ -30,7 +30,7 @@ import {
   Loader2, Wallet, Plane, Bus as BusIcon, Building2, Briefcase,
   IndianRupee, Mail, MessageSquare, Phone, Copy, Download, Clock,
   MapPin, User, CreditCard, FileText, StickyNote, ChevronRight,
-  Send, CheckCheck, XCircle, Hotel, Calendar, Users, Hash,
+  Send, CheckCheck, XCircle, Hotel, Calendar, Users, Hash, UserCheck,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -1069,10 +1069,12 @@ export default function BookingsManagementPage() {
   const [bookingStatusFilter, setBookingStatusFilter] = useState("all");
   const [viewBooking, setViewBooking]   = useState<AdminBooking | null>(null);
   const [confirmAction, setConfirmAction] = useState<{
-    booking: AdminBooking; type: "cancel" | "confirm" | "refund";
+    booking: AdminBooking; type: "cancel" | "confirm" | "refund" | "convert_lead";
   } | null>(null);
-  const [acting,       setActing]       = useState(false);
-  const [refundAmount, setRefundAmount] = useState("");
+  const [acting,              setActing]             = useState(false);
+  const [refundAmount,        setRefundAmount]        = useState("");
+  const [convertPaymentMethod, setConvertPaymentMethod] = useState("cash");
+  const [convertNote,         setConvertNote]         = useState("");
 
   async function fetchBookings() {
     setLoading(true);
@@ -1142,6 +1144,30 @@ export default function BookingsManagementPage() {
       setConfirmAction(null);
     } catch (e) {
       toast({ title: "Update failed", description: e instanceof Error ? e.message : "Could not update.", variant: "destructive" });
+    } finally { setActing(false); }
+  }
+
+  async function handleConvertLead(b: AdminBooking) {
+    setActing(true);
+    try {
+      const res = await fetch(`/api/admin/bookings/${b.id}/convert-lead`, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...getAuthHeader() },
+        body: JSON.stringify({ paymentMethod: convertPaymentMethod, note: convertNote }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error || "Failed to convert lead");
+      setBookings((prev) => prev.map((x) => (x.id === b.id ? { ...x, ...json.booking } : x)));
+      toast({
+        title: "Lead Converted",
+        description: `Booking ${b.bookingRef ?? `#${b.id}`} is now marked as confirmed (${convertPaymentMethod}).`,
+      });
+      setConfirmAction(null);
+      setConvertNote("");
+      setConvertPaymentMethod("cash");
+    } catch (e) {
+      toast({ title: "Conversion failed", description: e instanceof Error ? e.message : "Could not convert lead.", variant: "destructive" });
     } finally { setActing(false); }
   }
 
@@ -1395,6 +1421,13 @@ export default function BookingsManagementPage() {
                                 <AlertTriangle className="w-3.5 h-3.5" />
                               </Button>
                             )}
+                            {(b.paymentStatus === "pending" || b.paymentStatus === "failed" || b.status === "booking_failed") && b.status !== "cancelled" && b.status !== "refunded" && (
+                              <Button size="sm" variant="outline" className="text-violet-700 hover:bg-violet-50 border-violet-200"
+                                title="Convert Lead to Confirmed Booking"
+                                onClick={() => { setConvertNote(""); setConvertPaymentMethod("cash"); setConfirmAction({ booking: b, type: "convert_lead" }); }}>
+                                <UserCheck className="w-3.5 h-3.5" />
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -1416,20 +1449,22 @@ export default function BookingsManagementPage() {
       />
 
       {/* ── Confirm action dialog ── */}
-      <Dialog open={!!confirmAction} onOpenChange={(o) => { if (!o) { setConfirmAction(null); setRefundAmount(""); } }}>
+      <Dialog open={!!confirmAction} onOpenChange={(o) => { if (!o) { setConfirmAction(null); setRefundAmount(""); setConvertNote(""); setConvertPaymentMethod("cash"); } }}>
         <DialogContent>
           {confirmAction && (
             <>
               <DialogHeader>
                 <DialogTitle>
-                  {confirmAction.type === "confirm" && "Confirm booking?"}
-                  {confirmAction.type === "cancel"  && "Cancel booking?"}
-                  {confirmAction.type === "refund"  && "Initiate refund?"}
+                  {confirmAction.type === "confirm"      && "Confirm booking?"}
+                  {confirmAction.type === "cancel"       && "Cancel booking?"}
+                  {confirmAction.type === "refund"       && "Initiate refund?"}
+                  {confirmAction.type === "convert_lead" && "Convert lead to confirmed booking?"}
                 </DialogTitle>
                 <DialogDescription>
-                  {confirmAction.type === "confirm" && `Booking ${confirmAction.booking.bookingRef ?? `#${confirmAction.booking.id}`} will be marked as confirmed.`}
-                  {confirmAction.type === "cancel"  && `Booking ${confirmAction.booking.bookingRef ?? `#${confirmAction.booking.id}`} will be cancelled. This does not refund the customer.`}
-                  {confirmAction.type === "refund"  && `A refund will be initiated via Razorpay against payment ${confirmAction.booking.paymentId}.`}
+                  {confirmAction.type === "confirm"      && `Booking ${confirmAction.booking.bookingRef ?? `#${confirmAction.booking.id}`} will be marked as confirmed.`}
+                  {confirmAction.type === "cancel"       && `Booking ${confirmAction.booking.bookingRef ?? `#${confirmAction.booking.id}`} will be cancelled. This does not refund the customer.`}
+                  {confirmAction.type === "refund"       && `A refund will be initiated via Razorpay against payment ${confirmAction.booking.paymentId}.`}
+                  {confirmAction.type === "convert_lead" && `This marks the lead as paid and confirmed. Use this when payment was collected outside Razorpay (cash, bank transfer, UPI, etc.).`}
                 </DialogDescription>
               </DialogHeader>
 
@@ -1445,8 +1480,68 @@ export default function BookingsManagementPage() {
                 </div>
               )}
 
+              {confirmAction.type === "convert_lead" && (
+                <div className="py-2 space-y-4">
+                  {/* Lead summary */}
+                  <div className="rounded-lg bg-violet-50 border border-violet-200 px-4 py-3 space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Booking</span>
+                      <span className="font-mono font-semibold">{confirmAction.booking.bookingRef ?? `#${confirmAction.booking.id}`}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Customer</span>
+                      <span className="font-medium">{confirmAction.booking.userName}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Amount</span>
+                      <span className="font-bold text-violet-700">{formatINR(confirmAction.booking.amount)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Current status</span>
+                      <span className="capitalize text-amber-700">{confirmAction.booking.paymentStatus}</span>
+                    </div>
+                  </div>
+
+                  {/* Payment method */}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="convert-method" className="text-sm font-medium">How was payment collected?</Label>
+                    <Select value={convertPaymentMethod} onValueChange={setConvertPaymentMethod}>
+                      <SelectTrigger id="convert-method">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="cash">Cash</SelectItem>
+                        <SelectItem value="bank_transfer">Bank Transfer / NEFT / RTGS</SelectItem>
+                        <SelectItem value="upi">UPI (GPay / PhonePe / Paytm)</SelectItem>
+                        <SelectItem value="cheque">Cheque</SelectItem>
+                        <SelectItem value="card_pos">Card (POS Terminal)</SelectItem>
+                        <SelectItem value="wallet">Wallet / Voucher</SelectItem>
+                        <SelectItem value="agent_credit">Agent Credit / Commission Offset</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Note */}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="convert-note" className="text-sm font-medium">Note <span className="text-slate-400 font-normal">(optional)</span></Label>
+                    <Textarea
+                      id="convert-note"
+                      placeholder="e.g. Customer paid via bank transfer on 04 Jul 2026, UTR: XXXXXXXXXX"
+                      value={convertNote}
+                      onChange={(e) => setConvertNote(e.target.value)}
+                      rows={2}
+                      className="resize-none text-sm"
+                    />
+                  </div>
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                    ⚠️ This action cannot be undone automatically. Make sure payment has actually been received before converting.
+                  </p>
+                </div>
+              )}
+
               <DialogFooter className="gap-2">
-                <Button variant="outline" onClick={() => { setConfirmAction(null); setRefundAmount(""); }} disabled={acting}>
+                <Button variant="outline" onClick={() => { setConfirmAction(null); setRefundAmount(""); setConvertNote(""); setConvertPaymentMethod("cash"); }} disabled={acting}>
                   Cancel
                 </Button>
                 {confirmAction.type === "confirm" && (
@@ -1467,6 +1562,13 @@ export default function BookingsManagementPage() {
                     className="bg-indigo-600 hover:bg-indigo-700">
                     {acting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Wallet className="w-4 h-4 mr-2" />}
                     Initiate Refund
+                  </Button>
+                )}
+                {confirmAction.type === "convert_lead" && (
+                  <Button onClick={() => handleConvertLead(confirmAction.booking)} disabled={acting}
+                    className="bg-violet-600 hover:bg-violet-700">
+                    {acting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <UserCheck className="w-4 h-4 mr-2" />}
+                    Convert to Confirmed
                   </Button>
                 )}
               </DialogFooter>

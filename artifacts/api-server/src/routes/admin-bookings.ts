@@ -262,6 +262,81 @@ router.put("/admin/bookings/:id/status", requireAdmin, async (req, res) => {
   }
 });
 
+// ── PUT /api/admin/bookings/:id/convert-lead ────────────────────────────────
+// Manually converts a pending/failed lead into a confirmed booking.
+// Use this when payment was collected offline (cash, bank transfer, UPI, etc.)
+// or when the Razorpay gateway failed but money was received by another means.
+router.put("/admin/bookings/:id/convert-lead", requireAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ success: false, error: "Invalid booking id" });
+    }
+
+    const rows = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, error: "Booking not found" });
+    }
+
+    const booking = rows[0];
+
+    // Refuse to re-convert an already paid/confirmed booking
+    if (booking.paymentStatus === "paid" && booking.status === "confirmed") {
+      return res.status(409).json({ success: false, error: "Booking is already confirmed" });
+    }
+
+    const paymentMethod = String(req.body?.paymentMethod || "manual").trim();
+    const note          = String(req.body?.note || "").trim();
+    const adminUser     = String((req as any).adminUser?.email || "admin");
+
+    // Merge the conversion note into the existing details blob
+    const existingDetails = (typeof booking.details === "object" && booking.details !== null)
+      ? (booking.details as Record<string, any>)
+      : {};
+    const conversionLog = {
+      convertedAt:   new Date().toISOString(),
+      convertedBy:   adminUser,
+      paymentMethod,
+      note: note || "Manually converted by admin",
+    };
+    const updatedDetails = {
+      ...existingDetails,
+      conversionLog,
+      adminNotes: [
+        ...(existingDetails.adminNotes || []),
+        { note: `Lead converted — ${paymentMethod}${note ? `: ${note}` : ""}`, addedAt: new Date().toISOString(), addedBy: adminUser },
+      ],
+    };
+
+    await db
+      .update(bookingsTable)
+      .set({
+        paymentStatus: "paid",
+        status:        "confirmed",
+        bookingStatus: "confirmed",
+        paymentMethod,
+        details: updatedDetails,
+        // Clear failure markers so the booking is treated as clean
+        failureReason: null,
+        failureCode:   null,
+      } as any)
+      .where(eq(bookingsTable.id, id));
+
+    const updated  = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
+    const refundMap = await loadRefundsForBookings([id]);
+
+    logger.info({ id, paymentMethod, adminUser }, "[admin-bookings] lead converted to confirmed booking");
+
+    return res.json({
+      success: true,
+      booking: shapeBooking(updated[0], refundMap.get(id)),
+    });
+  } catch (err) {
+    logger.error({ err }, "[admin-bookings] convert-lead failed");
+    return res.status(500).json({ success: false, error: "Failed to convert lead" });
+  }
+});
+
 // ── Razorpay credentials helper (DB row > env) ────────────────────────────
 async function loadRazorpayCreds(): Promise<{
   keyId: string;
