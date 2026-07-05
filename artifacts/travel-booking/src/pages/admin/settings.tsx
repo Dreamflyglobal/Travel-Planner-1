@@ -16,7 +16,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import {
   Image as ImageIcon, Sparkles, Upload, Trash2, RotateCcw, Save, Globe,
-  Building2, CreditCard, Receipt, Mail, Phone, Eye, EyeOff,
+  Building2, CreditCard, Receipt, Mail, Phone,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useBranding, BrandingSettings } from "@/contexts/branding-context";
@@ -46,11 +46,8 @@ import {
   MailCheck,
   Facebook,
   Instagram,
-  Twitter,
   MessageCircle,
-  MessageSquare,
   Megaphone,
-  Wrench,
   CheckCircle2,
   ToggleLeft,
   RefreshCcw,
@@ -356,8 +353,8 @@ async function uploadImageFile(file: File, kind: "logo" | "favicon"): Promise<st
 }
 
 export default function AdminSettings() {
-  const { branding, updateBranding, resetBranding, saving: brandingSaving } = useBranding();
-  const { settings, updateSettings, resetSettings, saving: siteSaving } = useSiteSettings();
+  const { branding, updateBranding, saving: brandingSaving } = useBranding();
+  const { settings, updateSettings, saving: siteSaving } = useSiteSettings();
   const { toast } = useToast();
 
   const [brandingDraft, setBrandingDraft] = useState<BrandingSettings>(branding);
@@ -491,22 +488,6 @@ export default function AdminSettings() {
     setDirty(false);
   }
 
-  async function handleReset() {
-    await Promise.all([resetBranding(), resetSettings()]);
-    setBrandingDraft({
-      companyName: APP_NAME,
-      tagline: "Explore the world",
-      logoUrl: null,
-      faviconUrl: null,
-    });
-    setSiteDraft(DEFAULT_SITE_SETTINGS);
-    setDirty(false);
-    toast({
-      title: "Reset to defaults",
-      description: "All settings have been restored to the original values.",
-    });
-  }
-
   return (
     <AdminLayout>
       <div className="p-4 md:p-8 max-w-5xl mx-auto pb-24">
@@ -517,15 +498,6 @@ export default function AdminSettings() {
               Manage branding, site info, payments, and booking preferences. Changes apply instantly across the site.
             </p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleReset}
-            data-testid="button-reset-settings"
-          >
-            <RotateCcw className="w-4 h-4 mr-2" />
-            Reset to defaults
-          </Button>
         </div>
 
         {/* ============== Quick links to other admin tools ============== */}
@@ -970,7 +942,6 @@ function NotificationSettingsSection() {
 
   const [draft, setDraft] = useState<NotificationSettings>(settings);
   const [dirty, setDirty] = useState(false);
-  const [showPwd, setShowPwd] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
 
   useEffect(() => {
@@ -986,10 +957,6 @@ function NotificationSettingsSection() {
     if (draft.emailEnabled) {
       if (!draft.smtpEmail.trim() || !/^\S+@\S+\.\S+$/.test(draft.smtpEmail.trim())) {
         toast({ title: "Invalid SMTP email", description: "Please enter a valid email address.", variant: "destructive" });
-        return;
-      }
-      if (!draft.smtpPassword.trim()) {
-        toast({ title: "SMTP password required", description: "Enter the app password for the SMTP account.", variant: "destructive" });
         return;
       }
     }
@@ -1053,8 +1020,7 @@ function NotificationSettingsSection() {
             />
           </div>
 
-          <div className="grid md:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
+          <div className="max-w-sm space-y-1.5">
               <Label htmlFor="notif-smtp-email">SMTP Email</Label>
               <Input
                 id="notif-smtp-email"
@@ -1066,37 +1032,9 @@ function NotificationSettingsSection() {
                 data-testid="input-notif-smtp-email"
               />
               <p className="text-[11px] text-slate-500">
-                Gmail, Outlook, Yahoo, or any SMTP-capable address.
+                Gmail, Outlook, Yahoo, or any SMTP-capable address. Configure the app password via server environment variables.
               </p>
             </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="notif-smtp-pass">SMTP Password / App Password</Label>
-              <div className="relative">
-                <Input
-                  id="notif-smtp-pass"
-                  type={showPwd ? "text" : "password"}
-                  placeholder="App password (16 chars for Gmail)"
-                  value={draft.smtpPassword}
-                  onChange={(e) => patch({ smtpPassword: e.target.value })}
-                  disabled={!draft.emailEnabled}
-                  className="pr-10"
-                  data-testid="input-notif-smtp-pass"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPwd((s) => !s)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
-                  tabIndex={-1}
-                >
-                  {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-              <p className="text-[11px] text-slate-500">
-                Stored locally — only sent to the server when an email is dispatched.
-              </p>
-            </div>
-          </div>
         </div>
 
         <Separator />
@@ -1134,44 +1072,6 @@ function NotificationSettingsSection() {
             />
             <p className="text-[11px] text-slate-500">
               Shown verbatim in the success popup. Keep it short and friendly.
-            </p>
-          </div>
-        </div>
-
-        <Separator />
-
-        {/* ── SMS Notifications ─────────────────────────────────────────── */}
-        <div className="space-y-4">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <Label htmlFor="notif-sms-enabled" className="text-base font-semibold flex items-center gap-2">
-                <MessageSquare className="w-4 h-4 text-green-600" />
-                Enable SMS Notifications
-              </Label>
-              <p className="text-xs text-slate-500 mt-1">
-                Send an SMS alert to the customer after a successful booking or payment.
-              </p>
-            </div>
-            <Switch
-              id="notif-sms-enabled"
-              checked={draft.smsEnabled}
-              onCheckedChange={(v) => patch({ smsEnabled: v })}
-              data-testid="switch-notif-sms"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="notif-sms-provider">SMS Provider / API Endpoint</Label>
-            <Input
-              id="notif-sms-provider"
-              value={draft.smsProvider}
-              onChange={(e) => patch({ smsProvider: e.target.value })}
-              placeholder="e.g. Twilio, MSG91, Fast2SMS API URL"
-              disabled={!draft.smsEnabled}
-              data-testid="input-notif-sms-provider"
-            />
-            <p className="text-[11px] text-slate-500">
-              Enter your SMS gateway name or API endpoint. SMS dispatch requires server integration.
             </p>
           </div>
         </div>
@@ -1305,7 +1205,6 @@ function WebsiteSettingsSection() {
     for (const [field, label] of [
       ["facebookUrl", "Facebook URL"],
       ["instagramUrl", "Instagram URL"],
-      ["twitterUrl", "Twitter URL"],
     ] as const) {
       if (!isValidUrl(draft[field])) {
         toast({
@@ -1380,7 +1279,7 @@ function WebsiteSettingsSection() {
           <p className="text-xs text-slate-500 -mt-2">
             Shown as icons in the website footer. Leave blank to hide.
           </p>
-          <div className="grid md:grid-cols-3 gap-4">
+          <div className="grid md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="ws-facebook" className="flex items-center gap-1.5 text-sm">
                 <Facebook className="w-3.5 h-3.5 text-blue-600" /> Facebook URL
@@ -1405,19 +1304,6 @@ function WebsiteSettingsSection() {
                 value={draft.instagramUrl}
                 onChange={(e) => patch({ instagramUrl: e.target.value })}
                 data-testid="input-website-instagram"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="ws-twitter" className="flex items-center gap-1.5 text-sm">
-                <Twitter className="w-3.5 h-3.5 text-sky-500" /> Twitter URL
-              </Label>
-              <Input
-                id="ws-twitter"
-                type="url"
-                placeholder="https://twitter.com/yourhandle"
-                value={draft.twitterUrl}
-                onChange={(e) => patch({ twitterUrl: e.target.value })}
-                data-testid="input-website-twitter"
               />
             </div>
           </div>
@@ -1566,49 +1452,6 @@ function WebsiteSettingsSection() {
               PNG, JPG, or WebP — under 2 MB. Optional.
             </p>
           </div>
-        </div>
-
-        <Separator />
-
-        {/* ── Maintenance Mode ─────────────────────────────────────────── */}
-        <div className="space-y-4">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <Label
-                htmlFor="ws-maintenance-enabled"
-                className="text-base font-semibold flex items-center gap-2"
-              >
-                <Wrench className="w-4 h-4 text-amber-600" />
-                Maintenance Mode
-              </Label>
-              <p className="text-xs text-slate-500 mt-1">
-                Hide the public site and show a maintenance page. Admin and staff routes stay accessible.
-              </p>
-            </div>
-            <Switch
-              id="ws-maintenance-enabled"
-              checked={draft.maintenanceMode}
-              onCheckedChange={(v) => patch({ maintenanceMode: v })}
-              data-testid="switch-website-maintenance"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="ws-maintenance-message">Maintenance Message</Label>
-            <Textarea
-              id="ws-maintenance-message"
-              rows={2}
-              placeholder="We're upgrading the experience. We'll be back shortly."
-              value={draft.maintenanceMessage}
-              onChange={(e) => patch({ maintenanceMessage: e.target.value })}
-              disabled={!draft.maintenanceMode}
-              data-testid="input-website-maintenance-message"
-            />
-          </div>
-          {draft.maintenanceMode && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-              <strong>Heads up:</strong> The public website will display the maintenance page until this is turned off.
-            </div>
-          )}
         </div>
 
         {/* Action buttons */}
