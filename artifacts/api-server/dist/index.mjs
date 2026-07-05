@@ -98285,38 +98285,62 @@ async function tjPostWithRetry(path4, body, options = {}) {
     }
     const url3 = `${TRIPJACK_BASE2}${path4}`;
     logger.info({ context, attempt, url: url3 }, "[tj-retry] sending request");
+    const loggedHeaders = { ...headers };
+    if (loggedHeaders["apikey"]) loggedHeaders["apikey"] = loggedHeaders["apikey"].slice(0, 6) + "\u2026";
+    if (loggedHeaders["Authorization"]) loggedHeaders["Authorization"] = loggedHeaders["Authorization"].slice(0, 16) + "\u2026";
     console.log("TripJack Booking URL:", url3);
     console.log("TripJack Method:", "POST");
-    console.log("TripJack Headers:", JSON.stringify(headers));
+    console.log("TripJack Headers:", JSON.stringify(loggedHeaders));
     console.log("TripJack Payload:", JSON.stringify(body));
     let data;
     try {
       const resp = await axios_default.post(url3, body, { headers, timeout: timeoutMs });
       data = resp.data;
-      console.log("TripJack Response:", JSON.stringify(data).slice(0, 1e3));
+      console.log(
+        `[tj-retry] ${context} \u2014 full response:`,
+        JSON.stringify({ status: resp.status, data }, null, 2).slice(0, 4e3)
+      );
     } catch (err) {
-      console.log("TripJack Response Error:", err.response?.status, JSON.stringify(err.response?.data ?? err.message).slice(0, 500));
       const httpStatus = err.response?.status;
       const errCode = err.code ?? "?";
       const errBody = err.response?.data;
-      if (httpStatus === 401 || httpStatus === 403) {
+      const safeHeaders = { ...headers };
+      if (safeHeaders["apikey"]) safeHeaders["apikey"] = safeHeaders["apikey"].slice(0, 6) + "\u2026";
+      if (safeHeaders["Authorization"]) safeHeaders["Authorization"] = safeHeaders["Authorization"].slice(0, 16) + "\u2026";
+      console.log(
+        `[tj-retry] ${context} \u2014 request failed:`,
+        JSON.stringify(
+          {
+            url: url3,
+            method: "POST",
+            headers: safeHeaders,
+            payload: body,
+            httpStatus,
+            errCode,
+            responseBody: errBody ?? err.message
+          },
+          null,
+          2
+        ).slice(0, 4e3)
+      );
+      if (httpStatus === 401 || httpStatus === 403 || httpStatus === 405) {
         if (!tokenRefreshUsed) {
           tokenRefreshUsed = true;
           bustTripJackToken();
           logger.warn(
             { context, attempt, status: httpStatus },
-            "[tj-retry] HTTP auth error \u2014 busting token and retrying"
+            "[tj-retry] HTTP auth/access error \u2014 busting token and retrying"
           );
           attempt--;
           continue;
         }
-        const reason = errBody ? extractTripJackError(errBody, "Invalid API key") : "Invalid API key";
+        const reason = errBody ? extractTripJackError(errBody, httpStatus === 405 ? "Method Not Allowed" : "Invalid API key") : httpStatus === 405 ? "Method Not Allowed" : "Invalid API key";
         logger.error(
-          { context, attempt, status: httpStatus, reason },
+          { context, attempt, status: httpStatus, reason, url: url3 },
           "[tj-retry] auth rejected after token refresh \u2014 check TRIPJACK_API_KEY and IP whitelist"
         );
         const e = new Error(
-          `TripJack authentication failed: ${reason}. Check that your API key is active and this server's IP is whitelisted in the TripJack portal.`
+          httpStatus === 405 ? `TripJack rejected the request (HTTP 405) at ${url3}. This endpoint accepts POST, so a 405 here means TripJack's gateway is blocking this server before routing the request \u2014 almost always because the server's outbound IP is not yet whitelisted for API access (token exchange and the apikey-header fallback both failed). Ask TripJack support to whitelist this server's IP for TRIPJACK_API_KEY, then retry.` : `TripJack authentication failed: ${reason}. Check that your API key is active and this server's IP is whitelisted in the TripJack portal.`
         );
         e.isAuthError = true;
         throw e;
@@ -98958,6 +98982,7 @@ async function handleFareQuote(req, res) {
   const { traceId, resultIndex } = req.body;
   logger.info("TRACE:", traceId || "(none)");
   logger.info("RESULT:", resultIndex || "(none)");
+  console.log("[fareQuote] === Incoming request ===");
   console.log("[fareQuote] traceId:", traceId || "(none)");
   console.log("[fareQuote] resultIndex:", resultIndex || "(none)");
   if (!resultIndex) {
@@ -98969,7 +98994,7 @@ async function handleFareQuote(req, res) {
   const fareQuoteBody = { resultIndex };
   if (traceId) fareQuoteBody.traceId = traceId;
   logger.info("FareQuote Body:", JSON.stringify(fareQuoteBody));
-  console.log("[fareQuote] request payload:", JSON.stringify(fareQuoteBody));
+  console.log("[fareQuote] request payload sent to TripJack:", JSON.stringify(fareQuoteBody));
   try {
     const data = await tjPostWithRetry("/fms/v1/air/farequote", fareQuoteBody, {
       context: "fareQuote",
@@ -98977,9 +99002,23 @@ async function handleFareQuote(req, res) {
       maxRetries: 2
     });
     logger.info("FareQuote Response:", JSON.stringify(data).slice(0, 800));
-    console.log("[fareQuote] response:", JSON.stringify(data).slice(0, 800));
+    console.log("[fareQuote] === Success response from TripJack ===");
+    console.log("[fareQuote] response:", JSON.stringify(data).slice(0, 2e3));
     res.json(data);
   } catch (err) {
+    console.error(
+      "[fareQuote] === Failed ===",
+      JSON.stringify(
+        {
+          message: err.message,
+          isAuthError: err.isAuthError ?? false,
+          httpStatus: err.response?.status,
+          responseBody: err.response?.data
+        },
+        null,
+        2
+      ).slice(0, 2e3)
+    );
     handleTjError(res, err, "fareQuote");
   }
 }

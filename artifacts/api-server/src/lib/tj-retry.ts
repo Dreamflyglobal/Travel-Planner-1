@@ -123,9 +123,12 @@ export async function tjPostWithRetry(
     logger.info({ context, attempt, url }, "[tj-retry] sending request");
 
     // ── Debug logs (visible in workflow console) ─────────────────────────
+    const loggedHeaders = { ...headers };
+    if (loggedHeaders["apikey"]) loggedHeaders["apikey"] = loggedHeaders["apikey"].slice(0, 6) + "…";
+    if (loggedHeaders["Authorization"]) loggedHeaders["Authorization"] = loggedHeaders["Authorization"].slice(0, 16) + "…";
     console.log("TripJack Booking URL:", url);
     console.log("TripJack Method:", "POST");
-    console.log("TripJack Headers:", JSON.stringify(headers));
+    console.log("TripJack Headers:", JSON.stringify(loggedHeaders));
     console.log("TripJack Payload:", JSON.stringify(body));
 
     // ── HTTP call ────────────────────────────────────────────────────────
@@ -133,35 +136,71 @@ export async function tjPostWithRetry(
     try {
       const resp = await axios.post(url, body, { headers, timeout: timeoutMs });
       data = resp.data;
-      console.log("TripJack Response:", JSON.stringify(data).slice(0, 1000));
+      console.log(
+        `[tj-retry] ${context} — full response:`,
+        JSON.stringify({ status: resp.status, data }, null, 2).slice(0, 4000),
+      );
     } catch (err: any) {
-      console.log("TripJack Response Error:", err.response?.status, JSON.stringify(err.response?.data ?? err.message).slice(0, 500));
       const httpStatus = err.response?.status;
       const errCode    = err.code ?? "?";
       const errBody    = err.response?.data;
 
-      // 401 / 403 → hard auth rejection from HTTP layer — bust cache and try once
-      if (httpStatus === 401 || httpStatus === 403) {
+      // Full request + response dump for debugging (apikey masked)
+      const safeHeaders = { ...headers };
+      if (safeHeaders["apikey"]) safeHeaders["apikey"] = safeHeaders["apikey"].slice(0, 6) + "…";
+      if (safeHeaders["Authorization"]) safeHeaders["Authorization"] = safeHeaders["Authorization"].slice(0, 16) + "…";
+      console.log(
+        `[tj-retry] ${context} — request failed:`,
+        JSON.stringify(
+          {
+            url,
+            method: "POST",
+            headers: safeHeaders,
+            payload: body,
+            httpStatus,
+            errCode,
+            responseBody: errBody ?? err.message,
+          },
+          null,
+          2,
+        ).slice(0, 4000),
+      );
+
+      // 401 / 403 / 405 → hard auth/access rejection from HTTP layer.
+      // TripJack (and its Cloudflare edge) can return 405 instead of 401/403
+      // when the calling server's IP isn't whitelisted for the `apikey`
+      // fallback path, or when the Bearer token was rejected outright —
+      // treat it the same as a hard auth failure: bust the cached token and
+      // retry once with a freshly resolved header set before giving up.
+      if (httpStatus === 401 || httpStatus === 403 || httpStatus === 405) {
         if (!tokenRefreshUsed) {
           tokenRefreshUsed = true;
           bustTripJackToken();
           logger.warn(
             { context, attempt, status: httpStatus },
-            "[tj-retry] HTTP auth error — busting token and retrying",
+            "[tj-retry] HTTP auth/access error — busting token and retrying",
           );
           // Don't consume one of the regular retry slots — loop immediately
           attempt--; // will be incremented by for-loop
           continue;
         }
 
-        const reason = errBody ? extractTripJackError(errBody, "Invalid API key") : "Invalid API key";
+        const reason = errBody
+          ? extractTripJackError(errBody, httpStatus === 405 ? "Method Not Allowed" : "Invalid API key")
+          : (httpStatus === 405 ? "Method Not Allowed" : "Invalid API key");
         logger.error(
-          { context, attempt, status: httpStatus, reason },
+          { context, attempt, status: httpStatus, reason, url },
           "[tj-retry] auth rejected after token refresh — check TRIPJACK_API_KEY and IP whitelist",
         );
         const e = new Error(
-          `TripJack authentication failed: ${reason}. ` +
-          `Check that your API key is active and this server's IP is whitelisted in the TripJack portal.`
+          httpStatus === 405
+            ? `TripJack rejected the request (HTTP 405) at ${url}. This endpoint accepts POST, so a 405 ` +
+              `here means TripJack's gateway is blocking this server before routing the request — almost ` +
+              `always because the server's outbound IP is not yet whitelisted for API access (token exchange ` +
+              `and the apikey-header fallback both failed). Ask TripJack support to whitelist this server's ` +
+              `IP for TRIPJACK_API_KEY, then retry.`
+            : `TripJack authentication failed: ${reason}. ` +
+              `Check that your API key is active and this server's IP is whitelisted in the TripJack portal.`
         ) as any;
         e.isAuthError = true;
         throw e;

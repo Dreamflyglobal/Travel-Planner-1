@@ -18,8 +18,15 @@ router.post("/tj-search", async (req, res): Promise<void> => {
   }
 });
 
-// POST /api/tj-farequote → TripJack /fms/v1/air-fare-quote
+// POST /api/tj-farequote → TripJack /fms/v1/air/farequote
 // Accepts: { traceId, resultIndex }
+// NOTE: /fms/v1/air/farequote is confirmed valid by TripJack's own CORS
+// preflight (OPTIONS returns `access-control-allow-methods: POST` for this
+// exact path) — a 405 here is NOT a wrong-endpoint problem. It means
+// TripJack's gateway rejected the request before routing it, which happens
+// when neither the Bearer-token exchange nor the apikey-header fallback is
+// authorized for this server's outbound IP. See tj-retry.ts for the
+// auth-retry + actionable-error handling for this case.
 async function handleFareQuote(req: any, res: any): Promise<void> {
   const { traceId, resultIndex } = req.body as {
     traceId?:     string;
@@ -30,6 +37,7 @@ async function handleFareQuote(req: any, res: any): Promise<void> {
   logger.info("RESULT:", resultIndex || "(none)");
 
   // Explicit stdout logs (always visible regardless of pino log-level config)
+  console.log("[fareQuote] === Incoming request ===");
   console.log("[fareQuote] traceId:", traceId || "(none)");
   console.log("[fareQuote] resultIndex:", resultIndex || "(none)");
 
@@ -45,10 +53,9 @@ async function handleFareQuote(req: any, res: any): Promise<void> {
   if (traceId) fareQuoteBody.traceId = traceId;
 
   logger.info("FareQuote Body:", JSON.stringify(fareQuoteBody));
-  console.log("[fareQuote] request payload:", JSON.stringify(fareQuoteBody));
+  console.log("[fareQuote] request payload sent to TripJack:", JSON.stringify(fareQuoteBody));
 
   try {
-    // TripJack fareQuote endpoint — path confirmed by 405 (exists) vs 404 (doesn't exist)
     const data = await tjPostWithRetry("/fms/v1/air/farequote", fareQuoteBody, {
       context:    "fareQuote",
       timeoutMs:  15_000,
@@ -56,9 +63,23 @@ async function handleFareQuote(req: any, res: any): Promise<void> {
     });
 
     logger.info("FareQuote Response:", JSON.stringify(data).slice(0, 800));
-    console.log("[fareQuote] response:", JSON.stringify(data).slice(0, 800));
+    console.log("[fareQuote] === Success response from TripJack ===");
+    console.log("[fareQuote] response:", JSON.stringify(data).slice(0, 2000));
     res.json(data);
   } catch (err: any) {
+    console.error(
+      "[fareQuote] === Failed ===",
+      JSON.stringify(
+        {
+          message:    err.message,
+          isAuthError: err.isAuthError ?? false,
+          httpStatus:  err.response?.status,
+          responseBody: err.response?.data,
+        },
+        null,
+        2,
+      ).slice(0, 2000),
+    );
     handleTjError(res, err, "fareQuote");
   }
 }
