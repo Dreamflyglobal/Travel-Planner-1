@@ -98958,14 +98958,18 @@ async function handleFareQuote(req, res) {
   const { traceId, resultIndex } = req.body;
   logger.info("TRACE:", traceId || "(none)");
   logger.info("RESULT:", resultIndex || "(none)");
+  console.log("[fareQuote] traceId:", traceId || "(none)");
+  console.log("[fareQuote] resultIndex:", resultIndex || "(none)");
   if (!resultIndex) {
     logger.error("[fareQuote] resultIndex missing");
+    console.error("[fareQuote] resultIndex missing \u2014 request body:", JSON.stringify(req.body));
     res.status(400).json({ error: "resultIndex is required for fareQuote" });
     return;
   }
   const fareQuoteBody = { resultIndex };
   if (traceId) fareQuoteBody.traceId = traceId;
   logger.info("FareQuote Body:", JSON.stringify(fareQuoteBody));
+  console.log("[fareQuote] request payload:", JSON.stringify(fareQuoteBody));
   try {
     const data = await tjPostWithRetry("/fms/v1/air/farequote", fareQuoteBody, {
       context: "fareQuote",
@@ -98973,6 +98977,7 @@ async function handleFareQuote(req, res) {
       maxRetries: 2
     });
     logger.info("FareQuote Response:", JSON.stringify(data).slice(0, 800));
+    console.log("[fareQuote] response:", JSON.stringify(data).slice(0, 800));
     res.json(data);
   } catch (err) {
     handleTjError(res, err, "fareQuote");

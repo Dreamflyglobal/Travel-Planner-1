@@ -1436,8 +1436,20 @@ export default function FlightResults() {
                                 onClick={() => {
                                   if (bookingLoadingId) return;
                                   userClickedRef.current = true;
-                                  const ri = mf.resultIndex || fare.resultIndex;
+                                  // Each fare option carries its OWN TripJack resultIndex
+                                  // (different fare class/cabin = different search result item).
+                                  // Must prefer fare.resultIndex over the flight-level resultIndex,
+                                  // otherwise FareQuote is called against the wrong fare and TripJack
+                                  // rejects/fails verification.
+                                  const ri = fare.resultIndex || mf.resultIndex;
                                   const ti = (mf as any).traceId || traceId || "";
+                                  console.info(
+                                    "[fareQuote] fare selected | fareId:", fare.fareId,
+                                    "| fare.resultIndex:", fare.resultIndex || "(none)",
+                                    "| flight.resultIndex:", mf.resultIndex || "(none)",
+                                    "| using resultIndex:", ri || "(none)",
+                                    "| traceId:", ti || "(none)",
+                                  );
                                   handleSelectFlight(fare.fareId, bookParams, true, ri, ti);
                                 }}
                                 className={cn("w-full text-white font-bold text-sm h-8 gap-1", btnClass)}
