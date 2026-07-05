@@ -210,23 +210,20 @@ export default function FlightResults() {
       return;
     }
 
-    // ── TripJack test-API limitation: no traceId returned by search ───────
-    // fareQuote requires traceId — bypass it and proceed directly to booking.
-    // In production the real API always returns a traceId so this branch is
-    // never hit.
+    // ── Always attempt fareQuote — traceId is optional ────────────────────
+    // The backend fareQuote handler supports calls with resultIndex alone.
+    // Previously this branch bypassed fareQuote when traceId was absent and
+    // stored the local `fareKey` as the TripJack bookingId — that caused HTTP
+    // 405 at the book step because TripJack only accepts a bookingId that it
+    // issued via fareQuote. Fix: always call fareQuote; traceId is omitted from
+    // the payload when absent (backend builds { resultIndex } in that case).
     if (!ti) {
-      console.warn("[fareQuote] No traceId from TripJack (test API) — bypassing fareQuote");
-      sessionStorage.setItem("ww_tj_farequote",     JSON.stringify({ noFareQuote: true, resultIndex: ri }));
-      sessionStorage.setItem("ww_tj_booking_id",    fareKey);
-      sessionStorage.setItem("ww_tj_farequote_key", fareKey);
-      isLoadingRef.current = false;
-      setBookingLoadingId(null);
-      setLocation(`/booking/flight?${urlParams.toString()}`);
-      return;
+      console.warn("[fareQuote] No traceId from search — calling fareQuote with resultIndex only");
     }
 
-    // Both traceId and resultIndex present — do a proper fareQuote
-    const fareQuotePayload = { traceId: ti, resultIndex: ri };
+    // Build payload — omit traceId when absent so backend skips it
+    const fareQuotePayload: Record<string, string> = { resultIndex: ri };
+    if (ti) fareQuotePayload.traceId = ti;
     const payload = JSON.stringify(fareQuotePayload);
 
     console.info(

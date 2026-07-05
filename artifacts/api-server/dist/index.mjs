@@ -98285,11 +98285,17 @@ async function tjPostWithRetry(path4, body, options = {}) {
     }
     const url3 = `${TRIPJACK_BASE2}${path4}`;
     logger.info({ context, attempt, url: url3 }, "[tj-retry] sending request");
+    console.log("TripJack Booking URL:", url3);
+    console.log("TripJack Method:", "POST");
+    console.log("TripJack Headers:", JSON.stringify(headers));
+    console.log("TripJack Payload:", JSON.stringify(body));
     let data;
     try {
       const resp = await axios_default.post(url3, body, { headers, timeout: timeoutMs });
       data = resp.data;
+      console.log("TripJack Response:", JSON.stringify(data).slice(0, 1e3));
     } catch (err) {
+      console.log("TripJack Response Error:", err.response?.status, JSON.stringify(err.response?.data ?? err.message).slice(0, 500));
       const httpStatus = err.response?.status;
       const errCode = err.code ?? "?";
       const errBody = err.response?.data;
@@ -98749,6 +98755,7 @@ router24.post("/book-flight", async (req, res) => {
     },
     "[book-flight] STEP 2+3: calling TripJack /fms/v1/air/book (with retry)"
   );
+  console.log("[book-flight] TripJack AirBook payload:", JSON.stringify(tjPayload, null, 2));
   let tjSuccess = false;
   let pnr;
   let tjBookingRef;

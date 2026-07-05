@@ -383,6 +383,7 @@ router.post("/book-flight", async (req, res): Promise<void> => {
     },
     "[book-flight] STEP 2+3: calling TripJack /fms/v1/air/book (with retry)",
   );
+  console.log("[book-flight] TripJack AirBook payload:", JSON.stringify(tjPayload, null, 2));
 
   let tjSuccess    = false;
   let pnr: string | undefined;

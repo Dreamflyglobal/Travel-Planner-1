@@ -122,12 +122,20 @@ export async function tjPostWithRetry(
     const url = `${TRIPJACK_BASE}${path}`;
     logger.info({ context, attempt, url }, "[tj-retry] sending request");
 
+    // ── Debug logs (visible in workflow console) ─────────────────────────
+    console.log("TripJack Booking URL:", url);
+    console.log("TripJack Method:", "POST");
+    console.log("TripJack Headers:", JSON.stringify(headers));
+    console.log("TripJack Payload:", JSON.stringify(body));
+
     // ── HTTP call ────────────────────────────────────────────────────────
     let data: any;
     try {
       const resp = await axios.post(url, body, { headers, timeout: timeoutMs });
       data = resp.data;
+      console.log("TripJack Response:", JSON.stringify(data).slice(0, 1000));
     } catch (err: any) {
+      console.log("TripJack Response Error:", err.response?.status, JSON.stringify(err.response?.data ?? err.message).slice(0, 500));
       const httpStatus = err.response?.status;
       const errCode    = err.code ?? "?";
       const errBody    = err.response?.data;
