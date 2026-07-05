@@ -704,7 +704,7 @@ export default function AdminDashboard() {
       hotelBookings:       paidBookings.filter((b) => (b.bookingType || b.type) === "hotel").length,
       holidayBookings:     paidBookings.filter((b) => (b.bookingType || b.type) === "package").length,
       busBookings:         paidBookings.filter((b) => (b.bookingType || b.type) === "bus").length,
-      // Financial figures — confirmed/completed bookings only
+      // Financial figures — confirmed/ticketed/completed bookings only
       totalRevenue,
       confirmedRevenue:    totalRevenue,
       todayRevenue:        todayBookings.reduce((sum, b) => sum + getAmount(b), 0),
@@ -756,11 +756,9 @@ export default function AdminDashboard() {
       const key   = d.toISOString().slice(0, 10);
       const label = d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
       const dayBs = adminBookings.filter((b) => getBookingDate(b) === key);
-      // Revenue only from confirmed/completed bookings
-      const confirmedDayBs = dayBs.filter((b) => {
-        const s = (b.status || "").toLowerCase();
-        return s === "confirmed" || s === "completed";
-      });
+      // Revenue only from confirmed/ticketed/completed bookings
+      const confirmedDayBs = dayBs.filter((b) =>
+        REVENUE_STATUSES_FE.has((b.status || "").toLowerCase()));
       days.push({
         date:     key,
         label,
@@ -779,8 +777,7 @@ export default function AdminDashboard() {
       ...filteredBookings.map((b) => {
         const fi = b.details?.flightInfo || {};
         const route = fi.from && fi.to ? `${fi.from} → ${fi.to}` : (b.bookingType || b.type || "");
-        const bStatus = (b.status || "").toLowerCase();
-        const inRevenue = bStatus === "confirmed" || bStatus === "completed" ? "Yes" : "No";
+        const inRevenue = REVENUE_STATUSES_FE.has((b.status || "").toLowerCase()) ? "Yes" : "No";
         return [
           b.details?.bookingRef || b.bookingId || b.id,
           b.customerName || b.passengerName || "",
