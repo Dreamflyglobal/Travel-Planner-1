@@ -36,8 +36,9 @@ async function checkBackend(): Promise<boolean> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 1000);
-    
-    const response = await fetch('http://localhost:3000/api/healthz', {
+
+    const apiBase = (import.meta.env.VITE_API_BASE_URL as string) ?? "";
+    const response = await fetch(`${apiBase}/api/healthz`, {
       method: 'GET',
       signal: controller.signal,
     });
