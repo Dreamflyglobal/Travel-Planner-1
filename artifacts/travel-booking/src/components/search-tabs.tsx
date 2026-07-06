@@ -93,6 +93,26 @@ export function SearchTabs({
     return () => { if (toDebounceRef.current) clearTimeout(toDebounceRef.current); };
   }, [flightTo, airportData]);
 
+  // Multi City: same debounced airport-search pattern as One Way/Round Trip,
+  // but keyed per route index so each segment's From/To gets its own suggestions.
+  const [mcSuggestions, setMcSuggestions] = useState<{ from: AirportSuggestion[]; to: AirportSuggestion[] }[]>(
+    mcRoutes.map(() => ({ from: [], to: [] }))
+  );
+  const mcDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (mcDebounceRef.current) clearTimeout(mcDebounceRef.current);
+    mcDebounceRef.current = setTimeout(() => {
+      setMcSuggestions(
+        mcRoutes.map((r) => ({
+          from: airportData.length ? searchAirports(airportData, r.from) : [],
+          to:   airportData.length ? searchAirports(airportData, r.to)   : [],
+        }))
+      );
+    }, 300);
+    return () => { if (mcDebounceRef.current) clearTimeout(mcDebounceRef.current); };
+  }, [mcRoutes, airportData]);
+
   const [hotelLocation,   setHotelLocation]   = useState("");
   const [hotelSearchCity, setHotelSearchCity] = useState(""); // actual city for search (may differ if hotel brand selected)
   const [hotelCheckIn,    setHotelCheckIn]    = useState(today);
@@ -241,7 +261,11 @@ export function SearchTabs({
 
             {/* One Way / Round Trip form */}
             {tripType !== "multicity" && (
-              <div className="flex flex-col lg:grid lg:grid-cols-4 gap-4">
+              <div
+                className={`flex flex-col lg:grid gap-4 ${
+                  tripType === "roundtrip" ? "lg:grid-cols-5" : "lg:grid-cols-4"
+                }`}
+              >
                 <div className="lg:col-span-2 flex flex-col sm:flex-row sm:items-end gap-1.5 sm:gap-2">
                   <div className="flex-1 min-w-0 space-y-1">
                     <label className={labelCls}>From</label>
@@ -258,23 +282,24 @@ export function SearchTabs({
                   </div>
                 </div>
 
-                {/* Date(s) */}
+                {/* Date(s) — each date gets its own full grid column so it never
+                    gets squeezed/truncated, on both desktop and mobile */}
                 {tripType === "oneway" ? (
                   <div className="space-y-1">
                     <label className={labelCls}>Departure Date</label>
                     <input type="date" value={flightDate} min={today} onChange={(e) => setFlightDate(e.target.value)} className={inputCls} />
                   </div>
                 ) : (
-                  <div className="flex gap-2 lg:col-span-1">
-                    <div className="flex-1 space-y-1">
-                      <label className={labelCls}>Depart</label>
+                  <>
+                    <div className="space-y-1">
+                      <label className={labelCls}>Departure Date</label>
                       <input type="date" value={flightDate} min={today} onChange={(e) => setFlightDate(e.target.value)} className={inputCls} />
                     </div>
-                    <div className="flex-1 space-y-1">
-                      <label className={labelCls}>Return</label>
+                    <div className="space-y-1">
+                      <label className={labelCls}>Return Date</label>
                       <input type="date" value={returnDate} min={flightDate || today} onChange={(e) => setReturnDate(e.target.value)} className={inputCls} />
                     </div>
-                  </div>
+                  </>
                 )}
 
                 <div className="space-y-1">
@@ -295,24 +320,24 @@ export function SearchTabs({
                 {mcRoutes.map((route, i) => (
                   <div key={i} className="flex flex-col sm:flex-row sm:items-end gap-2 p-3 rounded-xl bg-gray-50 border relative">
                     <span className="absolute top-2 left-3 text-xs font-bold text-muted-foreground">Flight {i + 1}</span>
-                    <div className="flex-1 pt-4 sm:pt-0 space-y-1">
+                    <div className="flex-1 pt-4 sm:pt-0 space-y-1 min-w-0">
                       <label className={labelCls}>From</label>
-                      <input
-                        type="text"
+                      <AutocompleteInput
                         placeholder="City or Airport"
+                        suggestions={mcSuggestions[i]?.from ?? []}
                         value={route.from}
-                        onChange={(e) => updateMcRoute(i, "from", e.target.value)}
-                        className={inputCls}
+                        onChange={(val) => updateMcRoute(i, "from", val)}
+                        maxSuggestions={6}
                       />
                     </div>
-                    <div className="flex-1 space-y-1">
+                    <div className="flex-1 space-y-1 min-w-0">
                       <label className={labelCls}>To</label>
-                      <input
-                        type="text"
+                      <AutocompleteInput
                         placeholder="City or Airport"
+                        suggestions={mcSuggestions[i]?.to ?? []}
                         value={route.to}
-                        onChange={(e) => updateMcRoute(i, "to", e.target.value)}
-                        className={inputCls}
+                        onChange={(val) => updateMcRoute(i, "to", val)}
+                        maxSuggestions={6}
                       />
                     </div>
                     <div className="w-full sm:w-40 space-y-1">
