@@ -162,13 +162,19 @@ function mapTripJackFlight(item: any, idx: number, fromIata: string, toIata: str
     PREMIUM_ECONOMY: "Premium Economy",
   };
 
-  // TripJack fareQuote priceIds.resultIndex must be the raw resultIndex from the
-  // TripJack search response — do NOT modify or recreate this value.
-  // Fall back to sI[0].id (segment ID) only if resultIndex is absent.
+  // TripJack /fms/v1/review priceIds must be totalPriceList[].id — the full
+  // alphanumeric fare identifier (e.g. "4-6051918598_0BLRBOMSG115~..."), NOT
+  // the numeric sI[0].id / tai.tbi key (e.g. "928"). Verified directly
+  // against the sandbox: sending the tbi/segment numeric key always yields
+  // "Keys Passed in the request is already expired" (errCode 808) even on
+  // an immediate fresh search, while totalPriceList[].id returns HTTP 200
+  // with a real bookingId. Fall back to sI[0].id only if totalPriceList is
+  // empty (should not normally happen).
   const flightResultIndex: string =
-    String(item.resultIndex   ?? "")  ||
-    String(item.sI?.[0]?.id  ?? "")  ||
-    String(item.sI?.[0]?.rI  ?? "")  ||
+    String(item.totalPriceList?.[0]?.id ?? "")  ||
+    String(item.resultIndex             ?? "")  ||
+    String(item.sI?.[0]?.id             ?? "")  ||
+    String(item.sI?.[0]?.rI             ?? "")  ||
     String(idx);
 
   // Map every totalPriceList entry to a fare option object.
@@ -181,12 +187,17 @@ function mapTripJackFlight(item: any, idx: number, fromIata: string, toIata: str
       if (!rawFare) return null;
       const cc = (String(adultFd?.cc || "ECONOMY")).toUpperCase();
 
-      // resultIndex: prefer tbi key (segment id used by fareQuote) then fall back to flight-level.
-      const tbiKeys = pl?.tai?.tbi ? Object.keys(pl.tai.tbi) : [];
+      // resultIndex (TripJack priceId): must be this fare's own totalPriceList
+      // item `id` — the full alphanumeric fare identifier that /fms/v1/review
+      // expects in `priceIds`. The numeric tai.tbi key looks plausible (it's
+      // also a per-segment id) but is the WRONG value here — confirmed live
+      // against the sandbox, it always yields "Keys Passed in the request is
+      // already expired" (errCode 808), even immediately after a fresh
+      // search. See flightResultIndex comment above for the full writeup.
       const fareResultIndex: string =
-        (tbiKeys.length > 0 ? tbiKeys[0] : "")  ||
-        String(pl.resultIndex ?? "")             ||
-        String(pl.rI         ?? "")             ||
+        String(pl.id          ?? "")  ||
+        String(pl.resultIndex ?? "")  ||
+        String(pl.rI          ?? "")  ||
         flightResultIndex;
 
       // Normalize meal indicator: "F" → "FREE", "P" → "PAID", else null
@@ -274,14 +285,12 @@ function mapTripJackFlight(item: any, idx: number, fromIata: string, toIata: str
   const stops = Math.max(0, segCount - 1);
   const stopsLabel = segCount === 1 ? "Non-stop" : segCount === 2 ? "1 Stop" : "Multi-stop";
 
-  // resultIndex: raw value from TripJack search response — do NOT modify.
-  // TripJack fareQuote expects this exact value back in priceIds.resultIndex.
-  // Falls back through known field names then to array idx.
-  const resultIndex: string =
-    String(item.resultIndex  ?? "")  ||
-    String(item.sI?.[0]?.id ?? "")  ||
-    String(item.sI?.[0]?.rI ?? "")  ||
-    String(idx);
+  // resultIndex: this is the flight-level convenience field returned to the
+  // frontend (kept for back-compat) — it must use the same priceId logic as
+  // flightResultIndex above (totalPriceList[].id, TripJack's real /fms/v1/review
+  // priceId), not the numeric sI[0].id/tai.tbi segment key, or fareQuote will
+  // fail with "Keys Passed in the request is already expired" (errCode 808).
+  const resultIndex: string = flightResultIndex;
 
   // Map each TripJack segment to a normalized segment object
   const segments = (item.sI || []).map((seg: any) => {
@@ -503,9 +512,13 @@ router.post("/flights", async (req, res): Promise<void> => {
         // Keep the lowest price as the card display price
         const cheapest = existing.fareOptions?.[0];
         if (cheapest && cheapest.totalFare < existing.price) {
-          existing.price       = cheapest.totalFare;
-          existing.resultIndex = cheapest.resultIndex || existing.resultIndex;
+          existing.price = cheapest.totalFare;
         }
+        // Flight-level resultIndex is a display/back-compat convenience only —
+        // the booking flow always uses each fareOption's own resultIndex
+        // (the real TripJack priceId). Keep it aligned with the current
+        // cheapest fare so it's never a stale/mismatched value.
+        existing.resultIndex = existing.fareOptions?.[0]?.resultIndex || existing.resultIndex;
       }
     }
 

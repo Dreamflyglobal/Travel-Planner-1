@@ -17,10 +17,16 @@ router.post("/search", async (req, res): Promise<void> => {
   }
 });
 
-// ── POST /api/fareQuote → /fms/v1/air/farequote ───────────────────────────
+// ── POST /api/fareQuote → /fms/v1/review ──────────────────────────────────
+// NOTE: real endpoint is /fms/v1/review (TripJack calls this step "review",
+// not "farequote"), and it expects { priceIds: string[] }, not a single
+// `resultIndex` field. /fms/v1/air/farequote is an unmapped GET-only stub —
+// see tripjackRoutes.ts's handleFareQuote for the full investigation notes.
 router.post("/fareQuote", async (req, res): Promise<void> => {
   try {
-    const data = await tjPostWithRetry("/fms/v1/air/farequote", req.body, {
+    const { resultIndex, priceIds } = req.body as { resultIndex?: string; priceIds?: string[] };
+    const body = priceIds?.length ? { priceIds } : { priceIds: resultIndex ? [resultIndex] : [] };
+    const data = await tjPostWithRetry("/fms/v1/review", body, {
       context:    "api/fareQuote",
       timeoutMs:  15_000,
       maxRetries: 2,
@@ -45,10 +51,13 @@ router.post("/ssr", async (req, res): Promise<void> => {
   }
 });
 
-// ── POST /api/book → /fms/v1/air/book ─────────────────────────────────────
+// ── POST /api/book → /oms/v1/air/book ─────────────────────────────────────
+// NOTE: real path is /oms/v1/air/book, not /fms/v1/air/book — the latter is
+// an unmapped GET-only stub. See tripjackRoutes.ts's tj-book route for the
+// full investigation notes.
 router.post("/book", async (req, res): Promise<void> => {
   try {
-    const data = await tjPostWithRetry("/fms/v1/air/book", req.body, {
+    const data = await tjPostWithRetry("/oms/v1/air/book", req.body, {
       context:    "api/book",
       timeoutMs:  30_000,
       maxRetries: 2,

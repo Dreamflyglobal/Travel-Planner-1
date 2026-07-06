@@ -88778,15 +88778,14 @@ function mapTripJackFlight(item, idx, fromIata, toIata, traceId = "") {
     FIRST: "First",
     PREMIUM_ECONOMY: "Premium Economy"
   };
-  const flightResultIndex = String(item.resultIndex ?? "") || String(item.sI?.[0]?.id ?? "") || String(item.sI?.[0]?.rI ?? "") || String(idx);
+  const flightResultIndex = String(item.totalPriceList?.[0]?.id ?? "") || String(item.resultIndex ?? "") || String(item.sI?.[0]?.id ?? "") || String(item.sI?.[0]?.rI ?? "") || String(idx);
   const fareOptions = (item.totalPriceList || []).map((pl) => {
     const adultFd = pl?.fd?.ADULT;
     if (!adultFd) return null;
     const rawFare = adultFd?.fC?.TF || adultFd?.fC?.BF || 0;
     if (!rawFare) return null;
     const cc = String(adultFd?.cc || "ECONOMY").toUpperCase();
-    const tbiKeys = pl?.tai?.tbi ? Object.keys(pl.tai.tbi) : [];
-    const fareResultIndex = (tbiKeys.length > 0 ? tbiKeys[0] : "") || String(pl.resultIndex ?? "") || String(pl.rI ?? "") || flightResultIndex;
+    const fareResultIndex = String(pl.id ?? "") || String(pl.resultIndex ?? "") || String(pl.rI ?? "") || flightResultIndex;
     const rawMeal = adultFd?.mI ?? adultFd?.meal ?? null;
     const meal = rawMeal === "F" || rawMeal === "FREE" ? "FREE" : rawMeal === "P" || rawMeal === "PAID" ? "PAID" : null;
     const rTRaw = adultFd?.rT;
@@ -88821,7 +88820,7 @@ function mapTripJackFlight(item, idx, fromIata, toIata, traceId = "") {
   const segCount = item.sI?.length ?? 1;
   const stops = Math.max(0, segCount - 1);
   const stopsLabel = segCount === 1 ? "Non-stop" : segCount === 2 ? "1 Stop" : "Multi-stop";
-  const resultIndex = String(item.resultIndex ?? "") || String(item.sI?.[0]?.id ?? "") || String(item.sI?.[0]?.rI ?? "") || String(idx);
+  const resultIndex = flightResultIndex;
   const segments = (item.sI || []).map((seg) => {
     const depDt = seg.dt || "";
     const arrDt = seg.at || "";
@@ -88985,8 +88984,8 @@ router5.post("/flights", async (req, res) => {
         const cheapest = existing.fareOptions?.[0];
         if (cheapest && cheapest.totalFare < existing.price) {
           existing.price = cheapest.totalFare;
-          existing.resultIndex = cheapest.resultIndex || existing.resultIndex;
         }
+        existing.resultIndex = existing.fareOptions?.[0]?.resultIndex || existing.resultIndex;
       }
     }
     const flights = Array.from(groupMap.values()).map((f, idx) => ({ ...f, id: idx + 1 }));
@@ -98978,7 +98977,9 @@ router25.post("/search", async (req, res) => {
 });
 router25.post("/fareQuote", async (req, res) => {
   try {
-    const data = await tjPostWithRetry("/fms/v1/air/farequote", req.body, {
+    const { resultIndex, priceIds } = req.body;
+    const body = priceIds?.length ? { priceIds } : { priceIds: resultIndex ? [resultIndex] : [] };
+    const data = await tjPostWithRetry("/fms/v1/review", body, {
       context: "api/fareQuote",
       timeoutMs: 15e3,
       maxRetries: 2
@@ -99002,7 +99003,7 @@ router25.post("/ssr", async (req, res) => {
 });
 router25.post("/book", async (req, res) => {
   try {
-    const data = await tjPostWithRetry("/fms/v1/air/book", req.body, {
+    const data = await tjPostWithRetry("/oms/v1/air/book", req.body, {
       context: "api/book",
       timeoutMs: 3e4,
       maxRetries: 2
@@ -99042,12 +99043,11 @@ async function handleFareQuote(req, res) {
     res.status(400).json({ error: "resultIndex is required for fareQuote" });
     return;
   }
-  const fareQuoteBody = { resultIndex };
-  if (traceId) fareQuoteBody.traceId = traceId;
+  const fareQuoteBody = { priceIds: [resultIndex] };
   logger.info("FareQuote Body:", JSON.stringify(fareQuoteBody));
   console.log("[fareQuote] request payload sent to TripJack:", JSON.stringify(fareQuoteBody));
   try {
-    const data = await tjPostWithRetry("/fms/v1/air/farequote", fareQuoteBody, {
+    const data = await tjPostWithRetry("/fms/v1/review", fareQuoteBody, {
       context: "fareQuote",
       timeoutMs: 15e3,
       maxRetries: 2
@@ -99085,7 +99085,7 @@ router26.post("/tj-farerules", async (req, res) => {
     return;
   }
   try {
-    const data = await tjPostWithRetry("/fms/v1/air/farerule", { bookingId }, {
+    const data = await tjPostWithRetry("/fms/v1/farerule", { bookingId }, {
       context: "fareRules",
       timeoutMs: 15e3,
       maxRetries: 2
@@ -99143,7 +99143,7 @@ router26.post("/tj-ssr", async (req, res) => {
 router26.post("/tj-book", async (req, res) => {
   console.log("[tj-book] === Incoming request ===", JSON.stringify(req.body));
   try {
-    const data = await tjPostWithRetry("/fms/v1/air/book", req.body, {
+    const data = await tjPostWithRetry("/oms/v1/air/book", req.body, {
       context: "tj-book",
       timeoutMs: 3e4,
       maxRetries: 2

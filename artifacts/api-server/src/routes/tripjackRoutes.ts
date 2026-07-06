@@ -18,15 +18,17 @@ router.post("/tj-search", async (req, res): Promise<void> => {
   }
 });
 
-// POST /api/tj-farequote → TripJack /fms/v1/air/farequote
+// POST /api/tj-farequote → TripJack /fms/v1/review
 // Accepts: { traceId, resultIndex }
-// NOTE: /fms/v1/air/farequote is confirmed valid by TripJack's own CORS
-// preflight (OPTIONS returns `access-control-allow-methods: POST` for this
-// exact path) — a 405 here is NOT a wrong-endpoint problem. It means
-// TripJack's gateway rejected the request before routing it, which happens
-// when neither the Bearer-token exchange nor the apikey-header fallback is
-// authorized for this server's outbound IP. See tj-retry.ts for the
-// auth-retry + actionable-error handling for this case.
+// NOTE: TripJack's real "fare quote" step is called "review", not
+// "farequote" — /fms/v1/air/farequote does not exist on TripJack's gateway
+// (confirmed via direct OPTIONS preflight: it only allows GET/HEAD and
+// returns an unrelated `{ suggestions: [] }` stub; POSTing to it always
+// yields a bare HTTP 405). The real endpoint is `POST /fms/v1/review` with
+// body `{ priceIds: [resultIndex] }` (array, not a single `resultIndex`
+// field), authenticated with the plain `apikey` header — verified directly
+// against the sandbox to return HTTP 200 with real fare + a `bookingId`
+// that `/oms/v1/air/book` accepts. See tj-retry.ts for retry/error handling.
 async function handleFareQuote(req: any, res: any): Promise<void> {
   const { traceId, resultIndex } = req.body as {
     traceId?:     string;
@@ -48,15 +50,17 @@ async function handleFareQuote(req: any, res: any): Promise<void> {
     return;
   }
 
-  // Build fareQuote body — traceId is optional; test API may not return one
-  const fareQuoteBody: Record<string, string> = { resultIndex };
-  if (traceId) fareQuoteBody.traceId = traceId;
+  // TripJack's real review endpoint takes an array of priceIds (resultIndex
+  // values), not a single `resultIndex` string. traceId is not part of this
+  // request shape on TripJack's side — it's kept in our own API only for
+  // logging/back-compat with the frontend's cached session data.
+  const fareQuoteBody: Record<string, unknown> = { priceIds: [resultIndex] };
 
   logger.info("FareQuote Body:", JSON.stringify(fareQuoteBody));
   console.log("[fareQuote] request payload sent to TripJack:", JSON.stringify(fareQuoteBody));
 
   try {
-    const data = await tjPostWithRetry("/fms/v1/air/farequote", fareQuoteBody, {
+    const data = await tjPostWithRetry("/fms/v1/review", fareQuoteBody, {
       context:    "fareQuote",
       timeoutMs:  15_000,
       maxRetries: 2,
@@ -105,7 +109,10 @@ router.post("/tj-farerules", async (req, res): Promise<void> => {
   }
 
   try {
-    const data = await tjPostWithRetry("/fms/v1/air/farerule", { bookingId }, {
+    // NOTE: real path is /fms/v1/farerule (no "/air/" segment) — verified
+    // directly against the sandbox; /fms/v1/air/farerule is an unmapped
+    // GET-only stub, same class of bug as the old farequote endpoint.
+    const data = await tjPostWithRetry("/fms/v1/farerule", { bookingId }, {
       context:    "fareRules",
       timeoutMs:  15_000,
       maxRetries: 2,
@@ -163,11 +170,17 @@ router.post("/tj-ssr", async (req, res): Promise<void> => {
   }
 });
 
-// POST /api/tj-book → /fms/v1/air/book
+// POST /api/tj-book → /oms/v1/air/book
 router.post("/tj-book", async (req, res): Promise<void> => {
   console.log("[tj-book] === Incoming request ===", JSON.stringify(req.body));
   try {
-    const data = await tjPostWithRetry("/fms/v1/air/book", req.body, {
+    // NOTE: real path is /oms/v1/air/book (order-management service), not
+    // /fms/v1/air/book — verified directly against the sandbox. The latter
+    // is an unmapped GET-only stub, same class of bug as the old farequote
+    // endpoint. Confirmed with a real bookingId that /oms/v1/air/book
+    // returns meaningful business-logic errors (missing/expired bookingId)
+    // instead of a bare 405.
+    const data = await tjPostWithRetry("/oms/v1/air/book", req.body, {
       context:    "tj-book",
       timeoutMs:  30_000,
       maxRetries: 2,
