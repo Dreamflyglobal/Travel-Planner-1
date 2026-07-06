@@ -318,39 +318,43 @@ export function SearchTabs({
             {tripType === "multicity" && (
               <div className="space-y-3">
                 {mcRoutes.map((route, i) => (
-                  <div key={i} className="flex flex-col sm:flex-row sm:items-end gap-2 p-3 rounded-xl bg-gray-50 border relative">
-                    <span className="absolute top-2 left-3 text-xs font-bold text-muted-foreground">Flight {i + 1}</span>
-                    <div className="flex-1 pt-4 sm:pt-0 space-y-1 min-w-0">
-                      <label className={labelCls}>From</label>
-                      <AutocompleteInput
-                        placeholder="City or Airport"
-                        suggestions={mcSuggestions[i]?.from ?? []}
-                        value={route.from}
-                        onChange={(val) => updateMcRoute(i, "from", val)}
-                        maxSuggestions={6}
-                      />
+                  <div key={i} className="p-3 rounded-xl bg-gray-50 border space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-muted-foreground">Flight {i + 1}</span>
+                      {mcRoutes.length > 2 && (
+                        <button onClick={() => removeMcRoute(i)}
+                          className="w-7 h-7 rounded-full border border-gray-200 bg-white text-gray-400 hover:text-red-500 hover:border-red-300 flex items-center justify-center shrink-0 transition-colors"
+                          title="Remove this flight">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
-                    <div className="flex-1 space-y-1 min-w-0">
-                      <label className={labelCls}>To</label>
-                      <AutocompleteInput
-                        placeholder="City or Airport"
-                        suggestions={mcSuggestions[i]?.to ?? []}
-                        value={route.to}
-                        onChange={(val) => updateMcRoute(i, "to", val)}
-                        maxSuggestions={6}
-                      />
+                    <div className="flex flex-col sm:flex-row sm:items-end gap-2">
+                      <div className="flex-1 space-y-1 min-w-0">
+                        <label className={labelCls}>From</label>
+                        <AutocompleteInput
+                          placeholder="City or Airport"
+                          suggestions={mcSuggestions[i]?.from ?? []}
+                          value={route.from}
+                          onChange={(val) => updateMcRoute(i, "from", val)}
+                          maxSuggestions={6}
+                        />
+                      </div>
+                      <div className="flex-1 space-y-1 min-w-0">
+                        <label className={labelCls}>To</label>
+                        <AutocompleteInput
+                          placeholder="City or Airport"
+                          suggestions={mcSuggestions[i]?.to ?? []}
+                          value={route.to}
+                          onChange={(val) => updateMcRoute(i, "to", val)}
+                          maxSuggestions={6}
+                        />
+                      </div>
+                      <div className="w-full sm:w-40 space-y-1">
+                        <label className={labelCls}>Date</label>
+                        <input type="date" value={route.date} min={today} onChange={(e) => updateMcRoute(i, "date", e.target.value)} className={inputCls} />
+                      </div>
                     </div>
-                    <div className="w-full sm:w-40 space-y-1">
-                      <label className={labelCls}>Date</label>
-                      <input type="date" value={route.date} min={today} onChange={(e) => updateMcRoute(i, "date", e.target.value)} className={inputCls} />
-                    </div>
-                    {mcRoutes.length > 2 && (
-                      <button onClick={() => removeMcRoute(i)}
-                        className="sm:mb-0.5 w-9 h-9 rounded-full border border-gray-200 bg-white text-gray-400 hover:text-red-500 hover:border-red-300 flex items-center justify-center shrink-0 self-center sm:self-auto transition-colors"
-                        title="Remove this flight">
-                        <X className="w-4 h-4" />
-                      </button>
-                    )}
                   </div>
                 ))}
                 <div className="flex items-center gap-3 flex-wrap">
