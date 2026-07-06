@@ -88789,9 +88789,11 @@ function mapTripJackFlight(item, idx, fromIata, toIata, traceId = "") {
     const fareResultIndex = (tbiKeys.length > 0 ? tbiKeys[0] : "") || String(pl.resultIndex ?? "") || String(pl.rI ?? "") || flightResultIndex;
     const rawMeal = adultFd?.mI ?? adultFd?.meal ?? null;
     const meal = rawMeal === "F" || rawMeal === "FREE" ? "FREE" : rawMeal === "P" || rawMeal === "PAID" ? "PAID" : null;
-    const rT = String(adultFd?.rT || "").toUpperCase();
+    const rTRaw = adultFd?.rT;
+    const rTStr = typeof rTRaw === "string" ? rTRaw.toUpperCase() : "";
+    const rTNum = typeof rTRaw === "number" ? rTRaw : rTStr !== "" && !Number.isNaN(Number(rTStr)) ? Number(rTStr) : null;
     const nRF = adultFd?.nRF === true || adultFd?.nRF === 1;
-    const refundable = rT === "FULL_REFUNDABLE" || rT === "PARTIAL_REFUNDABLE" || rT === "REFUNDABLE" ? true : rT === "NON_REFUNDABLE" || nRF ? false : cc === "BUSINESS" || cc === "FIRST" || cc === "PREMIUM_ECONOMY";
+    const refundable = rTNum === 1 || rTNum === 2 || rTStr === "FULL_REFUNDABLE" || rTStr === "PARTIAL_REFUNDABLE" || rTStr === "REFUNDABLE" ? true : rTNum === 0 || rTStr === "NON_REFUNDABLE" ? false : !nRF;
     const apiLabel = (pl.fareIdentifier || pl.fn || adultFd.fareIdentifier || "").trim();
     const fareLabel = apiLabel || (cc === "BUSINESS" || cc === "FIRST" ? refundable ? "Business Flex" : "Business Saver" : cc === "PREMIUM_ECONOMY" ? "Premium Economy" : refundable ? "Flex" : "Saver");
     const bI = adultFd?.bI ?? {};
