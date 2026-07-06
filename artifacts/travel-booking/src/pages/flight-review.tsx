@@ -185,7 +185,7 @@ export default function FlightReview() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-slate-900 text-sm truncate">{p.name}</p>
-                        <p className="text-xs text-muted-foreground">{p.gender} · Age {p.age}</p>
+                        <p className="text-xs text-muted-foreground">{p.gender} · DOB {p.dob}</p>
                       </div>
                       {p.email && (
                         <p className="text-xs text-slate-400 hidden sm:block truncate max-w-[140px]">{p.email}</p>

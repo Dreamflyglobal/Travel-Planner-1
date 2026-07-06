@@ -98561,6 +98561,21 @@ var verify_payment_default = router23;
 
 // src/routes/book-flight.ts
 var router24 = (0, import_express24.Router)();
+function computePassengerAge(p) {
+  if (p.dob) {
+    const dobDate = new Date(p.dob);
+    if (!isNaN(dobDate.getTime())) {
+      const today = /* @__PURE__ */ new Date();
+      let age = today.getFullYear() - dobDate.getFullYear();
+      const monthDiff = today.getMonth() - dobDate.getMonth();
+      if (monthDiff < 0 || monthDiff === 0 && today.getDate() < dobDate.getDate()) {
+        age--;
+      }
+      if (age >= 0) return age;
+    }
+  }
+  return parseInt(p.age ?? "", 10);
+}
 async function doRazorpayRefund(paymentId, amountINR, bookingId, bookingRef) {
   const keyId = process.env["RAZORPAY_KEY_ID"] ?? "";
   const keySecret = process.env["RAZORPAY_KEY_SECRET"] ?? "";
@@ -98795,7 +98810,7 @@ router24.post("/book-flight", async (req, res) => {
       currency: "INR"
     }],
     travellerInfo: passengers.map((p) => {
-      const age = parseInt(p.age, 10);
+      const age = computePassengerAge(p);
       const gender = (p.gender ?? "").toLowerCase();
       const title = gender === "female" ? "MS" : "MR";
       const pt = !isNaN(age) && age < 12 ? age < 2 ? "INFANT" : "CHILD" : "ADULT";

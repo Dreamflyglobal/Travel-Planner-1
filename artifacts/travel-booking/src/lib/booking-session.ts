@@ -1,10 +1,10 @@
 export type Passenger = {
   name: string;
-  age: string;
+  age?: string;
   gender: string;
   email: string;
   phone: string;
-  dob?: string;
+  dob: string;
 };
 
 export type Guest = {

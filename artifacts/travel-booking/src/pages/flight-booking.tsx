@@ -26,14 +26,13 @@ import { cn } from "@/lib/utils";
 
 type Passenger = {
   name: string;
-  age: string;
   gender: string;
   email: string;
   phone: string;
   dob: string;
 };
 
-const emptyPassenger = (): Passenger => ({ name: "", age: "", gender: "", email: "", phone: "", dob: "" });
+const emptyPassenger = (): Passenger => ({ name: "", gender: "", email: "", phone: "", dob: "" });
 
 type FieldErrors = Partial<Record<keyof Passenger, string>>;
 
@@ -42,9 +41,6 @@ function validatePassengers(passengers: Passenger[]): FieldErrors[] {
     const errors: FieldErrors = {};
     if (!p.name.trim() || p.name.trim().length < 2)
       errors.name = "Full name must be at least 2 characters";
-    const age = parseInt(p.age);
-    if (!p.age || isNaN(age) || age < 1 || age > 120)
-      errors.age = "Enter a valid age (1–120)";
     if (!p.gender)
       errors.gender = "Please select a gender";
     if (!p.dob || isNaN(new Date(p.dob).getTime()) || new Date(p.dob) > new Date())
@@ -653,15 +649,15 @@ export default function FlightBooking() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className="text-sm font-semibold text-slate-700 block mb-1.5">
-                          Age <span className="text-red-500">*</span>
+                          Date of Birth <span className="text-red-500">*</span>
                         </label>
                         <Input
-                          type="number" min={1} max={120} placeholder="Enter age"
-                          value={passengers[i].age}
-                          onChange={(e) => updatePassenger(i, "age", e.target.value)}
-                          className={cn("h-11", errors[i]?.age && "border-red-400")}
+                          type="date" max={new Date().toISOString().slice(0, 10)}
+                          value={passengers[i].dob}
+                          onChange={(e) => updatePassenger(i, "dob", e.target.value)}
+                          className={cn("h-11", errors[i]?.dob && "border-red-400")}
                         />
-                        {errors[i]?.age && <p className="text-xs text-red-500 mt-1">{errors[i].age}</p>}
+                        {errors[i]?.dob && <p className="text-xs text-red-500 mt-1">{errors[i].dob}</p>}
                       </div>
                       <div>
                         <label className="text-sm font-semibold text-slate-700 block mb-1.5">
@@ -679,19 +675,6 @@ export default function FlightBooking() {
                         </Select>
                         {errors[i]?.gender && <p className="text-xs text-red-500 mt-1">{errors[i].gender}</p>}
                       </div>
-                    </div>
-
-                    <div>
-                      <label className="text-sm font-semibold text-slate-700 block mb-1.5">
-                        Date of Birth <span className="text-red-500">*</span>
-                      </label>
-                      <Input
-                        type="date" max={new Date().toISOString().slice(0, 10)}
-                        value={passengers[i].dob}
-                        onChange={(e) => updatePassenger(i, "dob", e.target.value)}
-                        className={cn("h-11", errors[i]?.dob && "border-red-400")}
-                      />
-                      {errors[i]?.dob && <p className="text-xs text-red-500 mt-1">{errors[i].dob}</p>}
                     </div>
 
                     <div>

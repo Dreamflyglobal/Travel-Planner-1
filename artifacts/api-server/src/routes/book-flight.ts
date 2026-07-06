@@ -10,6 +10,27 @@ import { sendAllBookingNotifications, sendBookingFailureNotifications, sendRefun
 
 const router = Router();
 
+// ── Passenger age (derived from Date of Birth) ─────────────────────────────
+// The passenger form only collects Date of Birth (no separate Age field), so
+// TripJack's required passenger-type (ADULT/CHILD/INFANT) is derived here.
+// Falls back to a legacy `age` field for any older/unrelated flows that may
+// still send it directly.
+function computePassengerAge(p: { dob?: string; age?: string }): number {
+  if (p.dob) {
+    const dobDate = new Date(p.dob);
+    if (!isNaN(dobDate.getTime())) {
+      const today = new Date();
+      let age = today.getFullYear() - dobDate.getFullYear();
+      const monthDiff = today.getMonth() - dobDate.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dobDate.getDate())) {
+        age--;
+      }
+      if (age >= 0) return age;
+    }
+  }
+  return parseInt(p.age ?? "", 10);
+}
+
 // ── Razorpay refund (server-side, no admin auth required) ─────────────────
 async function doRazorpayRefund(
   paymentId: string,
@@ -354,7 +375,7 @@ router.post("/book-flight", async (req, res): Promise<void> => {
       currency:    "INR",
     }],
     travellerInfo: (passengers as any[]).map((p) => {
-      const age    = parseInt(p.age, 10);
+      const age    = computePassengerAge(p);
       const gender = (p.gender ?? "").toLowerCase();
       const title  = gender === "female" ? "MS" : "MR";
       const pt     = !isNaN(age) && age < 12 ? (age < 2 ? "INFANT" : "CHILD") : "ADULT";

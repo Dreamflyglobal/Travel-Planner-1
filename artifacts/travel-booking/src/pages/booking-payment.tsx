@@ -111,7 +111,7 @@ function FlightSummary({ s }: { s: FlightBookingSession }) {
             <div key={i} className="flex items-center gap-2 text-sm text-slate-700 py-1">
               <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[10px] font-bold">{i+1}</span>
               <span className="font-medium">{p.name}</span>
-              <span className="text-muted-foreground text-xs">· {p.age}y · {p.gender}</span>
+              <span className="text-muted-foreground text-xs">· DOB {p.dob} · {p.gender}</span>
             </div>
           ))}
         </div>
