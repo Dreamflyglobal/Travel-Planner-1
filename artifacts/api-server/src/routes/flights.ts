@@ -196,15 +196,27 @@ function mapTripJackFlight(item: any, idx: number, fromIata: string, toIata: str
         rawMeal === "P" || rawMeal === "PAID" ? "PAID" :
         null;
 
-      // Refundability — TripJack uses rT (refundType) or nRF (non-refundable bool)
-      const rT: string  = (String(adultFd?.rT || "")).toUpperCase();
+      // Refundability — TripJack's real indicator is `rT`, a NUMERIC enum on fd.ADULT:
+      //   0 = fully non-refundable, 1 = refundable, 2 = partially refundable,
+      //   4 = LCC fare (refundability governed by `nRF` instead).
+      // Some environments may still send the legacy string enum
+      // ("REFUNDABLE" / "NON_REFUNDABLE" / etc.) — support both, numeric first.
+      const rTRaw = adultFd?.rT;
+      const rTStr: string = typeof rTRaw === "string" ? rTRaw.toUpperCase() : "";
+      const rTNum: number | null =
+        typeof rTRaw === "number" ? rTRaw :
+        rTStr !== "" && !Number.isNaN(Number(rTStr)) ? Number(rTStr) :
+        null;
       const nRF: boolean = adultFd?.nRF === true || adultFd?.nRF === 1;
       const refundable: boolean =
-        rT === "FULL_REFUNDABLE" || rT === "PARTIAL_REFUNDABLE" || rT === "REFUNDABLE"
+        rTNum === 1 || rTNum === 2 ||
+        rTStr === "FULL_REFUNDABLE" || rTStr === "PARTIAL_REFUNDABLE" || rTStr === "REFUNDABLE"
           ? true
-          : rT === "NON_REFUNDABLE" || nRF
+          : rTNum === 0 || rTStr === "NON_REFUNDABLE"
           ? false
-          : cc === "BUSINESS" || cc === "FIRST" || cc === "PREMIUM_ECONOMY";
+          // rT absent/ambiguous (e.g. LCC fare, rT=4) — trust TripJack's own
+          // non-refundable flag rather than guessing off cabin class.
+          : !nRF;
 
       // Fare label — prefer API-provided name, derive from refundability otherwise
       const apiLabel: string =

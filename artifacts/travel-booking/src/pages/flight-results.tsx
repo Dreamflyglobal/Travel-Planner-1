@@ -938,6 +938,11 @@ export default function FlightResults() {
                       ? (normalMarkup - agentMarkupFlat)
                       : null;
                     const isLive = source === "aviationstack";
+                    // Cheapest fare drives the flight-level tag — matches the price shown on this card.
+                    const primaryFare = flight.fareOptions
+                      ? [...flight.fareOptions].sort((a, b) => a.totalFare - b.totalFare)[0]
+                      : undefined;
+                    const flightRefundable = primaryFare?.refundable ?? false;
 
                     return (
                       <Card
@@ -1146,8 +1151,13 @@ export default function FlightResults() {
                                 <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 bg-slate-50 border border-slate-200 rounded-full px-2.5 py-0.5">
                                   👁 {((flight.id * 13 + 7) % 18) + 6} viewing
                                 </span>
-                                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-green-700 bg-green-50 border border-green-200 rounded-full px-2.5 py-0.5">
-                                  ✓ Refundable
+                                <span className={cn(
+                                  "inline-flex items-center gap-1 text-[11px] font-medium rounded-full px-2.5 py-0.5 border",
+                                  flightRefundable
+                                    ? "text-green-700 bg-green-50 border-green-200"
+                                    : "text-red-500 bg-red-50 border-red-200"
+                                )}>
+                                  {flightRefundable ? "✓ Refundable" : "✕ Non-refundable"}
                                 </span>
                                 {flight.seatsAvailable <= 5 && (
                                   <span className="text-[10px] font-bold text-red-500 animate-pulse">↑ Prices rising fast!</span>
