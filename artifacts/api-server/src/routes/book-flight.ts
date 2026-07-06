@@ -353,17 +353,23 @@ router.post("/book-flight", async (req, res): Promise<void> => {
       amount:      totalPrice,
       currency:    "INR",
     }],
-    travellerInfo: (passengers as any[]).map((p) => ({
-      fn:  (p.name ?? "").split(" ")[0]                 || p.name || "Guest",
-      ln:  (p.name ?? "").split(" ").slice(1).join(" ") || ".",
-      ti:  "MR",
-      dob: "",
-      pNum: p.phone  ?? "",
-      eml:  p.email  ?? "",
-      pt:   "ADULT",
-      ssrSeatInfos:    p.seatCode    ? [{ key: p.seatCode,    code: p.seatCode    }] : [],
-      ssrBaggageInfos: p.baggageCode ? [{ key: p.baggageCode, code: p.baggageCode }] : [],
-    })),
+    travellerInfo: (passengers as any[]).map((p) => {
+      const age    = parseInt(p.age, 10);
+      const gender = (p.gender ?? "").toLowerCase();
+      const title  = gender === "female" ? "MS" : "MR";
+      const pt     = !isNaN(age) && age < 12 ? (age < 2 ? "INFANT" : "CHILD") : "ADULT";
+      return {
+        fn:  (p.name ?? "").split(" ")[0]                 || p.name || "Guest",
+        ln:  (p.name ?? "").split(" ").slice(1).join(" ") || ".",
+        ti:  title,
+        dob: p.dob ?? "",
+        pNum: p.phone  ?? "",
+        eml:  p.email  ?? "",
+        pt,
+        ssrSeatInfos:    p.seatCode    ? [{ key: p.seatCode,    code: p.seatCode    }] : [],
+        ssrBaggageInfos: p.baggageCode ? [{ key: p.baggageCode, code: p.baggageCode }] : [],
+      };
+    }),
     deliveryInfo: {
       emails:  [passengers[0]?.email ?? passengerEmail],
       mobiles: [{ countryCode: "91", number: passengers[0]?.phone ?? passengerPhone }],

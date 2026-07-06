@@ -9,9 +9,25 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import {
   Plane, ArrowLeft, CheckCircle2, ChevronRight,
-  Armchair, Luggage, Loader2,
+  Armchair, Luggage, Loader2, ShieldCheck, ShieldAlert,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+type FareRules = {
+  refundable: boolean;
+  cancellationCharge?: number;
+  dateChangeCharge?: number;
+  note?: string;
+};
+
+function loadFareRules(): FareRules | null {
+  try {
+    const raw = sessionStorage.getItem("ww_tj_farerules");
+    return raw ? (JSON.parse(raw) as FareRules) : null;
+  } catch {
+    return null;
+  }
+}
 
 
 type SeatInfo   = { code: string; available: boolean; amount: number; seatType?: string; rowNo?: number };
@@ -48,6 +64,7 @@ export default function FlightAddons() {
 
   const [selectedSeats,   setSelectedSeats]   = useState<string[]>([]);
   const [selectedBaggage, setSelectedBaggage] = useState<BaggageInfo | null>(null);
+  const [fareRules,       setFareRules]       = useState<FareRules | null>(null);
 
   useEffect(() => {
     const s = loadBookingSession();
@@ -71,6 +88,8 @@ export default function FlightAddons() {
       setSelectedBaggage({ ...parsedBaggage[0] });
     }
     // else: baggage remains [], selectedBaggage stays null → "not available" message shown in UI
+
+    setFareRules(loadFareRules());
   }, []);
 
   if (!session) {
@@ -115,6 +134,7 @@ export default function FlightAddons() {
       seatAddOnPrice:    seatAddOn,
       baggageAddOnPrice: baggageAddOn,
       totalBase:         totalWithAddons,
+      ...(fareRules ? { fareRules } : {}),
     };
     saveBookingSession(updated);
     setLocation("/booking/flight-review");
@@ -202,6 +222,47 @@ export default function FlightAddons() {
                     <div className="text-right">
                       <p className="text-xl font-extrabold text-slate-900">{session.arrival}</p>
                       <p className="text-xs text-slate-500">{session.to}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Fare Rules — Refundable / Non-refundable */}
+              <Card className="shadow-sm border">
+                <CardContent className="p-4">
+                  <div className="flex items-start gap-3">
+                    <div className={cn(
+                      "w-9 h-9 rounded-full flex items-center justify-center shrink-0",
+                      fareRules?.refundable === false ? "bg-red-100" : "bg-green-100"
+                    )}>
+                      {fareRules?.refundable === false
+                        ? <ShieldAlert className="w-4 h-4 text-red-600" />
+                        : <ShieldCheck className="w-4 h-4 text-green-600" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-slate-800">
+                        {fareRules
+                          ? (fareRules.refundable ? "Refundable Fare" : "Non-refundable Fare")
+                          : "Fare Rules"}
+                      </p>
+                      {fareRules ? (
+                        <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
+                          {typeof fareRules.cancellationCharge === "number" && (
+                            <p>Cancellation charge: ₹{fareRules.cancellationCharge.toLocaleString("en-IN")} per passenger</p>
+                          )}
+                          {typeof fareRules.dateChangeCharge === "number" && (
+                            <p>Date change charge: ₹{fareRules.dateChangeCharge.toLocaleString("en-IN")} per passenger</p>
+                          )}
+                          {fareRules.note && <p>{fareRules.note}</p>}
+                          {!fareRules.cancellationCharge && !fareRules.dateChangeCharge && !fareRules.note && (
+                            <p>{fareRules.refundable ? "Cancellation charges may apply as per airline policy." : "This fare cannot be cancelled or refunded."}</p>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Fare rules from the airline were not available for this fare. Standard cancellation policy applies — see our Cancellation Policy page.
+                        </p>
+                      )}
                     </div>
                   </div>
                 </CardContent>

@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
   Plane, ArrowLeft, CheckCircle2, ChevronRight,
-  User, Armchair, Luggage, ShieldCheck, Loader2, Lock,
+  User, Armchair, Luggage, ShieldCheck, ShieldAlert, Loader2, Lock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -194,6 +194,38 @@ export default function FlightReview() {
                   ))}
                 </CardContent>
               </Card>
+
+              {/* Fare Rules */}
+              {session.fareRules && (
+                <Card className="shadow-sm border">
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      <div className={cn(
+                        "w-9 h-9 rounded-full flex items-center justify-center shrink-0",
+                        session.fareRules.refundable === false ? "bg-red-100" : "bg-green-100"
+                      )}>
+                        {session.fareRules.refundable === false
+                          ? <ShieldAlert className="w-4 h-4 text-red-600" />
+                          : <ShieldCheck className="w-4 h-4 text-green-600" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-slate-800">
+                          {session.fareRules.refundable ? "Refundable Fare" : "Non-refundable Fare"}
+                        </p>
+                        <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
+                          {typeof session.fareRules.cancellationCharge === "number" && (
+                            <p>Cancellation charge: ₹{session.fareRules.cancellationCharge.toLocaleString("en-IN")} per passenger</p>
+                          )}
+                          {typeof session.fareRules.dateChangeCharge === "number" && (
+                            <p>Date change charge: ₹{session.fareRules.dateChangeCharge.toLocaleString("en-IN")} per passenger</p>
+                          )}
+                          {session.fareRules.note && <p>{session.fareRules.note}</p>}
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* SSR Selections */}
               <Card className="shadow-sm border">

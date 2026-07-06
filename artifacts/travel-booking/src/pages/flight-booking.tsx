@@ -30,9 +30,10 @@ type Passenger = {
   gender: string;
   email: string;
   phone: string;
+  dob: string;
 };
 
-const emptyPassenger = (): Passenger => ({ name: "", age: "", gender: "", email: "", phone: "" });
+const emptyPassenger = (): Passenger => ({ name: "", age: "", gender: "", email: "", phone: "", dob: "" });
 
 type FieldErrors = Partial<Record<keyof Passenger, string>>;
 
@@ -46,12 +47,63 @@ function validatePassengers(passengers: Passenger[]): FieldErrors[] {
       errors.age = "Enter a valid age (1–120)";
     if (!p.gender)
       errors.gender = "Please select a gender";
+    if (!p.dob || isNaN(new Date(p.dob).getTime()) || new Date(p.dob) > new Date())
+      errors.dob = "Enter a valid date of birth";
     if (!p.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email))
       errors.email = "Enter a valid email address";
     if (!p.phone.trim() || !/^\d{10}$/.test(p.phone.replace(/\D/g, "")))
       errors.phone = "Enter a valid 10-digit phone number";
     return errors;
   });
+}
+
+// ── Fare Rules helper ─────────────────────────────────────────────────────
+// Fetches TripJack's /api/tj-farerules and stores a simplified refundable /
+// cancellation-charge summary in sessionStorage for the add-ons & review
+// pages. Best-effort: any failure just means "rules unavailable" — never
+// blocks the booking flow.
+async function fetchAndStoreFareRules(bookingId: string, apiBase: string): Promise<void> {
+  if (!bookingId) return;
+  try {
+    console.info("[fareRules] fetching fare rules | bookingId:", bookingId);
+    const res  = await fetch(`${apiBase}/api/tj-farerules`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ bookingId }),
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok || data?.status?.success === false) {
+      console.warn("[fareRules] fare rules unavailable:", data?.error || res.status);
+      sessionStorage.removeItem("ww_tj_farerules");
+      return;
+    }
+
+    // TripJack farerule response shape varies by carrier; look for common fields.
+    const ruleList: any[] =
+      data?.data?.ruleList ?? data?.ruleList ?? data?.data?.fareRules ?? [];
+    const firstRule = Array.isArray(ruleList) ? ruleList[0] : undefined;
+    const cancellationCharge = Number(
+      firstRule?.cancellationCharge ?? firstRule?.cc ?? data?.data?.cancellationCharge ?? 0
+    ) || undefined;
+    const dateChangeCharge = Number(
+      firstRule?.dateChangeCharge ?? firstRule?.dc ?? data?.data?.dateChangeCharge ?? 0
+    ) || undefined;
+    // Refundable unless TripJack explicitly says otherwise or fees consume the full fare.
+    const refundable = firstRule?.refundable ?? data?.data?.refundable ?? true;
+
+    const summary = {
+      refundable: refundable !== false,
+      cancellationCharge,
+      dateChangeCharge,
+      note: firstRule?.text ?? firstRule?.remarks ?? undefined,
+    };
+    sessionStorage.setItem("ww_tj_farerules", JSON.stringify(summary));
+    console.info("[fareRules] fare rules stored:", summary);
+  } catch (err: any) {
+    console.warn("[fareRules] fare rules fetch failed (non-fatal):", err?.message);
+    sessionStorage.removeItem("ww_tj_farerules");
+  }
 }
 
 function formatDate(d: string) {
@@ -280,6 +332,9 @@ export default function FlightBooking() {
         }
       }
       // Price consistent — skip network block; SSR will use resolvedBookingId
+
+      // ── Step 1b: Fare Rules (refundable / cancellation charges) — best-effort ──
+      await fetchAndStoreFareRules(resolvedBookingId, apiBase);
     } else {
       // ── No cached fareQuote — session was cleared (page refresh / direct URL) ──
       // Try to recover using the flight data saved to localStorage at selection time.
@@ -338,6 +393,9 @@ export default function FlightBooking() {
               setSubmitStep("");
               return;
             }
+
+            // ── Step 1b: Fare Rules (refundable / cancellation charges) — best-effort ──
+            await fetchAndStoreFareRules(resolvedBookingId, apiBase);
           } else {
             // fareQuote retry failed — invalid booking session
             console.error("[fareQuote] retry failed — invalid booking session");
@@ -621,6 +679,19 @@ export default function FlightBooking() {
                         </Select>
                         {errors[i]?.gender && <p className="text-xs text-red-500 mt-1">{errors[i].gender}</p>}
                       </div>
+                    </div>
+
+                    <div>
+                      <label className="text-sm font-semibold text-slate-700 block mb-1.5">
+                        Date of Birth <span className="text-red-500">*</span>
+                      </label>
+                      <Input
+                        type="date" max={new Date().toISOString().slice(0, 10)}
+                        value={passengers[i].dob}
+                        onChange={(e) => updatePassenger(i, "dob", e.target.value)}
+                        className={cn("h-11", errors[i]?.dob && "border-red-400")}
+                      />
+                      {errors[i]?.dob && <p className="text-xs text-red-500 mt-1">{errors[i].dob}</p>}
                     </div>
 
                     <div>

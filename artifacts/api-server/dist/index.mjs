@@ -99026,27 +99026,68 @@ async function handleFareQuote(req, res) {
 }
 router26.post("/tj-farequote", handleFareQuote);
 router26.post("/tripjack/fareQuote", handleFareQuote);
+router26.post("/tj-farerules", async (req, res) => {
+  const { bookingId } = req.body;
+  console.log("[fareRules] === Incoming request ===");
+  console.log("[fareRules] bookingId:", bookingId || "(none)");
+  if (!bookingId) {
+    console.error("[fareRules] bookingId missing \u2014 request body:", JSON.stringify(req.body));
+    res.status(400).json({ error: "bookingId is required for fareRules" });
+    return;
+  }
+  try {
+    const data = await tjPostWithRetry("/fms/v1/air/farerule", { bookingId }, {
+      context: "fareRules",
+      timeoutMs: 15e3,
+      maxRetries: 2
+    });
+    console.log("[fareRules] === Success response from TripJack ===");
+    console.log("[fareRules] response:", JSON.stringify(data).slice(0, 2e3));
+    res.json(data);
+  } catch (err) {
+    console.error(
+      "[fareRules] === Failed ===",
+      JSON.stringify(
+        {
+          message: err.message,
+          isAuthError: err.isAuthError ?? false,
+          httpStatus: err.response?.status,
+          responseBody: err.response?.data
+        },
+        null,
+        2
+      ).slice(0, 2e3)
+    );
+    handleTjError(res, err, "fareRules");
+  }
+});
 router26.post("/tj-ssr", async (req, res) => {
+  console.log("[ssr] === Incoming request ===", JSON.stringify(req.body));
   try {
     const data = await tjPostWithRetry("/fms/v1/air/ssr", req.body, {
       context: "tj-ssr",
       timeoutMs: 15e3,
       maxRetries: 2
     });
+    console.log("[ssr] === Success response from TripJack ===", JSON.stringify(data).slice(0, 2e3));
     res.json(data);
   } catch (err) {
+    console.error("[ssr] === Failed ===", err.message);
     handleTjError(res, err, "tj-ssr");
   }
 });
 router26.post("/tj-book", async (req, res) => {
+  console.log("[tj-book] === Incoming request ===", JSON.stringify(req.body));
   try {
     const data = await tjPostWithRetry("/fms/v1/air/book", req.body, {
       context: "tj-book",
       timeoutMs: 3e4,
       maxRetries: 2
     });
+    console.log("[tj-book] === Success response from TripJack ===", JSON.stringify(data).slice(0, 2e3));
     res.json(data);
   } catch (err) {
+    console.error("[tj-book] === Failed ===", err.message);
     handleTjError(res, err, "tj-book");
   }
 });

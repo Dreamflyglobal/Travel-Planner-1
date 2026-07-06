@@ -4,6 +4,7 @@ export type Passenger = {
   gender: string;
   email: string;
   phone: string;
+  dob?: string;
 };
 
 export type Guest = {
@@ -47,6 +48,12 @@ export type FlightBookingSession = {
   cabinClass: string;
   cabinLabel: string;
   tjBookingId: string;
+  fareRules?: {
+    refundable: boolean;
+    cancellationCharge?: number;
+    dateChangeCharge?: number;
+    note?: string;
+  };
 };
 
 export type BusBookingSession = {
