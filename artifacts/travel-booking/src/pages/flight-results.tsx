@@ -6,6 +6,7 @@ import { useAbandonedLeadTracker } from "@/hooks/use-abandoned-lead-tracker";
 import { useMarketing } from "@/hooks/use-marketing";
 import { getHiddenMarkupAmount } from "@/lib/pricing";
 import { useFlightSearch, type FlightSearchOptions, type FareOption, type LiveFlight, type FlightSegment } from "@/lib/use-flight-search";
+import { getAirlineLogoUrl } from "@/lib/airline-logos";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
@@ -61,6 +62,50 @@ function airlineGradient(name: string) {
   const key = name.toLowerCase();
   for (const k in AIRLINE_COLORS) if (key.includes(k)) return AIRLINE_COLORS[k];
   return "from-slate-500 to-slate-700";
+}
+
+// Renders the real airline logo (looked up by IATA code) when available,
+// falling back to the gradient + initials badge if there's no mapped logo
+// or the image fails to load.
+function AirlineLogo({
+  name,
+  code,
+  size = "md",
+}: {
+  name: string;
+  code?: string;
+  size?: "md" | "sm" | "lg";
+}) {
+  const [imgFailed, setImgFailed] = useState(false);
+  const logoUrl = getAirlineLogoUrl(code);
+
+  const sizeCls = size === "lg" ? "w-10 h-10" : size === "sm" ? "w-5 h-5" : "w-11 h-11";
+  const textCls = size === "lg" ? "text-sm" : size === "sm" ? "text-[8px]" : "text-sm";
+
+  if (logoUrl && !imgFailed) {
+    return (
+      <div className={cn("rounded-xl bg-white border border-slate-100 flex items-center justify-center shrink-0 overflow-hidden p-1.5", sizeCls)}>
+        <img
+          src={logoUrl}
+          alt={`${name} logo`}
+          className="w-full h-full object-contain"
+          onError={() => setImgFailed(true)}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className={cn(
+      "rounded-xl bg-gradient-to-br flex items-center justify-center shadow-sm shrink-0",
+      sizeCls,
+      airlineGradient(name)
+    )}>
+      <span className={cn("text-white font-extrabold tracking-tight", textCls)}>
+        {name.substring(0, 2).toUpperCase()}
+      </span>
+    </div>
+  );
 }
 
 export default function FlightResults() {
@@ -893,7 +938,6 @@ export default function FlightResults() {
                       ? (normalMarkup - agentMarkupFlat)
                       : null;
                     const isLive = source === "aviationstack";
-                    const gradient = airlineGradient(flight.airline);
 
                     return (
                       <Card
@@ -909,14 +953,7 @@ export default function FlightResults() {
                               {/* Row 1: Airline header */}
                               <div className="flex items-center gap-3 mb-5">
                                 {/* Airline logo badge */}
-                                <div className={cn(
-                                  "w-11 h-11 rounded-xl bg-gradient-to-br flex items-center justify-center shadow-sm shrink-0",
-                                  gradient
-                                )}>
-                                  <span className="text-white font-extrabold text-sm tracking-tight">
-                                    {flight.airline.substring(0, 2).toUpperCase()}
-                                  </span>
-                                </div>
+                                <AirlineLogo name={flight.airline} code={flight.airlineCode} size="md" />
                                 <div className="flex-1 min-w-0">
                                   <p className="font-bold text-sm text-slate-800 leading-tight">{flight.airline}</p>
                                   <p className="text-xs text-muted-foreground mt-0.5">{flight.flightNumber}</p>
@@ -1233,9 +1270,7 @@ export default function FlightResults() {
                 <X className="w-3.5 h-3.5" /> Close
               </button>
               <div className="flex items-center gap-3 mb-4 pr-20">
-                <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center shrink-0">
-                  <span className="font-extrabold text-sm tracking-tight">{mf.airline.substring(0, 2).toUpperCase()}</span>
-                </div>
+                <AirlineLogo name={mf.airline} code={mf.airlineCode} size="lg" />
                 <div className="flex-1 min-w-0">
                   <DialogTitle className="text-white font-bold text-base leading-tight">{mf.airline}</DialogTitle>
                   <p className="text-white/70 text-xs mt-0.5">{mf.flightNumber}</p>
