@@ -15,6 +15,7 @@ import {
   getTripJackHeaders,
   bustTripJackToken,
   extractTripJackError,
+  extractTripJackErrorDetails,
   TRIPJACK_BASE,
 } from "./tripjack-auth.js";
 import { logger } from "./logger.js";
@@ -185,11 +186,12 @@ export async function tjPostWithRetry(
           continue;
         }
 
-        const reason = errBody
-          ? extractTripJackError(errBody, httpStatus === 405 ? "Method Not Allowed" : "Invalid API key")
-          : (httpStatus === 405 ? "Method Not Allowed" : "Invalid API key");
+        const errDetails = extractTripJackErrorDetails(
+          errBody,
+          httpStatus === 405 ? "Method Not Allowed" : "Invalid API key",
+        );
         logger.error(
-          { context, attempt, status: httpStatus, reason, url },
+          { context, attempt, status: httpStatus, reason: errDetails.message, url },
           "[tj-retry] auth rejected after token refresh — check TRIPJACK_API_KEY and IP whitelist",
         );
         const e = new Error(
@@ -199,10 +201,14 @@ export async function tjPostWithRetry(
               `always because the server's outbound IP is not yet whitelisted for API access (token exchange ` +
               `and the apikey-header fallback both failed). Ask TripJack support to whitelist this server's ` +
               `IP for TRIPJACK_API_KEY, then retry.`
-            : `TripJack authentication failed: ${reason}. ` +
+            : `TripJack authentication failed: ${errDetails.message}. ` +
               `Check that your API key is active and this server's IP is whitelisted in the TripJack portal.`
         ) as any;
-        e.isAuthError = true;
+        e.isAuthError       = true;
+        e.tripjackHttpStatus = httpStatus;
+        e.tripjackCode      = errDetails.code;
+        e.tripjackMessage   = errDetails.message;
+        e.tripjackRaw       = errDetails.raw;
         throw e;
       }
 
@@ -226,6 +232,11 @@ export async function tjPostWithRetry(
         { context, attempt, code: errCode, status: httpStatus, err: err.message },
         "[tj-retry] request failed",
       );
+      const netErrDetails = extractTripJackErrorDetails(errBody, err.message);
+      (err as any).tripjackHttpStatus = httpStatus;
+      (err as any).tripjackCode       = netErrDetails.code ?? errCode;
+      (err as any).tripjackMessage    = netErrDetails.message;
+      (err as any).tripjackRaw        = netErrDetails.raw;
       throw err;
     }
 
@@ -253,15 +264,31 @@ export async function tjPostWithRetry(
 
     // ── Detect "server busy" hidden inside a 200-OK body ────────────────
     if (data?.status?.success === false && isBodyBusy(data)) {
-      const msg = extractTripJackError(data, "Server busy");
-      logger.warn({ context, attempt, msg }, "[tj-retry] busy body response");
+      const details = extractTripJackErrorDetails(data, "Server busy");
+      logger.warn({ context, attempt, msg: details.message }, "[tj-retry] busy body response");
 
       if (attempt < totalAttempts) continue;
 
       const e = new Error("Temporary airline issue. Please try again.") as any;
-      e.isTransient  = true;
-      e.tripjackMsg  = msg;
+      e.isTransient        = true;
+      e.tripjackMsg        = details.message;
+      e.tripjackHttpStatus = 200;
+      e.tripjackCode       = details.code;
+      e.tripjackMessage    = details.message;
+      e.tripjackRaw        = details.raw;
       throw e;
+    }
+
+    // ── Any other 200-OK "success: false" body — surface it directly ────
+    // Attach the extracted code/message onto the body so the route can pass
+    // it straight through to the frontend without re-parsing TripJack's
+    // (inconsistent) error shapes.
+    if (data?.status?.success === false) {
+      const details = extractTripJackErrorDetails(data, "TripJack returned an unspecified error");
+      logger.warn({ context, attempt, msg: details.message, code: details.code }, "[tj-retry] non-success body response");
+      data.tripjackCode    = details.code ?? null;
+      data.tripjackMessage = details.message;
+      return data;
     }
 
     return data;
@@ -272,24 +299,43 @@ export async function tjPostWithRetry(
 
 /**
  * Build a standardised error response for Express routes.
+ * Always includes the exact TripJack HTTP status, error code, and message
+ * (when available) alongside a human-readable `error` field, so the
+ * frontend can display the airline's precise response rather than a
+ * generic string.
  */
 export function handleTjError(res: any, err: any, context: string): void {
   if (err.isAuthError) {
     logger.error({ context, err: err.message }, "[tj-retry] auth error");
-    res.status(503).json({ error: err.message });
+    res.status(503).json({
+      error:              err.message,
+      tripjackHttpStatus: err.tripjackHttpStatus ?? null,
+      tripjackCode:       err.tripjackCode ?? null,
+      tripjackMessage:    err.tripjackMessage ?? err.message,
+    });
     return;
   }
 
   if (err.isTransient) {
-    res.status(503).json({ error: "Temporary airline issue. Please try again." });
+    res.status(503).json({
+      error:              "Temporary airline issue. Please try again.",
+      tripjackHttpStatus: err.tripjackHttpStatus ?? null,
+      tripjackCode:       err.tripjackCode ?? null,
+      tripjackMessage:    err.tripjackMessage ?? err.tripjackMsg ?? null,
+    });
     return;
   }
 
-  const httpStatus = err.response?.status || 502;
-  const message    = err.response?.data
-    ? extractTripJackError(err.response.data, err.message)
-    : (err.message ?? "Unknown error");
+  const httpStatus = err.response?.status || err.tripjackHttpStatus || 502;
+  const details     = err.response?.data
+    ? extractTripJackErrorDetails(err.response.data, err.message)
+    : { message: err.tripjackMessage ?? err.message ?? "Unknown error", code: err.tripjackCode, raw: err.tripjackRaw ?? null };
 
-  logger.error({ context, status: httpStatus, message }, "[tj-retry] api error");
-  res.status(httpStatus).json({ error: message });
+  logger.error({ context, status: httpStatus, message: details.message, code: details.code }, "[tj-retry] api error");
+  res.status(httpStatus).json({
+    error:              details.message,
+    tripjackHttpStatus: httpStatus,
+    tripjackCode:       details.code ?? null,
+    tripjackMessage:    details.message,
+  });
 }

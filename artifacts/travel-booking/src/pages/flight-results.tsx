@@ -377,15 +377,25 @@ export default function FlightResults() {
     // ── HTTP-level errors (after retries) ────────────────────────────────
     if (!res!.ok) {
       setBookingLoadingId(null);
-      console.warn("[fareQuote] fareQuote failed — HTTP", res!.status, "— stopping flow");
+      console.warn("[fareQuote] fareQuote failed — HTTP", res!.status, "— stopping flow", data);
 
       if (!userClickedRef.current) return;
+
+      // Surface TripJack's exact code/message (attached server-side by
+      // handleTjError) instead of a generic string, wherever available.
+      const tjCode       = data?.tripjackCode ?? null;
+      const tjHttpStatus = data?.tripjackHttpStatus ?? null;
+      const tjMessage    = data?.tripjackMessage ?? data?.error ?? null;
+      const tjIdentifier = tjCode ?? tjHttpStatus;
+      const detail       = tjMessage
+        ? `${tjMessage}${tjIdentifier ? ` (code: ${tjIdentifier})` : ""}`
+        : null;
 
       if (isTransientStatus(res!.status)) {
         toast({
           variant:     "destructive",
           title:       "Temporary airline issue",
-          description: "Could not reach the airline right now. Please try again.",
+          description: detail ?? "Could not reach the airline right now. Please try again.",
           action:      <ToastAction altText="Retry" onClick={manualRetry}>Retry</ToastAction>,
         });
         return;
@@ -395,7 +405,7 @@ export default function FlightResults() {
       toast({
         variant:     "destructive",
         title:       "Cannot verify fare",
-        description: "The airline returned an error verifying this fare. Please try again.",
+        description: detail ?? "The airline returned an error verifying this fare. Please try again.",
         action:      <ToastAction altText="Retry" onClick={manualRetry}>Retry</ToastAction>,
       });
       return;
@@ -403,7 +413,11 @@ export default function FlightResults() {
 
     // ── TripJack application-level error ──────────────────────────────────
     if (data?.status === false || data?.errors?.length) {
-      const rawMsg: string = data?.errors?.[0]?.message || data?.message || "";
+      const rawMsg: string = data?.tripjackMessage || data?.errors?.[0]?.message || data?.message || "";
+      const rawCode: string | number | null = data?.tripjackCode ?? data?.errors?.[0]?.code ?? null;
+      const exactDetail = rawMsg
+        ? `${rawMsg}${rawCode !== null && rawCode !== undefined ? ` (code: ${rawCode})` : ""}`
+        : null;
       const msg  = rawMsg.toLowerCase();
       const tf: number = data?.data?.totalPriceInfo?.totalFareDetail?.fC?.TF ?? 0;
       console.warn("[fareQuote] TripJack error:", rawMsg || "(no message)", "| tf:", tf);
@@ -450,7 +464,7 @@ export default function FlightResults() {
         toast({
           variant:     "destructive",
           title:       "Fare verification failed",
-          description: "Could not authenticate with the airline. Please contact support.",
+          description: exactDetail ?? "Could not authenticate with the airline. Please contact support.",
         });
         return;
       }
@@ -460,7 +474,7 @@ export default function FlightResults() {
         toast({
           variant:     "destructive",
           title:       "Flight sold out",
-          description: "This fare is no longer available. Please select another flight.",
+          description: exactDetail ?? "This fare is no longer available. Please select another flight.",
         });
         return;
       }
@@ -469,7 +483,7 @@ export default function FlightResults() {
       toast({
         variant:     "destructive",
         title:       "Temporary airline issue",
-        description: "Please try again.",
+        description: exactDetail ?? "Please try again.",
         action:      <ToastAction altText="Retry" onClick={manualRetry}>Retry</ToastAction>,
       });
       return;

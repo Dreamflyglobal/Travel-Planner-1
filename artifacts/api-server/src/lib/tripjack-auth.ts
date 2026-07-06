@@ -205,3 +205,30 @@ export function extractTripJackError(data: any, fallback: string): string {
     ?? fallback
   );
 }
+
+/**
+ * Full structured breakdown of a TripJack error body — message, code, and
+ * the raw body itself — so callers (API routes → frontend toasts) can show
+ * the airline's exact response instead of a generic string.
+ */
+export function extractTripJackErrorDetails(data: any, fallbackMessage: string): {
+  message: string;
+  code?: string | number;
+  raw: any;
+} {
+  const message =
+    data?.errors?.[0]?.message
+    ?? data?.status?.messages?.[0]?.description
+    ?? data?.message
+    ?? data?.error
+    ?? fallbackMessage;
+
+  const code =
+    data?.errors?.[0]?.code
+    ?? data?.status?.messages?.[0]?.code
+    ?? data?.status?.httpStatus
+    ?? data?.code
+    ?? undefined;
+
+  return { message, code, raw: data ?? null };
+}

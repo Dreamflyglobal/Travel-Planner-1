@@ -143,7 +143,22 @@ router.post("/tj-ssr", async (req, res): Promise<void> => {
     console.log("[ssr] === Success response from TripJack ===", JSON.stringify(data).slice(0, 2000));
     res.json(data);
   } catch (err: any) {
-    console.error("[ssr] === Failed ===", err.message);
+    console.error(
+      "[ssr] === Failed ===",
+      JSON.stringify(
+        {
+          message:         err.message,
+          isAuthError:     err.isAuthError ?? false,
+          isTransient:     err.isTransient ?? false,
+          httpStatus:      err.response?.status ?? err.tripjackHttpStatus,
+          tripjackCode:    err.tripjackCode,
+          tripjackMessage: err.tripjackMessage,
+          responseBody:    err.response?.data ?? err.tripjackRaw,
+        },
+        null,
+        2,
+      ).slice(0, 2000),
+    );
     handleTjError(res, err, "tj-ssr");
   }
 });
@@ -160,7 +175,22 @@ router.post("/tj-book", async (req, res): Promise<void> => {
     console.log("[tj-book] === Success response from TripJack ===", JSON.stringify(data).slice(0, 2000));
     res.json(data);
   } catch (err: any) {
-    console.error("[tj-book] === Failed ===", err.message);
+    console.error(
+      "[tj-book] === Failed ===",
+      JSON.stringify(
+        {
+          message:         err.message,
+          isAuthError:     err.isAuthError ?? false,
+          isTransient:     err.isTransient ?? false,
+          httpStatus:      err.response?.status ?? err.tripjackHttpStatus,
+          tripjackCode:    err.tripjackCode,
+          tripjackMessage: err.tripjackMessage,
+          responseBody:    err.response?.data ?? err.tripjackRaw,
+        },
+        null,
+        2,
+      ).slice(0, 2000),
+    );
     handleTjError(res, err, "tj-book");
   }
 });

@@ -98234,6 +98234,11 @@ async function getTripJackHeaders() {
 function extractTripJackError(data, fallback) {
   return data?.errors?.[0]?.message ?? data?.status?.messages?.[0]?.description ?? data?.message ?? data?.error ?? fallback;
 }
+function extractTripJackErrorDetails(data, fallbackMessage) {
+  const message = data?.errors?.[0]?.message ?? data?.status?.messages?.[0]?.description ?? data?.message ?? data?.error ?? fallbackMessage;
+  const code = data?.errors?.[0]?.code ?? data?.status?.messages?.[0]?.code ?? data?.status?.httpStatus ?? data?.code ?? void 0;
+  return { message, code, raw: data ?? null };
+}
 
 // src/lib/tj-retry.ts
 var AUTH_ERROR_PATTERNS = [
@@ -98336,15 +98341,22 @@ async function tjPostWithRetry(path4, body, options = {}) {
           attempt--;
           continue;
         }
-        const reason = errBody ? extractTripJackError(errBody, httpStatus === 405 ? "Method Not Allowed" : "Invalid API key") : httpStatus === 405 ? "Method Not Allowed" : "Invalid API key";
+        const errDetails = extractTripJackErrorDetails(
+          errBody,
+          httpStatus === 405 ? "Method Not Allowed" : "Invalid API key"
+        );
         logger.error(
-          { context, attempt, status: httpStatus, reason, url: url3 },
+          { context, attempt, status: httpStatus, reason: errDetails.message, url: url3 },
           "[tj-retry] auth rejected after token refresh \u2014 check TRIPJACK_API_KEY and IP whitelist"
         );
         const e = new Error(
-          httpStatus === 405 ? `TripJack rejected the request (HTTP 405) at ${url3}. This endpoint accepts POST, so a 405 here means TripJack's gateway is blocking this server before routing the request \u2014 almost always because the server's outbound IP is not yet whitelisted for API access (token exchange and the apikey-header fallback both failed). Ask TripJack support to whitelist this server's IP for TRIPJACK_API_KEY, then retry.` : `TripJack authentication failed: ${reason}. Check that your API key is active and this server's IP is whitelisted in the TripJack portal.`
+          httpStatus === 405 ? `TripJack rejected the request (HTTP 405) at ${url3}. This endpoint accepts POST, so a 405 here means TripJack's gateway is blocking this server before routing the request \u2014 almost always because the server's outbound IP is not yet whitelisted for API access (token exchange and the apikey-header fallback both failed). Ask TripJack support to whitelist this server's IP for TRIPJACK_API_KEY, then retry.` : `TripJack authentication failed: ${errDetails.message}. Check that your API key is active and this server's IP is whitelisted in the TripJack portal.`
         );
         e.isAuthError = true;
+        e.tripjackHttpStatus = httpStatus;
+        e.tripjackCode = errDetails.code;
+        e.tripjackMessage = errDetails.message;
+        e.tripjackRaw = errDetails.raw;
         throw e;
       }
       const isTransient = !err.response || errCode === "ECONNABORTED" || errCode === "ETIMEDOUT" || errCode === "ECONNRESET" || httpStatus && httpStatus >= 500;
@@ -98359,6 +98371,11 @@ async function tjPostWithRetry(path4, body, options = {}) {
         { context, attempt, code: errCode, status: httpStatus, err: err.message },
         "[tj-retry] request failed"
       );
+      const netErrDetails = extractTripJackErrorDetails(errBody, err.message);
+      err.tripjackHttpStatus = httpStatus;
+      err.tripjackCode = netErrDetails.code ?? errCode;
+      err.tripjackMessage = netErrDetails.message;
+      err.tripjackRaw = netErrDetails.raw;
       throw err;
     }
     const traceId = data?.data?.traceId ?? data?.traceId;
@@ -98377,13 +98394,24 @@ async function tjPostWithRetry(path4, body, options = {}) {
       continue;
     }
     if (data?.status?.success === false && isBodyBusy(data)) {
-      const msg = extractTripJackError(data, "Server busy");
-      logger.warn({ context, attempt, msg }, "[tj-retry] busy body response");
+      const details = extractTripJackErrorDetails(data, "Server busy");
+      logger.warn({ context, attempt, msg: details.message }, "[tj-retry] busy body response");
       if (attempt < totalAttempts) continue;
       const e = new Error("Temporary airline issue. Please try again.");
       e.isTransient = true;
-      e.tripjackMsg = msg;
+      e.tripjackMsg = details.message;
+      e.tripjackHttpStatus = 200;
+      e.tripjackCode = details.code;
+      e.tripjackMessage = details.message;
+      e.tripjackRaw = details.raw;
       throw e;
+    }
+    if (data?.status?.success === false) {
+      const details = extractTripJackErrorDetails(data, "TripJack returned an unspecified error");
+      logger.warn({ context, attempt, msg: details.message, code: details.code }, "[tj-retry] non-success body response");
+      data.tripjackCode = details.code ?? null;
+      data.tripjackMessage = details.message;
+      return data;
     }
     return data;
   }
@@ -98392,17 +98420,32 @@ async function tjPostWithRetry(path4, body, options = {}) {
 function handleTjError(res, err, context) {
   if (err.isAuthError) {
     logger.error({ context, err: err.message }, "[tj-retry] auth error");
-    res.status(503).json({ error: err.message });
+    res.status(503).json({
+      error: err.message,
+      tripjackHttpStatus: err.tripjackHttpStatus ?? null,
+      tripjackCode: err.tripjackCode ?? null,
+      tripjackMessage: err.tripjackMessage ?? err.message
+    });
     return;
   }
   if (err.isTransient) {
-    res.status(503).json({ error: "Temporary airline issue. Please try again." });
+    res.status(503).json({
+      error: "Temporary airline issue. Please try again.",
+      tripjackHttpStatus: err.tripjackHttpStatus ?? null,
+      tripjackCode: err.tripjackCode ?? null,
+      tripjackMessage: err.tripjackMessage ?? err.tripjackMsg ?? null
+    });
     return;
   }
-  const httpStatus = err.response?.status || 502;
-  const message = err.response?.data ? extractTripJackError(err.response.data, err.message) : err.message ?? "Unknown error";
-  logger.error({ context, status: httpStatus, message }, "[tj-retry] api error");
-  res.status(httpStatus).json({ error: message });
+  const httpStatus = err.response?.status || err.tripjackHttpStatus || 502;
+  const details = err.response?.data ? extractTripJackErrorDetails(err.response.data, err.message) : { message: err.tripjackMessage ?? err.message ?? "Unknown error", code: err.tripjackCode, raw: err.tripjackRaw ?? null };
+  logger.error({ context, status: httpStatus, message: details.message, code: details.code }, "[tj-retry] api error");
+  res.status(httpStatus).json({
+    error: details.message,
+    tripjackHttpStatus: httpStatus,
+    tripjackCode: details.code ?? null,
+    tripjackMessage: details.message
+  });
 }
 
 // src/routes/verify-payment.ts
@@ -98752,17 +98795,23 @@ router24.post("/book-flight", async (req, res) => {
       amount: totalPrice,
       currency: "INR"
     }],
-    travellerInfo: passengers.map((p) => ({
-      fn: (p.name ?? "").split(" ")[0] || p.name || "Guest",
-      ln: (p.name ?? "").split(" ").slice(1).join(" ") || ".",
-      ti: "MR",
-      dob: "",
-      pNum: p.phone ?? "",
-      eml: p.email ?? "",
-      pt: "ADULT",
-      ssrSeatInfos: p.seatCode ? [{ key: p.seatCode, code: p.seatCode }] : [],
-      ssrBaggageInfos: p.baggageCode ? [{ key: p.baggageCode, code: p.baggageCode }] : []
-    })),
+    travellerInfo: passengers.map((p) => {
+      const age = parseInt(p.age, 10);
+      const gender = (p.gender ?? "").toLowerCase();
+      const title = gender === "female" ? "MS" : "MR";
+      const pt = !isNaN(age) && age < 12 ? age < 2 ? "INFANT" : "CHILD" : "ADULT";
+      return {
+        fn: (p.name ?? "").split(" ")[0] || p.name || "Guest",
+        ln: (p.name ?? "").split(" ").slice(1).join(" ") || ".",
+        ti: title,
+        dob: p.dob ?? "",
+        pNum: p.phone ?? "",
+        eml: p.email ?? "",
+        pt,
+        ssrSeatInfos: p.seatCode ? [{ key: p.seatCode, code: p.seatCode }] : [],
+        ssrBaggageInfos: p.baggageCode ? [{ key: p.baggageCode, code: p.baggageCode }] : []
+      };
+    }),
     deliveryInfo: {
       emails: [passengers[0]?.email ?? passengerEmail],
       mobiles: [{ countryCode: "91", number: passengers[0]?.phone ?? passengerPhone }]
@@ -99072,7 +99121,22 @@ router26.post("/tj-ssr", async (req, res) => {
     console.log("[ssr] === Success response from TripJack ===", JSON.stringify(data).slice(0, 2e3));
     res.json(data);
   } catch (err) {
-    console.error("[ssr] === Failed ===", err.message);
+    console.error(
+      "[ssr] === Failed ===",
+      JSON.stringify(
+        {
+          message: err.message,
+          isAuthError: err.isAuthError ?? false,
+          isTransient: err.isTransient ?? false,
+          httpStatus: err.response?.status ?? err.tripjackHttpStatus,
+          tripjackCode: err.tripjackCode,
+          tripjackMessage: err.tripjackMessage,
+          responseBody: err.response?.data ?? err.tripjackRaw
+        },
+        null,
+        2
+      ).slice(0, 2e3)
+    );
     handleTjError(res, err, "tj-ssr");
   }
 });
@@ -99087,7 +99151,22 @@ router26.post("/tj-book", async (req, res) => {
     console.log("[tj-book] === Success response from TripJack ===", JSON.stringify(data).slice(0, 2e3));
     res.json(data);
   } catch (err) {
-    console.error("[tj-book] === Failed ===", err.message);
+    console.error(
+      "[tj-book] === Failed ===",
+      JSON.stringify(
+        {
+          message: err.message,
+          isAuthError: err.isAuthError ?? false,
+          isTransient: err.isTransient ?? false,
+          httpStatus: err.response?.status ?? err.tripjackHttpStatus,
+          tripjackCode: err.tripjackCode,
+          tripjackMessage: err.tripjackMessage,
+          responseBody: err.response?.data ?? err.tripjackRaw
+        },
+        null,
+        2
+      ).slice(0, 2e3)
+    );
     handleTjError(res, err, "tj-book");
   }
 });
