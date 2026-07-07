@@ -94265,11 +94265,25 @@ function handleTjError(res, err, context) {
 }
 
 // src/lib/tj-booking-helper.ts
+function extractStatus(dd) {
+  const fromStatusBooking = dd?.status?.booking || "";
+  if (fromStatusBooking) return fromStatusBooking.toUpperCase();
+  const fromOrderStatus = dd?.order?.status || "";
+  if (fromOrderStatus) return fromOrderStatus.toUpperCase();
+  if (typeof dd?.status === "string") return dd.status.toUpperCase();
+  return "";
+}
 function extractPnr(dd, fallback) {
-  return dd?.pnr || dd?.pnrDetails?.[0]?.pnr || fallback || null;
+  if (dd?.pnr) return dd.pnr;
+  const fromPnrDetails = dd?.pnrDetails?.[0]?.pnr;
+  if (fromPnrDetails) return fromPnrDetails;
+  const fromAir = dd?.itemInfos?.AIR?.pnrDetails?.[0]?.pnr;
+  if (fromAir) return fromAir;
+  return fallback ?? null;
 }
 function extractPassengers(dd, pnr) {
-  return (dd?.pnrDetails || []).map((p) => ({
+  const pnrDetails = dd?.pnrDetails || dd?.itemInfos?.AIR?.pnrDetails || [];
+  return pnrDetails.map((p) => ({
     name: (p.paxName || p.name || "").trim(),
     pnr: p.pnr || pnr || "",
     ticketNum: p.ticketNum || p.eTicketNumber || p.ticket_num || "",
@@ -94277,134 +94291,113 @@ function extractPassengers(dd, pnr) {
   })).filter((p) => p.name.length > 0);
 }
 function extractTickets(dd) {
-  return (dd?.pnrDetails || []).map((p) => p.ticketNum || p.eTicketNumber || p.ticket_num).filter(Boolean);
-}
-function dateStr(d) {
-  return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+  const pnrDetails = dd?.pnrDetails || dd?.itemInfos?.AIR?.pnrDetails || [];
+  return pnrDetails.map((p) => p.ticketNum || p.eTicketNumber || p.ticket_num).filter(Boolean);
 }
 async function fetchTjBookingDetail(tjBookingRef, context) {
-  const today = /* @__PURE__ */ new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
   const strategies = [
-    // ── 1. Standard OMS detail endpoint ─────────────────────────────────
+    // ── Strategy 1: Official documented OMS booking detail endpoint ──────────
+    // Reference: TripJack OMS API documentation
+    // Correct single-booking status endpoint (not a listing endpoint).
     {
       label: "detail",
-      isList: false,
-      fn: () => tjPostWithRetry(
-        "/oms/v1/booking/detail",
-        { bookingId: tjBookingRef },
-        { context: `${context}/detail`, timeoutMs: 15e3, maxRetries: 0 }
-      )
+      path: "/oms/v1/booking/detail",
+      body: { bookingId: tjBookingRef }
     },
-    // ── 2. Alternate air-scoped path (some TripJack sandbox configs) ─────
+    // ── Strategy 2: Air-specific booking-details path ────────────────────────
+    // Derived from the hotel docs pattern:
+    //   Hotel: POST /oms/v1/hotel/booking-details
+    //   Air:   POST /oms/v1/air/booking-details  (equivalent)
     {
       label: "air-detail",
-      isList: false,
-      fn: () => tjPostWithRetry(
-        "/oms/v1/air/booking/detail",
-        { bookingId: tjBookingRef },
-        { context: `${context}/air-detail`, timeoutMs: 15e3, maxRetries: 0 }
-      )
-    },
-    // ── 3. Booking list — today only ─────────────────────────────────────
-    {
-      label: "list-today",
-      isList: true,
-      fn: () => tjPostWithRetry(
-        "/oms/v1/booking/list",
-        { fromDate: dateStr(today), toDate: dateStr(today), bookingType: "AIRLINE" },
-        { context: `${context}/list-today`, timeoutMs: 15e3, maxRetries: 0 }
-      )
-    },
-    // ── 4. Booking list — yesterday + today (covers midnight boundary) ───
-    {
-      label: "list-2d",
-      isList: true,
-      fn: () => tjPostWithRetry(
-        "/oms/v1/booking/list",
-        { fromDate: dateStr(yesterday), toDate: dateStr(today), bookingType: "AIRLINE" },
-        { context: `${context}/list-2d`, timeoutMs: 15e3, maxRetries: 0 }
-      )
+      path: "/oms/v1/air/booking-details",
+      body: { bookingId: tjBookingRef }
     }
   ];
   for (const strategy of strategies) {
     logger.info(
-      { context, tjBookingRef, strategy: strategy.label },
-      "[tj-booking-helper] trying strategy"
+      {
+        context,
+        tjBookingRef,
+        strategy: strategy.label,
+        endpoint: strategy.path,
+        payload: strategy.body
+      },
+      "[tj-booking-helper] calling booking status API"
     );
     try {
-      const raw = await strategy.fn();
-      let dd = raw;
-      if (strategy.isList) {
-        const items = raw?.data?.bookings || raw?.bookings || (Array.isArray(raw?.data) ? raw.data : null) || [];
-        console.log(
-          `[tj-booking-helper] ${context}/${strategy.label} \u2014 list returned ${items.length} booking(s)`,
-          items.length > 0 ? JSON.stringify(items.map((b) => ({
-            bookingId: b.bookingId ?? b.orderId ?? "(no-id)",
-            status: b.status?.booking ?? "(no-status)",
-            pnr: b.pnr ?? "(no-pnr)"
-          })), null, 2).slice(0, 2e3) : "(empty)"
-        );
-        dd = items.find(
-          (b) => b.bookingId === tjBookingRef || b.orderId === tjBookingRef || b.tripJackBookingId === tjBookingRef
-        ) ?? null;
-        if (!dd) {
-          logger.info(
-            { context, tjBookingRef, strategy: strategy.label, total: items.length },
-            "[tj-booking-helper] booking not found in list \u2014 trying next strategy"
-          );
-          continue;
-        }
-      }
-      if (!dd) continue;
-      const rawStatus = (dd?.status?.booking || "").toUpperCase();
-      const pnr = extractPnr(dd);
-      const passengers = extractPassengers(dd, pnr);
-      const tickets = extractTickets(dd);
-      console.log(
-        `[tj-booking-helper] ${context}/${strategy.label} \u2014 SUCCESS:`,
-        JSON.stringify({
-          rawStatus,
-          pnr,
-          pnrDetailsCount: (dd?.pnrDetails ?? []).length,
-          pnrDetailsSample: (dd?.pnrDetails ?? [])[0] ?? null,
-          source: strategy.label
-        }, null, 2)
+      const raw = await tjPostWithRetry(
+        strategy.path,
+        strategy.body,
+        { context: `${context}/${strategy.label}`, timeoutMs: 15e3, maxRetries: 0 }
       );
+      const rawStatus = extractStatus(raw);
+      const pnr = extractPnr(raw);
+      const passengers = extractPassengers(raw, pnr);
+      const tickets = extractTickets(raw);
       logger.info(
         {
           context,
           tjBookingRef,
           strategy: strategy.label,
+          endpoint: strategy.path,
           rawStatus,
           pnr,
           paxCount: passengers.length,
-          ticketCount: tickets.length
+          ticketCount: tickets.length,
+          responseKeys: raw ? Object.keys(raw) : []
         },
-        "[tj-booking-helper] strategy succeeded"
+        "[tj-booking-helper] booking status API SUCCESS"
       );
-      const source = strategy.label === "detail" ? "detail" : strategy.label === "air-detail" ? "air-detail" : "list";
-      return { rawStatus, pnr, tjPassengers: passengers, ticketNumbers: tickets, source, rawResponse: dd };
+      logger.debug(
+        { context, tjBookingRef, strategy: strategy.label, response: raw },
+        "[tj-booking-helper] full booking status response"
+      );
+      const source = strategy.label === "detail" ? "detail" : "air-detail";
+      return { rawStatus, pnr, tjPassengers: passengers, ticketNumbers: tickets, source, rawResponse: raw };
     } catch (err) {
       const httpStatus = err?.tripjackHttpStatus ?? err?.response?.status ?? "?";
       logger.warn(
-        { context, tjBookingRef, strategy: strategy.label, httpStatus, err: err?.message },
-        "[tj-booking-helper] strategy failed \u2014 trying next"
+        {
+          context,
+          tjBookingRef,
+          strategy: strategy.label,
+          endpoint: strategy.path,
+          payload: strategy.body,
+          httpStatus,
+          err: err?.message
+        },
+        "[tj-booking-helper] booking status API call FAILED"
       );
-      if (httpStatus === 404 && strategy.label === "detail") {
+      if (httpStatus === 404) {
         logger.warn(
-          { context, tjBookingRef },
-          "[tj-booking-helper] SANDBOX LIMITATION: /oms/v1/booking/detail returned 404. This means TripJack has NOT whitelisted the booking-management (/oms/v1/booking/*) endpoints for this API key / IP. AirBook (/oms/v1/air/book) is whitelisted separately. ACTION REQUIRED: Ask TripJack support to whitelist /oms/v1/booking/detail and /oms/v1/booking/list for the sandbox (and production) API key. Automatic sync WILL work in production once these endpoints are accessible."
+          {
+            context,
+            tjBookingRef,
+            strategy: strategy.label,
+            endpoint: strategy.path
+          },
+          "[tj-booking-helper] 404 on booking management endpoint \u2014 SANDBOX LIMITATION: TripJack restricts /oms/v1/booking/* to whitelisted IPs. ACTION REQUIRED: Ask TripJack support to whitelist your server IP for POST /oms/v1/booking/detail and POST /oms/v1/air/booking-details in both sandbox and production environments."
         );
       }
     }
   }
   logger.warn(
-    { context, tjBookingRef },
-    "[tj-booking-helper] all strategies exhausted \u2014 cannot retrieve booking detail. See SANDBOX LIMITATION log above for the expected reason and resolution steps."
+    {
+      context,
+      tjBookingRef,
+      strategiesTried: strategies.map((s) => s.label)
+    },
+    "[tj-booking-helper] all booking status strategies exhausted \u2014 booking remains in its stored state. SANDBOX: this is expected until TripJack whitelists the server IP. PRODUCTION: contact TripJack support if this persists."
   );
-  return { rawStatus: "", pnr: null, tjPassengers: [], ticketNumbers: [], source: "none", rawResponse: null };
+  return {
+    rawStatus: "",
+    pnr: null,
+    tjPassengers: [],
+    ticketNumbers: [],
+    source: "none",
+    rawResponse: null
+  };
 }
 
 // src/lib/booking-id.ts
@@ -95194,7 +95187,7 @@ var SERVICE_EMOJI = {
 };
 function generalBookingEmailHTML(data) {
   const emoji3 = SERVICE_EMOJI[data.bookingType] ?? "\u{1F4CB}";
-  const dateStr2 = new Date(data.travelDate).toLocaleDateString("en-IN", {
+  const dateStr = new Date(data.travelDate).toLocaleDateString("en-IN", {
     day: "2-digit",
     month: "long",
     year: "numeric"
@@ -95264,7 +95257,7 @@ function generalBookingEmailHTML(data) {
     </div>
     <div class="row">
       <label>Travel Date</label>
-      <span>${dateStr2}</span>
+      <span>${dateStr}</span>
     </div>
     <div class="row">
       <label>${data.bookingType === "hotel" ? "Rooms" : "Passengers"}</label>
@@ -95633,7 +95626,7 @@ function formatPhone3(raw) {
 }
 function buildSmsBody(data) {
   const typeLabel = data.bookingType.charAt(0).toUpperCase() + data.bookingType.slice(1);
-  const dateStr2 = (() => {
+  const dateStr = (() => {
     try {
       return new Date(data.travelDate).toLocaleDateString("en-IN", {
         day: "2-digit",
@@ -95653,7 +95646,7 @@ function buildSmsBody(data) {
   } else if (data.bookingType === "hotel" && data.hotelName) {
     detail = ` | ${data.hotelName}`;
   }
-  return `Your ${typeLabel} booking with ${APP_NAME} is confirmed${detail}. Booking ID: ${data.bookingId} | Date: ${dateStr2} | Amount: ${amount}. Support: ${APP_SUPPORT_PHONE}`;
+  return `Your ${typeLabel} booking with ${APP_NAME} is confirmed${detail}. Booking ID: ${data.bookingId} | Date: ${dateStr} | Amount: ${amount}. Support: ${APP_SUPPORT_PHONE}`;
 }
 async function sendBookingEmail(data) {
   if (!data.passengerEmail) {
@@ -95716,7 +95709,7 @@ async function sendBookingWhatsApp(data) {
     logger.warn(`[notification/whatsapp] No phone number \u2014 skipping (booking: ${data.bookingId})`);
     return { sent: false, reason: "No passenger phone number" };
   }
-  const dateStr2 = (() => {
+  const dateStr = (() => {
     try {
       return new Date(data.travelDate).toLocaleDateString("en-IN", {
         day: "2-digit",
@@ -95734,7 +95727,7 @@ async function sendBookingWhatsApp(data) {
     bookingType: data.bookingType,
     from: data.from || "",
     to: data.to || "",
-    date: dateStr2,
+    date: dateStr,
     amount: data.totalAmount,
     invoiceUrl: data.invoiceUrl,
     airline: data.airline,
@@ -99471,36 +99464,61 @@ ${"#".repeat(80)}`);
       maxRetries: 2
     });
     const tjBookingStatus = (data?.status?.booking ?? data?.data?.status?.booking ?? "").toUpperCase();
-    console.log(`
-${"#".repeat(80)}`);
-    console.log(`[book-flight] AIRBOOK RESPONSE \u2014 bookingRef: ${bookingRef} | paymentId: ${paymentId}`);
-    console.log(`${"#".repeat(80)}`);
-    console.log("[book-flight] FULL AIRBOOK RESPONSE BODY:\n" + JSON.stringify(data, null, 2));
-    console.log(`${"#".repeat(80)}
-`);
+    const hasPnrDetails = Array.isArray(data?.pnrDetails) && data.pnrDetails.length > 0 || Array.isArray(data?.data?.pnrDetails) && data.data.pnrDetails.length > 0;
+    const extractedPnr = data?.pnr || data?.pnrDetails?.[0]?.pnr || data?.data?.pnr || data?.data?.pnrDetails?.[0]?.pnr || void 0;
+    const extractedBookingRef = data?.bookingId || data?.data?.bookingId || void 0;
+    logger.info(
+      {
+        paymentId,
+        bookingRef,
+        tjBookingStatus: tjBookingStatus || "(absent)",
+        hasPnrDetails,
+        extractedPnr: extractedPnr ?? null,
+        extractedTjRef: extractedBookingRef ?? null,
+        responseKeys: data ? Object.keys(data) : [],
+        statusSuccess: data?.status?.success ?? null
+      },
+      "[book-flight] AIRBOOK RESPONSE received"
+    );
+    logger.debug(
+      { paymentId, bookingRef, airBookResponse: data },
+      "[book-flight] AIRBOOK full response body"
+    );
     if (data?.status?.success === false || (data?.errors?.length ?? 0) > 0) {
       tjError = extractTripJackError(data, "TripJack booking failed");
       logger.warn({ paymentId, tjError }, "[book-flight] TripJack returned failure in body");
-    } else if (tjBookingStatus === "CONFIRMED") {
+    } else if (tjBookingStatus === "CONFIRMED" || hasPnrDetails && tjBookingStatus !== "FAILED" && tjBookingStatus !== "CANCELLED") {
       tjSuccess = true;
-      pnr = data?.pnr || data?.pnrDetails?.[0]?.pnr || data?.data?.pnr || void 0;
-      tjBookingRef = data?.bookingId || data?.data?.bookingId || void 0;
-      logger.info({ paymentId, pnr, tjBookingRef }, "[book-flight] TripJack AirBook CONFIRMED immediately");
+      pnr = extractedPnr;
+      tjBookingRef = extractedBookingRef;
+      logger.info(
+        { paymentId, pnr, tjBookingRef, tjBookingStatus, hasPnrDetails },
+        "[book-flight] TripJack AirBook CONFIRMED \u2014 booking confirmed synchronously"
+      );
     } else if (tjBookingStatus === "PENDING" || tjBookingStatus === "PROCESSING") {
       tjPending = true;
-      pnr = data?.pnr || data?.pnrDetails?.[0]?.pnr || data?.data?.pnr || void 0;
-      tjBookingRef = data?.bookingId || data?.data?.bookingId || void 0;
-      logger.info({ paymentId, pnr, tjBookingRef, tjBookingStatus }, "[book-flight] TripJack AirBook PENDING \u2014 will poll for confirmation");
-    } else if (tjBookingStatus === "" && data?.status?.success === true && (data?.bookingId || data?.data?.bookingId)) {
+      pnr = extractedPnr;
+      tjBookingRef = extractedBookingRef;
+      logger.info(
+        { paymentId, pnr, tjBookingRef, tjBookingStatus },
+        "[book-flight] TripJack AirBook PENDING \u2014 will poll /oms/v1/booking/detail for confirmation"
+      );
+    } else if (data?.status?.success === true && extractedBookingRef) {
       tjPending = true;
-      pnr = data?.pnr || data?.pnrDetails?.[0]?.pnr || data?.data?.pnr || void 0;
-      tjBookingRef = data?.bookingId || data?.data?.bookingId || void 0;
-      logger.info({ paymentId, pnr, tjBookingRef }, "[book-flight] TripJack AirBook success:true + bookingId (no status.booking) \u2014 treating as PENDING until detail confirms");
+      pnr = extractedPnr;
+      tjBookingRef = extractedBookingRef;
+      logger.info(
+        { paymentId, pnr, tjBookingRef, tjBookingStatus: "(absent)" },
+        "[book-flight] TripJack AirBook success + bookingId, no status/pnrDetails \u2014 queued, polling /oms/v1/booking/detail"
+      );
     } else {
       tjPending = true;
-      pnr = data?.pnr || data?.pnrDetails?.[0]?.pnr || data?.data?.pnr || void 0;
-      tjBookingRef = data?.bookingId || data?.data?.bookingId || void 0;
-      logger.warn({ paymentId, pnr, tjBookingRef, tjBookingStatus }, "[book-flight] TripJack AirBook unknown status \u2014 treating as pending");
+      pnr = extractedPnr;
+      tjBookingRef = extractedBookingRef;
+      logger.warn(
+        { paymentId, pnr, tjBookingRef, tjBookingStatus, data },
+        "[book-flight] TripJack AirBook unexpected state \u2014 treating as pending"
+      );
     }
   } catch (err) {
     const errBody = err?.response?.data;

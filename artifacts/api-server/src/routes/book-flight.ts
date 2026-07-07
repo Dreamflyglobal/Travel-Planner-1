@@ -526,50 +526,96 @@ router.post("/book-flight", async (req, res): Promise<void> => {
     });
 
     // tjPostWithRetry returns resp.data directly, so `data` IS the TripJack body.
-    // Shape: { bookingId, status: { success, httpStatus, booking? }, pnrDetails?, pnr? }
+    //
+    // AirBook response shape (TripJack OMS):
+    //   { bookingId, status: { success, httpStatus, booking? }, pnrDetails?, pnr? }
+    //
+    // status.booking can be "CONFIRMED", "PENDING", "PROCESSING", or absent.
+    // When absent but pnrDetails is non-empty, TripJack confirmed synchronously
+    // without setting status.booking — treat as CONFIRMED.
     const tjBookingStatus = (
       data?.status?.booking ??
       data?.data?.status?.booking ??
       ""
     ).toUpperCase();
-    console.log(`\n${"#".repeat(80)}`);
-    console.log(`[book-flight] AIRBOOK RESPONSE — bookingRef: ${bookingRef} | paymentId: ${paymentId}`);
-    console.log(`${"#".repeat(80)}`);
-    console.log("[book-flight] FULL AIRBOOK RESPONSE BODY:\n" + JSON.stringify(data, null, 2));
-    console.log(`${"#".repeat(80)}\n`);
+
+    // PNR details present = synchronous confirmation even when status.booking is absent
+    const hasPnrDetails =
+      (Array.isArray(data?.pnrDetails)      && (data.pnrDetails as any[]).length      > 0) ||
+      (Array.isArray(data?.data?.pnrDetails) && (data.data.pnrDetails as any[]).length > 0);
+
+    const extractedPnr: string | undefined =
+      data?.pnr || data?.pnrDetails?.[0]?.pnr || data?.data?.pnr || data?.data?.pnrDetails?.[0]?.pnr || undefined;
+    const extractedBookingRef: string | undefined =
+      data?.bookingId || data?.data?.bookingId || undefined;
+
+    // Log the full AirBook response via structured logger for diagnostics
+    logger.info(
+      {
+        paymentId,
+        bookingRef,
+        tjBookingStatus:  tjBookingStatus || "(absent)",
+        hasPnrDetails,
+        extractedPnr:     extractedPnr     ?? null,
+        extractedTjRef:   extractedBookingRef ?? null,
+        responseKeys:     data ? Object.keys(data) : [],
+        statusSuccess:    data?.status?.success ?? null,
+      },
+      "[book-flight] AIRBOOK RESPONSE received",
+    );
+    logger.debug(
+      { paymentId, bookingRef, airBookResponse: data },
+      "[book-flight] AIRBOOK full response body",
+    );
 
     if (data?.status?.success === false || (data?.errors?.length ?? 0) > 0) {
       tjError = extractTripJackError(data, "TripJack booking failed");
       logger.warn({ paymentId, tjError }, "[book-flight] TripJack returned failure in body");
-    } else if (tjBookingStatus === "CONFIRMED") {
-      // Explicitly confirmed by TripJack
+
+    } else if (
+      tjBookingStatus === "CONFIRMED" ||
+      (hasPnrDetails && tjBookingStatus !== "FAILED" && tjBookingStatus !== "CANCELLED")
+    ) {
+      // CONFIRMED: either explicit status.booking === "CONFIRMED", or pnrDetails
+      // is present (synchronous confirmation without status.booking — common in sandbox).
       tjSuccess    = true;
-      pnr          = data?.pnr || data?.pnrDetails?.[0]?.pnr || data?.data?.pnr || undefined;
-      tjBookingRef = data?.bookingId || data?.data?.bookingId || undefined;
-      logger.info({ paymentId, pnr, tjBookingRef }, "[book-flight] TripJack AirBook CONFIRMED immediately");
+      pnr          = extractedPnr;
+      tjBookingRef = extractedBookingRef;
+      logger.info(
+        { paymentId, pnr, tjBookingRef, tjBookingStatus, hasPnrDetails },
+        "[book-flight] TripJack AirBook CONFIRMED — booking confirmed synchronously",
+      );
+
     } else if (tjBookingStatus === "PENDING" || tjBookingStatus === "PROCESSING") {
-      // Explicitly PENDING or PROCESSING — TripJack is still processing; poll until confirmed.
+      // Explicitly async — TripJack is still processing; poll until confirmed.
       tjPending    = true;
-      pnr          = data?.pnr || data?.pnrDetails?.[0]?.pnr || data?.data?.pnr || undefined;
-      tjBookingRef = data?.bookingId || data?.data?.bookingId || undefined;
-      logger.info({ paymentId, pnr, tjBookingRef, tjBookingStatus }, "[book-flight] TripJack AirBook PENDING — will poll for confirmation");
-    } else if (tjBookingStatus === "" && data?.status?.success === true && (data?.bookingId || data?.data?.bookingId)) {
-      // status.booking absent but success:true + bookingId present.
-      // TripJack does not return status.booking when the booking is queued / still processing
-      // (common in sandbox AND in production when the airline hasn't confirmed yet).
-      // Treat as PENDING so STEP 4.5 (booking detail) determines the real status.
-      // If the detail fetch fails (sandbox 404), the background poller will update when
-      // TripJack's booking-management endpoints become accessible.
+      pnr          = extractedPnr;
+      tjBookingRef = extractedBookingRef;
+      logger.info(
+        { paymentId, pnr, tjBookingRef, tjBookingStatus },
+        "[book-flight] TripJack AirBook PENDING — will poll /oms/v1/booking/detail for confirmation",
+      );
+
+    } else if (data?.status?.success === true && extractedBookingRef) {
+      // status.booking absent and no pnrDetails — booking queued, awaiting async confirmation.
+      // The background poller calls POST /oms/v1/booking/detail every 60 s until confirmed.
       tjPending    = true;
-      pnr          = data?.pnr || data?.pnrDetails?.[0]?.pnr || data?.data?.pnr || undefined;
-      tjBookingRef = data?.bookingId || data?.data?.bookingId || undefined;
-      logger.info({ paymentId, pnr, tjBookingRef }, "[book-flight] TripJack AirBook success:true + bookingId (no status.booking) — treating as PENDING until detail confirms");
+      pnr          = extractedPnr;
+      tjBookingRef = extractedBookingRef;
+      logger.info(
+        { paymentId, pnr, tjBookingRef, tjBookingStatus: "(absent)" },
+        "[book-flight] TripJack AirBook success + bookingId, no status/pnrDetails — queued, polling /oms/v1/booking/detail",
+      );
+
     } else {
-      // Any other unknown status — treat as pending to be safe
+      // Unknown / unexpected state — treat as pending rather than failing
       tjPending    = true;
-      pnr          = data?.pnr || data?.pnrDetails?.[0]?.pnr || data?.data?.pnr || undefined;
-      tjBookingRef = data?.bookingId || data?.data?.bookingId || undefined;
-      logger.warn({ paymentId, pnr, tjBookingRef, tjBookingStatus }, "[book-flight] TripJack AirBook unknown status — treating as pending");
+      pnr          = extractedPnr;
+      tjBookingRef = extractedBookingRef;
+      logger.warn(
+        { paymentId, pnr, tjBookingRef, tjBookingStatus, data },
+        "[book-flight] TripJack AirBook unexpected state — treating as pending",
+      );
     }
   } catch (err: any) {
     const errBody = err?.response?.data;
@@ -620,17 +666,15 @@ router.post("/book-flight", async (req, res): Promise<void> => {
 
   if (tjSuccess || tjPending) {
     // ── STEP 4.5: Fetch booking detail to get enriched PNR/ticket/status ─────────
-    // Uses fetchTjBookingDetail which tries 4 strategies in order:
-    //   1. /oms/v1/booking/detail   (standard OMS path)
-    //   2. /oms/v1/air/booking/detail (alternate sandbox path)
-    //   3. /oms/v1/booking/list filtered to today
-    //   4. /oms/v1/booking/list filtered to yesterday+today
+    // Uses fetchTjBookingDetail which tries 2 strategies in order:
+    //   1. POST /oms/v1/booking/detail      — official OMS single-booking status endpoint
+    //   2. POST /oms/v1/air/booking-details — air-specific path (hotel docs pattern)
     //
-    // SANDBOX LIMITATION: If all 4 fail with 404, TripJack has not yet
-    // whitelisted the /oms/v1/booking/* endpoints for this API key / server IP.
-    // The booking is stored as PENDING and the background poller will retry
-    // every 60 seconds.  In production with correct IP whitelisting,
-    // strategy 1 succeeds on the first attempt.
+    // SANDBOX LIMITATION: Both return 404 because TripJack restricts the booking
+    // management sub-tree to whitelisted IPs in sandbox.  The booking is stored as
+    // PENDING and the background poller will retry every 60 seconds.
+    // In production with correct IP whitelisting, strategy 1 succeeds immediately.
+    // ACTION: Contact TripJack support to whitelist POST /oms/v1/booking/detail.
     let detailPnr      = pnr;
     let tjDetailStatus = tjSuccess ? "CONFIRMED" : "PENDING";
     let tjPassengers: Array<{ name: string; pnr: string; ticketNum: string; paxType: string }> = [];
