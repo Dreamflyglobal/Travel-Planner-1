@@ -408,7 +408,7 @@ router.post("/book-flight", async (req, res): Promise<void> => {
       seats:        passengers.map((p: any) => p.seatCode).filter(Boolean),
       baggage:      passengers.map((p: any) => p.baggageCode).filter(Boolean),
     },
-    "[book-flight] STEP 2+3: calling TripJack /fms/v1/air/book (with retry)",
+    "[book-flight] STEP 2+3: calling TripJack /oms/v1/air/book (with retry)",
   );
   console.log("[book-flight] TripJack AirBook payload:", JSON.stringify(tjPayload, null, 2));
 
@@ -418,7 +418,7 @@ router.post("/book-flight", async (req, res): Promise<void> => {
   let tjError: string | undefined;
 
   try {
-    const data = await tjPostWithRetry("/fms/v1/air/book", tjPayload, {
+    const data = await tjPostWithRetry("/oms/v1/air/book", tjPayload, {
       context:    "book-flight/airbook",
       timeoutMs:  30_000,
       maxRetries: 2,

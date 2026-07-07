@@ -98841,7 +98841,7 @@ router24.post("/book-flight", async (req, res) => {
       seats: passengers.map((p) => p.seatCode).filter(Boolean),
       baggage: passengers.map((p) => p.baggageCode).filter(Boolean)
     },
-    "[book-flight] STEP 2+3: calling TripJack /fms/v1/air/book (with retry)"
+    "[book-flight] STEP 2+3: calling TripJack /oms/v1/air/book (with retry)"
   );
   console.log("[book-flight] TripJack AirBook payload:", JSON.stringify(tjPayload, null, 2));
   let tjSuccess = false;
@@ -98849,7 +98849,7 @@ router24.post("/book-flight", async (req, res) => {
   let tjBookingRef;
   let tjError;
   try {
-    const data = await tjPostWithRetry("/fms/v1/air/book", tjPayload, {
+    const data = await tjPostWithRetry("/oms/v1/air/book", tjPayload, {
       context: "book-flight/airbook",
       timeoutMs: 3e4,
       maxRetries: 2
