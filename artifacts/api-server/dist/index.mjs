@@ -88574,5434 +88574,6 @@ var admin_notify_default = router4;
 var import_express5 = __toESM(require_express2(), 1);
 init_drizzle_orm();
 
-// src/lib/provider-config.ts
-var cache = null;
-var CACHE_TTL_MS = 3e4;
-async function loadFromDb() {
-  try {
-    const rows = await db.select().from(apiKeysTable).limit(1);
-    const row = rows[0];
-    const rawProvider = (row?.flightProvider ?? "tripjack").toLowerCase();
-    const flightProvider = rawProvider === "tbo" ? "tbo" : "tripjack";
-    return {
-      flightProvider,
-      flightApiKey: row?.flightApiKey || process.env["TRIPJACK_API_KEY"] || "",
-      tboApiKey: row?.tboApiKey || process.env["TBO_API_KEY"] || "",
-      paymentKeyId: row?.paymentApiKey || process.env["RAZORPAY_KEY_ID"] || "",
-      paymentKeySecret: row?.paymentApiSecret || process.env["RAZORPAY_KEY_SECRET"] || "",
-      cachedAt: Date.now()
-    };
-  } catch {
-    return {
-      flightProvider: "tripjack",
-      flightApiKey: process.env["TRIPJACK_API_KEY"] || "",
-      tboApiKey: process.env["TBO_API_KEY"] || "",
-      paymentKeyId: process.env["RAZORPAY_KEY_ID"] || "",
-      paymentKeySecret: process.env["RAZORPAY_KEY_SECRET"] || "",
-      cachedAt: Date.now()
-    };
-  }
-}
-async function getProviderConfig() {
-  if (cache && Date.now() - cache.cachedAt < CACHE_TTL_MS) return cache;
-  cache = await loadFromDb();
-  return cache;
-}
-
-// src/routes/flights.ts
-var router5 = (0, import_express5.Router)();
-var CITY_TO_IATA = {
-  delhi: "DEL",
-  "new delhi": "DEL",
-  mumbai: "BOM",
-  bombay: "BOM",
-  bangalore: "BLR",
-  bengaluru: "BLR",
-  chennai: "MAA",
-  madras: "MAA",
-  kolkata: "CCU",
-  calcutta: "CCU",
-  hyderabad: "HYD",
-  goa: "GOI",
-  kochi: "COK",
-  cochin: "COK",
-  jaipur: "JAI",
-  pune: "PNQ",
-  ahmedabad: "AMD",
-  lucknow: "LKO",
-  varanasi: "VNS",
-  amritsar: "ATQ",
-  nagpur: "NAG",
-  indore: "IDR",
-  bhopal: "BHO",
-  srinagar: "SXR",
-  leh: "IXL",
-  patna: "PAT",
-  ranchi: "IXR",
-  bhubaneswar: "BBI",
-  visakhapatnam: "VTZ",
-  vizag: "VTZ",
-  dubai: "DXB",
-  singapore: "SIN",
-  bangkok: "BKK",
-  london: "LHR",
-  "new york": "JFK",
-  "abu dhabi": "AUH",
-  "kuala lumpur": "KUL",
-  colombo: "CMB",
-  kathmandu: "KTM",
-  coimbatore: "CJB",
-  tiruchirappalli: "TRZ",
-  trichy: "TRZ",
-  madurai: "IXM",
-  mangalore: "IXE",
-  vadodara: "BDQ",
-  surat: "STV",
-  chandigarh: "IXC",
-  vijayawada: "VGA",
-  rajkot: "RAJ",
-  jodhpur: "JDH",
-  raipur: "RPR",
-  dehradun: "DED",
-  udaipur: "UDR",
-  agra: "AGR",
-  hubli: "HBX",
-  jammu: "IXJ",
-  dibrugarh: "DIB",
-  bagdogra: "IXB",
-  port_blair: "IXZ",
-  "port blair": "IXZ",
-  tirupati: "TIR",
-  aurangabad: "IXU"
-};
-var CANONICAL = {
-  DEL: "Delhi",
-  BOM: "Mumbai",
-  BLR: "Bangalore",
-  MAA: "Chennai",
-  CCU: "Kolkata",
-  HYD: "Hyderabad",
-  GOI: "Goa",
-  COK: "Kochi",
-  JAI: "Jaipur",
-  PNQ: "Pune",
-  AMD: "Ahmedabad",
-  LKO: "Lucknow",
-  VNS: "Varanasi",
-  ATQ: "Amritsar",
-  NAG: "Nagpur",
-  IDR: "Indore",
-  BHO: "Bhopal",
-  SXR: "Srinagar",
-  IXL: "Leh",
-  PAT: "Patna",
-  IXR: "Ranchi",
-  BBI: "Bhubaneswar",
-  VTZ: "Visakhapatnam",
-  CJB: "Coimbatore",
-  TRZ: "Tiruchirappalli",
-  IXM: "Madurai",
-  IXE: "Mangalore",
-  BDQ: "Vadodara",
-  STV: "Surat",
-  IXC: "Chandigarh",
-  VGA: "Vijayawada",
-  RAJ: "Rajkot",
-  JDH: "Jodhpur",
-  RPR: "Raipur",
-  DED: "Dehradun",
-  UDR: "Udaipur",
-  AGR: "Agra",
-  HBX: "Hubli",
-  IXJ: "Jammu",
-  DIB: "Dibrugarh",
-  IXB: "Bagdogra",
-  IXZ: "Port Blair",
-  TIR: "Tirupati",
-  IXU: "Aurangabad",
-  DXB: "Dubai",
-  SIN: "Singapore",
-  BKK: "Bangkok",
-  LHR: "London",
-  JFK: "New York",
-  AUH: "Abu Dhabi",
-  KUL: "Kuala Lumpur",
-  CMB: "Colombo",
-  KTM: "Kathmandu"
-};
-var KNOWN_IATA_CODES = new Set(Object.values(CITY_TO_IATA));
-function resolveIata(raw) {
-  const clean = raw.trim();
-  if (!clean) return void 0;
-  const codeMatch = clean.match(/\(([A-Z]{3})\)\s*(?:-.*)?$/);
-  if (codeMatch) return codeMatch[1];
-  if (/^[A-Z]{3}$/.test(clean)) return clean;
-  const cityOnly = clean.replace(/\s*\(.*\)\s*$/, "").toLowerCase().trim();
-  if (CITY_TO_IATA[cityOnly]) return CITY_TO_IATA[cityOnly];
-  if (CITY_TO_IATA[clean.toLowerCase()]) return CITY_TO_IATA[clean.toLowerCase()];
-  for (const word of clean.toLowerCase().split(/[\s,;()\-/]+/)) {
-    if (word.length >= 3 && CITY_TO_IATA[word]) return CITY_TO_IATA[word];
-  }
-  return void 0;
-}
-function mapTripJackFlight(item, idx, fromIata, toIata, traceId = "") {
-  const firstSeg = item.sI?.[0];
-  const lastSeg = item.sI?.[item.sI.length - 1];
-  const airlineCode = firstSeg?.fD?.aI?.code || "";
-  const airline = firstSeg?.fD?.aI?.name || "Unknown Airline";
-  const flightNum = firstSeg?.fD?.fN ? `${airlineCode}${firstSeg.fD.fN}` : `FL${idx + 1}`;
-  const depIso = firstSeg?.dt;
-  const arrIso = lastSeg?.at;
-  const depTime = depIso ? depIso.slice(11, 16) || "N/A" : "N/A";
-  const arrTime = arrIso ? arrIso.slice(11, 16) || "N/A" : "N/A";
-  let duration3 = "N/A";
-  if (depIso && arrIso) {
-    const depMs = new Date(depIso).getTime();
-    const arrMs = new Date(arrIso).getTime();
-    const diffMs = arrMs - depMs;
-    if (diffMs > 0) {
-      const durH = Math.floor(diffMs / 36e5);
-      const durM = Math.floor(diffMs % 36e5 / 6e4);
-      duration3 = `${durH}h ${durM.toString().padStart(2, "0")}m`;
-    }
-  } else {
-    const durMinsRaw = firstSeg?.duration;
-    if (durMinsRaw && durMinsRaw > 0) {
-      const durH = Math.floor(durMinsRaw / 60);
-      const durM = durMinsRaw % 60;
-      duration3 = `${durH}h ${durM.toString().padStart(2, "0")}m`;
-    }
-  }
-  const CABIN_LABEL = {
-    ECONOMY: "Economy",
-    BUSINESS: "Business",
-    FIRST: "First",
-    PREMIUM_ECONOMY: "Premium Economy"
-  };
-  const flightResultIndex = String(item.totalPriceList?.[0]?.id ?? "") || String(item.resultIndex ?? "") || String(item.sI?.[0]?.id ?? "") || String(item.sI?.[0]?.rI ?? "") || String(idx);
-  const fareOptions = (item.totalPriceList || []).map((pl) => {
-    const adultFd = pl?.fd?.ADULT;
-    if (!adultFd) return null;
-    const rawFare = adultFd?.fC?.TF || adultFd?.fC?.BF || 0;
-    if (!rawFare) return null;
-    const cc = String(adultFd?.cc || "ECONOMY").toUpperCase();
-    const fareResultIndex = String(pl.id ?? "") || String(pl.resultIndex ?? "") || String(pl.rI ?? "") || flightResultIndex;
-    const rawMeal = adultFd?.mI ?? adultFd?.meal ?? null;
-    const meal = rawMeal === "F" || rawMeal === "FREE" ? "FREE" : rawMeal === "P" || rawMeal === "PAID" ? "PAID" : null;
-    const rTRaw = adultFd?.rT;
-    const rTStr = typeof rTRaw === "string" ? rTRaw.toUpperCase() : "";
-    const rTNum = typeof rTRaw === "number" ? rTRaw : rTStr !== "" && !Number.isNaN(Number(rTStr)) ? Number(rTStr) : null;
-    const nRF = adultFd?.nRF === true || adultFd?.nRF === 1;
-    const refundable = rTNum === 1 || rTNum === 2 || rTStr === "FULL_REFUNDABLE" || rTStr === "PARTIAL_REFUNDABLE" || rTStr === "REFUNDABLE" ? true : rTNum === 0 || rTStr === "NON_REFUNDABLE" ? false : !nRF;
-    const apiLabel = (pl.fareIdentifier || pl.fn || adultFd.fareIdentifier || "").trim();
-    const fareLabel = apiLabel || (cc === "BUSINESS" || cc === "FIRST" ? refundable ? "Business Flex" : "Business Saver" : cc === "PREMIUM_ECONOMY" ? "Premium Economy" : refundable ? "Flex" : "Saver");
-    const bI = adultFd?.bI ?? {};
-    const checkedBaggage = bI.iB ? String(bI.iB) : bI.checkIn ? String(bI.checkIn) : cc === "BUSINESS" || cc === "FIRST" ? "30 kg" : cc === "PREMIUM_ECONOMY" ? "20 kg" : "15 kg";
-    const cabinBaggage = bI.cB ? String(bI.cB) : bI.cabin ? String(bI.cabin) : cc === "BUSINESS" || cc === "FIRST" ? "10 kg" : "7 kg";
-    return {
-      fareId: pl.id || pl.fareIdentifier || `${cc}_${rawFare}`,
-      cabinClass: cc,
-      cabinLabel: CABIN_LABEL[cc] || cc,
-      fareLabel,
-      totalFare: rawFare,
-      seatsLeft: adultFd?.sR ?? 9,
-      resultIndex: fareResultIndex,
-      meal,
-      refundable,
-      checkedBaggage,
-      cabinBaggage
-    };
-  }).filter(Boolean);
-  fareOptions.sort((a, b) => a.totalFare - b.totalFare);
-  const priceInfo = item.totalPriceList?.[0]?.fd?.ADULT;
-  const price = fareOptions.length > 0 ? Math.min(...fareOptions.map((f) => f.totalFare)) : priceInfo?.fC?.TF || priceInfo?.fC?.BF || 0;
-  const seatsLeft = priceInfo?.sR ?? 9;
-  const cabinClass = CABIN_LABEL[String(priceInfo?.cc || "ECONOMY").toUpperCase()] ?? "Economy";
-  const segCount = item.sI?.length ?? 1;
-  const stops = Math.max(0, segCount - 1);
-  const stopsLabel = segCount === 1 ? "Non-stop" : segCount === 2 ? "1 Stop" : "Multi-stop";
-  const resultIndex = flightResultIndex;
-  const segments = (item.sI || []).map((seg) => {
-    const depDt = seg.dt || "";
-    const arrDt = seg.at || "";
-    const fromCode = seg.da?.code || seg.da?.cityCode || "";
-    const toCode = seg.aa?.code || seg.aa?.cityCode || "";
-    return {
-      from: fromCode,
-      fromCity: seg.da?.cityName || seg.da?.name || CANONICAL[fromCode] || fromCode,
-      fromTerminal: seg.da?.terminal || "",
-      to: toCode,
-      toCity: seg.aa?.cityName || seg.aa?.name || CANONICAL[toCode] || toCode,
-      toTerminal: seg.aa?.terminal || "",
-      departure: depDt,
-      arrival: arrDt,
-      departureTime: depDt ? depDt.slice(11, 16) : "",
-      arrivalTime: arrDt ? arrDt.slice(11, 16) : "",
-      airline: seg.fD?.aI?.name || airline,
-      flightNumber: seg.fD?.aI?.code && seg.fD?.fN ? `${seg.fD.aI.code}${seg.fD.fN}` : flightNum
-    };
-  });
-  return {
-    id: idx + 1,
-    airline,
-    airlineCode,
-    flightNumber: flightNum,
-    origin: CANONICAL[fromIata] || fromIata,
-    destination: CANONICAL[toIata] || toIata,
-    departureTime: depTime,
-    arrivalTime: arrTime,
-    departureDatetime: depIso || "",
-    // full ISO — for client-side calculations
-    arrivalDatetime: arrIso || "",
-    // full ISO — for client-side calculations
-    duration: duration3,
-    price,
-    class: cabinClass,
-    seatsAvailable: seatsLeft,
-    stops,
-    stopsLabel,
-    status: "scheduled",
-    segments,
-    // ← per-segment details for stop/layover display
-    fareOptions,
-    // ← all cabin classes with their prices
-    resultIndex,
-    // ← required by TripJack fareQuote/SSR/book
-    traceId
-    // ← search session ID — embedded per-flight for reliable access
-  };
-}
-var TRIPJACK_BASE = process.env.TRIPJACK_BASE_URL || "https://apitest.tripjack.com";
-function resolveCabinClass(raw) {
-  const v = (raw || "ECONOMY").toUpperCase().replace(/[\s-]/g, "_");
-  if (v === "BUSINESS") return "BUSINESS";
-  if (v === "FIRST") return "FIRST";
-  if (v.includes("PREMIUM")) return "PREMIUM_ECONOMY";
-  return "ECONOMY";
-}
-router5.post("/flights", async (req, res) => {
-  const {
-    // Legacy single-route params (kept for backward compat)
-    from,
-    to,
-    date: date6,
-    passengers = 1,
-    class: requestedClass,
-    // Extended params
-    tripType = "ONEWAY",
-    routeInfos: incomingRoutes,
-    paxInfo: incomingPax,
-    cabinClass: incomingCabinClass,
-    returnDate
-  } = req.body;
-  const cfg = await getProviderConfig();
-  const apiKey = cfg.flightApiKey || process.env.TRIPJACK_API_KEY || "";
-  if (!apiKey) {
-    res.status(503).json({ error: "TripJack API key is not configured. Please set it in Admin Settings \u2192 API Keys." });
-    return;
-  }
-  const cabinClass = resolveCabinClass(incomingCabinClass || requestedClass);
-  const adultCount = incomingPax?.ADULT ?? Math.max(1, Number(passengers) || 1);
-  const childCount = incomingPax?.CHILD ?? 0;
-  const infantCount = incomingPax?.INFANT ?? 0;
-  const paxInfo = { ADULT: adultCount, CHILD: childCount, INFANT: infantCount };
-  let resolvedRoutes;
-  if (Array.isArray(incomingRoutes) && incomingRoutes.length > 0) {
-    const mapped = incomingRoutes.map((r) => ({
-      fromIata: resolveIata(r.from || "") || "",
-      toIata: resolveIata(r.to || "") || "",
-      travelDate: r.date || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10)
-    }));
-    const bad = mapped.find((r) => !r.fromIata || !r.toIata);
-    if (bad) {
-      res.status(400).json({ error: `Could not resolve airport code for one of the routes.` });
-      return;
-    }
-    resolvedRoutes = mapped;
-  } else {
-    const fromIata = resolveIata(from || "");
-    const toIata = resolveIata(to || "");
-    if (!fromIata || !toIata) {
-      res.status(400).json({
-        error: `Could not find airport for "${!fromIata ? from : to}". Please use a valid city or IATA code.`
-      });
-      return;
-    }
-    const travelDate = date6 || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-    resolvedRoutes = [{ fromIata, toIata, travelDate }];
-    if (String(tripType).toUpperCase() === "ROUNDTRIP" && returnDate) {
-      resolvedRoutes.push({ fromIata: toIata, toIata: fromIata, travelDate: returnDate });
-    }
-  }
-  const searchRouteInfos = resolvedRoutes.map((r) => ({
-    fromCityOrAirport: { code: r.fromIata },
-    toCityOrAirport: { code: r.toIata },
-    travelDate: r.travelDate
-  }));
-  const searchBody = {
-    searchQuery: {
-      cabinClass,
-      paxInfo,
-      routeInfos: searchRouteInfos,
-      searchModifiers: { isDirectFlight: false, isConnectingFlight: false }
-    }
-  };
-  const logLabel = resolvedRoutes.map((r) => `${r.fromIata}\u2192${r.toIata} on ${r.travelDate}`).join(" | ");
-  try {
-    const apiRes = await fetch(`${TRIPJACK_BASE}/fms/v1/air-search-all`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", apikey: apiKey },
-      body: JSON.stringify(searchBody),
-      signal: AbortSignal.timeout(2e4)
-    });
-    const data = await apiRes.json().catch(() => ({}));
-    if (!apiRes.ok || data?.errors?.length) {
-      const reason = data?.errors?.[0]?.message || `HTTP ${apiRes.status}`;
-      logger.error(`[flights/tripjack] Search error: ${reason}`);
-      res.status(apiRes.ok ? 400 : apiRes.status).json({ error: reason });
-      return;
-    }
-    const { fromIata: f0, toIata: t0 } = resolvedRoutes[0];
-    const onward = data?.searchResult?.tripInfos?.ONWARD || data?.tripInfos?.ONWARD || [];
-    const traceId = data?.searchResult?.traceId || data?.traceId || data?.data?.traceId || onward?.[0]?.traceId || "";
-    const rawFlights = onward.map((item, idx) => mapTripJackFlight(item, idx, f0, t0, traceId));
-    const groupMap = /* @__PURE__ */ new Map();
-    for (const flight of rawFlights) {
-      const normFlight = (flight.flightNumber || "").replace(/\s+/g, "").toUpperCase();
-      const key = `${(flight.airlineCode || "").toUpperCase()}|${normFlight}|${flight.departureTime}|${flight.arrivalTime}`;
-      const existing = groupMap.get(key);
-      if (!existing) {
-        groupMap.set(key, { ...flight });
-      } else {
-        const seenFareIds = new Set(existing.fareOptions?.map((f) => f.fareId) ?? []);
-        for (const fo of flight.fareOptions ?? []) {
-          if (!seenFareIds.has(fo.fareId)) {
-            existing.fareOptions = [...existing.fareOptions ?? [], fo];
-            seenFareIds.add(fo.fareId);
-          }
-        }
-        existing.fareOptions?.sort((a, b) => a.totalFare - b.totalFare);
-        const cheapest = existing.fareOptions?.[0];
-        if (cheapest && cheapest.totalFare < existing.price) {
-          existing.price = cheapest.totalFare;
-        }
-        existing.resultIndex = existing.fareOptions?.[0]?.resultIndex || existing.resultIndex;
-      }
-    }
-    const flights = Array.from(groupMap.values()).map((f, idx) => ({ ...f, id: idx + 1 }));
-    if (!traceId) {
-      const topKeys = Object.keys(data || {}).join(", ");
-      const srKeys = Object.keys(data?.searchResult || {}).join(", ");
-      logger.warn(
-        `[flights/tripjack] traceId not found \u2014 top-level keys: [${topKeys}] | searchResult keys: [${srKeys}]`
-      );
-    }
-    logger.info(
-      `[flights/tripjack] ${logLabel}: ${rawFlights.length} raw \u2192 ${flights.length} unique flights (${cabinClass}, A${adultCount}C${childCount}I${infantCount}) | traceId: ${traceId || "(none)"}`
-    );
-    res.json({ flights, total: flights.length, source: "tripjack", traceId });
-  } catch (err) {
-    logger.error("[flights/tripjack] Request failed:", err.message);
-    res.status(502).json({ error: `TripJack request failed: ${err.message}` });
-  }
-});
-router5.get("/airports/search", async (req, res) => {
-  const q = (req.query.q || "").trim();
-  if (!q || q.length < 2) {
-    res.json({ airports: [] });
-    return;
-  }
-  const rapidApiKey = process.env.RAPIDAPI_KEY;
-  if (rapidApiKey) {
-    try {
-      const apiRes = await fetch(
-        `https://booking-com15.p.rapidapi.com/api/v1/flights/searchDestination?query=${encodeURIComponent(q)}`,
-        {
-          headers: {
-            "X-RapidAPI-Key": rapidApiKey,
-            "X-RapidAPI-Host": "booking-com15.p.rapidapi.com"
-          },
-          signal: AbortSignal.timeout(6e3)
-        }
-      );
-      if (apiRes.ok) {
-        const body = await apiRes.json();
-        const items = Array.isArray(body?.data) ? body.data : [];
-        const airports = items.slice(0, 8).map((item) => ({
-          id: item.id || item.code,
-          name: item.name || item.cityName,
-          iata: item.code,
-          city: item.cityName || item.name,
-          country: item.countryName || "",
-          type: item.type || "AIRPORT"
-        }));
-        res.json({ airports, source: "rapidapi" });
-        return;
-      }
-    } catch (err) {
-      logger.warn(`[airports/search] RapidAPI error: ${err?.message}`);
-    }
-  }
-  const lower = q.toLowerCase();
-  const matches = Object.entries(CITY_TO_IATA).filter(([city]) => city.includes(lower)).slice(0, 8).map(([city, iata]) => ({
-    id: iata,
-    name: CANONICAL[iata] || city,
-    iata,
-    city: CANONICAL[iata] || city,
-    country: "India",
-    type: "AIRPORT"
-  }));
-  res.json({ airports: matches, source: "local" });
-});
-router5.get("/flights/search", async (req, res) => {
-  const parsed = SearchFlightsQueryParams.safeParse(req.query);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-  const { origin: origin2, destination, class: flightClass } = parsed.data;
-  let query = db.select().from(flightsTable).$dynamic();
-  const conditions = [];
-  if (origin2) conditions.push(ilike(flightsTable.origin, `%${origin2}%`));
-  if (destination) conditions.push(ilike(flightsTable.destination, `%${destination}%`));
-  if (flightClass) conditions.push(eq(flightsTable.class, flightClass));
-  if (conditions.length > 0) {
-    const { and: and3 } = await Promise.resolve().then(() => (init_drizzle_orm(), drizzle_orm_exports));
-    query = query.where(and3(...conditions));
-  }
-  const flights = await query;
-  const mapped = flights.map((f) => ({ ...f, price: Number(f.price), airlineLogoUrl: f.airlineLogoUrl ?? void 0 }));
-  res.json(SearchFlightsResponse.parse(mapped));
-});
-router5.get("/flights", async (_req, res) => {
-  const flights = await db.select().from(flightsTable).orderBy(flightsTable.id);
-  const mapped = flights.map((f) => ({ ...f, price: Number(f.price), airlineLogoUrl: f.airlineLogoUrl ?? void 0 }));
-  res.json(ListFlightsResponse.parse(mapped));
-});
-router5.get("/flights/:id", async (req, res) => {
-  const params = GetFlightParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-  const [flight] = await db.select().from(flightsTable).where(eq(flightsTable.id, params.data.id));
-  if (!flight) {
-    res.status(404).json({ error: "Flight not found" });
-    return;
-  }
-  res.json(GetFlightResponse.parse({ ...flight, price: Number(flight.price), airlineLogoUrl: flight.airlineLogoUrl ?? void 0 }));
-});
-var flights_default = router5;
-
-// src/routes/buses.ts
-var import_express6 = __toESM(require_express2(), 1);
-init_drizzle_orm();
-var router6 = (0, import_express6.Router)();
-var CITY_BUS_DATA = {
-  hyderabad: { boarding: ["MGBS (Imlibun)", "Ameerpet", "Kukatpally", "LB Nagar", "Uppal", "Secunderabad", "Dilsukhnagar"], dropping: ["MGBS (Imlibun)", "Koti", "LB Nagar", "Dilsukhnagar", "Secunderabad", "Uppal X Roads"] },
-  mumbai: { boarding: ["Dadar", "Borivali", "Thane", "Kurla", "Sion", "Panvel", "Vashi"], dropping: ["Dadar", "Borivali", "Thane", "Kurla", "Panvel"] },
-  delhi: { boarding: ["Kashmere Gate ISBT", "Sarai Kale Khan", "Anand Vihar", "Dhaula Kuan", "Nehru Place"], dropping: ["Kashmere Gate ISBT", "Sarai Kale Khan", "Anand Vihar", "Nehru Place"] },
-  bangalore: { boarding: ["Majestic (KBS)", "Silk Board", "Marathahalli", "Electronic City", "Hebbal", "Kalasipalya"], dropping: ["Majestic (KBS)", "Silk Board", "Koramangala", "Whitefield", "Hebbal"] },
-  bengaluru: { boarding: ["Majestic (KBS)", "Silk Board", "Marathahalli", "Electronic City", "Hebbal", "Kalasipalya"], dropping: ["Majestic (KBS)", "Silk Board", "Koramangala", "Whitefield", "Hebbal"] },
-  chennai: { boarding: ["Koyambedu", "Chennai Central", "Tambaram", "Guindy", "Broadway", "Perungudi"], dropping: ["Koyambedu", "Broadway", "Chennai Central", "Tambaram", "Guindy"] },
-  pune: { boarding: ["Shivajinagar", "Swargate", "Katraj", "Hadapsar", "Kothrud", "Deccan"], dropping: ["Shivajinagar", "Swargate", "Katraj", "Hadapsar", "Deccan"] },
-  kolkata: { boarding: ["Esplanade", "Howrah", "Salt Lake", "Park Street", "Babughat"], dropping: ["Esplanade", "Howrah", "Salt Lake", "Park Street"] },
-  ahmedabad: { boarding: ["Geeta Mandir", "Paldi", "Naroda", "Isanpur", "Vastral"], dropping: ["Geeta Mandir", "Paldi", "Naroda", "Kankaria"] },
-  jaipur: { boarding: ["Sindhi Camp", "Narayan Singh Circle", "Vidyadhar Nagar", "Ajmer Road"], dropping: ["Sindhi Camp", "Narayan Singh Circle", "Ajmer Road"] },
-  kochi: { boarding: ["KSRTC Bus Stand", "Aluva", "Edapally", "MG Road", "Vyttila"], dropping: ["KSRTC Bus Stand", "Aluva", "Edapally", "MG Road"] },
-  goa: { boarding: ["Panaji Bus Stand", "Mapusa", "Margao", "Vasco da Gama", "Calangute"], dropping: ["Panaji Bus Stand", "Mapusa", "Margao", "Vasco da Gama"] },
-  vijayawada: { boarding: ["Pandit Nehru Bus Station", "Benz Circle", "One Town", "Gunadala", "Auto Nagar"], dropping: ["Pandit Nehru Bus Station", "Benz Circle", "Auto Nagar", "One Town"] },
-  visakhapatnam: { boarding: ["RTC Complex", "Dwaraka Nagar", "MVP Colony", "Steel Plant"], dropping: ["RTC Complex", "Dwaraka Nagar", "MVP Colony"] },
-  tirupati: { boarding: ["Tirupati Bus Stand", "Renigunta", "Alipiri"], dropping: ["Tirupati Bus Stand", "Renigunta"] },
-  coimbatore: { boarding: ["Gandhipuram", "Ukkadam", "Singanallur", "Peelamedu"], dropping: ["Gandhipuram", "Ukkadam", "Singanallur"] },
-  madurai: { boarding: ["Madurai Bus Stand", "Anna Nagar", "Kalavasal"], dropping: ["Madurai Bus Stand", "Anna Nagar"] },
-  mangalore: { boarding: ["KSRTC Bus Stand", "Lalbagh", "Hampankatta"], dropping: ["KSRTC Bus Stand", "Lalbagh"] },
-  nagpur: { boarding: ["Nagpur Central Bus Stand", "Ganeshpeth", "Sitabuldi"], dropping: ["Nagpur Central Bus Stand", "Ganeshpeth"] },
-  indore: { boarding: ["Sarwate Bus Stand", "Rajwada", "Vijay Nagar", "Palasia"], dropping: ["Sarwate Bus Stand", "Rajwada", "Vijay Nagar"] },
-  bhopal: { boarding: ["Hamidia Road Bus Stand", "MP Nagar", "New Market"], dropping: ["Hamidia Road Bus Stand", "MP Nagar"] },
-  lucknow: { boarding: ["Alambagh Bus Stand", "Charbagh", "Hazratganj", "Gomti Nagar"], dropping: ["Alambagh Bus Stand", "Charbagh", "Gomti Nagar"] },
-  surat: { boarding: ["Surat Central Bus Stand", "Adajan", "Vesu", "Athwa Gate"], dropping: ["Surat Central Bus Stand", "Adajan", "Athwa Gate"] },
-  vadodara: { boarding: ["Sayajigunj Bus Stand", "Alkapuri", "Nizampura"], dropping: ["Sayajigunj Bus Stand", "Alkapuri"] },
-  nashik: { boarding: ["Nashik Central Bus Stand", "CBS", "Mahamarg Nagar"], dropping: ["Nashik Central Bus Stand", "CBS"] },
-  aurangabad: { boarding: ["Central Bus Stand", "Cidco", "Jalna Road"], dropping: ["Central Bus Stand", "Cidco"] },
-  chandigarh: { boarding: ["ISBT Sector 17", "Sector 22", "Sector 43"], dropping: ["ISBT Sector 17", "Sector 22"] },
-  amritsar: { boarding: ["ISBT Amritsar", "Hall Gate", "Golden Temple Road"], dropping: ["ISBT Amritsar", "Hall Gate"] },
-  jalandhar: { boarding: ["Jalandhar Bus Stand", "Nakodar Chowk"], dropping: ["Jalandhar Bus Stand"] },
-  ludhiana: { boarding: ["Ludhiana Bus Stand", "Ferozepur Road"], dropping: ["Ludhiana Bus Stand"] },
-  dehradun: { boarding: ["ISBT Dehradun", "Clock Tower", "Rajpur Road"], dropping: ["ISBT Dehradun", "Clock Tower"] },
-  haridwar: { boarding: ["Haridwar Bus Stand", "Har ki Pauri"], dropping: ["Haridwar Bus Stand"] },
-  varanasi: { boarding: ["Varanasi Bus Stand", "Godowlia", "Lanka"], dropping: ["Varanasi Bus Stand", "Godowlia"] },
-  agra: { boarding: ["Agra Fort Bus Stand", "Idgah Bus Stand", "Raja Mandi"], dropping: ["Agra Fort Bus Stand", "Idgah Bus Stand"] },
-  patna: { boarding: ["Patna Bus Stand", "Gandhi Maidan", "Boring Road"], dropping: ["Patna Bus Stand", "Gandhi Maidan"] },
-  ranchi: { boarding: ["Ranchi Bus Stand", "Kantatoli"], dropping: ["Ranchi Bus Stand"] },
-  bhubaneswar: { boarding: ["Baramunda Bus Stand", "Master Canteen", "Rasulgarh"], dropping: ["Baramunda Bus Stand", "Master Canteen"] },
-  thiruvananthapuram: { boarding: ["KSRTC Bus Stand", "Thampanoor", "Palayam"], dropping: ["KSRTC Bus Stand", "Thampanoor"] },
-  kozhikode: { boarding: ["Kozhikode Bus Stand", "Mananchira", "KSRTC Bus Stand"], dropping: ["Kozhikode Bus Stand", "Mananchira"] },
-  thrissur: { boarding: ["Thrissur Bus Stand", "Round North"], dropping: ["Thrissur Bus Stand"] }
-};
-var APPROX_DISTANCE_KM = {
-  "hyderabad-vijayawada": 270,
-  "hyderabad-visakhapatnam": 620,
-  "hyderabad-bangalore": 570,
-  "hyderabad-chennai": 620,
-  "hyderabad-pune": 560,
-  "hyderabad-mumbai": 710,
-  "hyderabad-goa": 680,
-  "hyderabad-tirupati": 550,
-  "hyderabad-nagpur": 500,
-  "mumbai-pune": 150,
-  "mumbai-goa": 600,
-  "mumbai-nashik": 170,
-  "mumbai-ahmedabad": 530,
-  "mumbai-surat": 290,
-  "mumbai-indore": 590,
-  "mumbai-bangalore": 990,
-  "mumbai-hyderabad": 710,
-  "delhi-jaipur": 280,
-  "delhi-agra": 200,
-  "delhi-chandigarh": 250,
-  "delhi-lucknow": 550,
-  "delhi-varanasi": 820,
-  "delhi-amritsar": 450,
-  "delhi-dehradun": 330,
-  "bangalore-chennai": 350,
-  "bangalore-coimbatore": 360,
-  "bangalore-goa": 560,
-  "bangalore-hyderabad": 570,
-  "bangalore-mangalore": 360,
-  "bangalore-kochi": 600,
-  "bangalore-pune": 840,
-  "bangalore-madurai": 490,
-  "chennai-coimbatore": 500,
-  "chennai-madurai": 460,
-  "chennai-kochi": 680,
-  "chennai-bangalore": 350,
-  "chennai-vijayawada": 430,
-  "pune-goa": 460,
-  "pune-nashik": 210,
-  "pune-ahmedabad": 470,
-  "pune-indore": 580,
-  "ahmedabad-surat": 260,
-  "ahmedabad-vadodara": 110,
-  "ahmedabad-indore": 400,
-  "kolkata-bhubaneswar": 440,
-  "kolkata-patna": 580,
-  "kolkata-ranchi": 380
-};
-function getDistance(a, b) {
-  const k1 = `${a}-${b}`, k2 = `${b}-${a}`;
-  return APPROX_DISTANCE_KM[k1] || APPROX_DISTANCE_KM[k2] || 400;
-}
-function getCityData(city) {
-  const key = city.toLowerCase().split(",")[0].trim().split(" ")[0];
-  return CITY_BUS_DATA[key] || CITY_BUS_DATA[city.toLowerCase().split(",")[0].trim()] || { boarding: [`${city} Bus Stand`, `${city} Central`], dropping: [`${city} Bus Stand`] };
-}
-router6.get("/buses/live-search", (req, res) => {
-  const rawFrom = req.query.from || "";
-  const rawTo = req.query.to || "";
-  const from = rawFrom.split(",")[0].trim();
-  const to = rawTo.split(",")[0].trim();
-  if (!from || !to) {
-    res.status(400).json({ error: "Both 'from' and 'to' are required." });
-    return;
-  }
-  const distKm = getDistance(from.toLowerCase(), to.toLowerCase());
-  const avgSpeedKmh = 60;
-  const totalMins = Math.round(distKm / avgSpeedKmh * 60);
-  const durH = Math.floor(totalMins / 60);
-  const durM = totalMins % 60;
-  const durationStr = `${durH}h${durM > 0 ? ` ${durM}m` : ""}`;
-  const fromData = getCityData(from);
-  const toData = getCityData(to);
-  const seed = from.toLowerCase().split("").reduce((a, c) => a + c.charCodeAt(0), 0) + to.toLowerCase().split("").reduce((a, c) => a + c.charCodeAt(0), 0);
-  const OPERATORS = [
-    { name: "APSRTC", types: ["AC Seater", "Non-AC Seater", "Volvo Multi-Axle"] },
-    { name: "VRL Travels", types: ["AC Sleeper", "AC Semi-Sleeper", "Non-AC Seater"] },
-    { name: "Orange Travels", types: ["AC Sleeper", "AC Semi-Sleeper"] },
-    { name: "SRS Travels", types: ["Non-AC Seater", "AC Seater"] },
-    { name: "Patel Travels", types: ["AC Sleeper", "AC Semi-Sleeper", "AC Seater"] },
-    { name: "Neeta Tours", types: ["AC Sleeper", "Volvo Multi-Axle"] },
-    { name: "Paulo Travels", types: ["AC Sleeper", "Scania Multi-Axle"] },
-    { name: "KPN Travels", types: ["AC Semi-Sleeper", "AC Seater"] },
-    { name: "Chartered Bus", types: ["AC Sleeper", "Volvo Multi-Axle"] },
-    { name: "Raj National", types: ["Non-AC Seater", "AC Seater"] },
-    { name: "MSRTC Shivshahi", types: ["AC Seater", "Volvo Multi-Axle"] },
-    { name: "KSRTC Airavata", types: ["Volvo Multi-Axle", "AC Sleeper"] }
-  ];
-  const BASE_PRICES = {
-    "Non-AC Seater": Math.round(distKm * 1.2 / 50) * 50,
-    "AC Seater": Math.round(distKm * 1.8 / 50) * 50,
-    "AC Semi-Sleeper": Math.round(distKm * 2.2 / 50) * 50,
-    "AC Sleeper": Math.round(distKm * 2.8 / 50) * 50,
-    "Volvo Multi-Axle": Math.round(distKm * 3.2 / 50) * 50,
-    "Scania Multi-Axle": Math.round(distKm * 3.5 / 50) * 50
-  };
-  const DEP_TIMES = ["4:00 PM", "5:30 PM", "6:00 PM", "7:00 PM", "8:00 PM", "9:00 PM", "10:00 PM", "11:00 PM", "11:59 PM"];
-  function addTime(hhmm12, addMins) {
-    const m = hhmm12.match(/(\d+):(\d+)\s*(AM|PM)/i);
-    if (!m) return hhmm12;
-    let h = parseInt(m[1]), min2 = parseInt(m[2]);
-    const pm = m[3].toUpperCase() === "PM";
-    if (pm && h !== 12) h += 12;
-    if (!pm && h === 12) h = 0;
-    const totalM = h * 60 + min2 + addMins;
-    const nextDay = totalM >= 1440;
-    const rh = Math.floor(totalM % 1440 / 60);
-    const rm = totalM % 60;
-    const period = rh >= 12 ? "PM" : "AM";
-    const displayH = rh > 12 ? rh - 12 : rh === 0 ? 12 : rh;
-    return `${displayH}:${rm.toString().padStart(2, "0")} ${period}${nextDay ? " (+1)" : ""}`;
-  }
-  const pickedCount = 6 + seed % 3;
-  const shuffled = [...OPERATORS].sort((a, b) => {
-    const ha = a.name.charCodeAt(0) * seed % 100;
-    const hb = b.name.charCodeAt(0) * seed % 100;
-    return ha - hb;
-  });
-  const picked = shuffled.slice(0, pickedCount);
-  const buses = picked.map((op, idx) => {
-    const busType = op.types[(seed + idx) % op.types.length];
-    const basePrice = BASE_PRICES[busType] || 500;
-    const price = basePrice + seed * (idx + 1) % 5 * 50;
-    const depTime = DEP_TIMES[(idx + seed % 3) % DEP_TIMES.length];
-    const arrTime = addTime(depTime, totalMins);
-    const totalSeats = busType.includes("Sleeper") ? 36 : busType.includes("Semi") ? 40 : 45;
-    const seatsAvailable = 3 + (seed * idx + 7) % (totalSeats - 5);
-    const amenities = [];
-    if (!busType.includes("Non-AC")) amenities.push("AC");
-    if (busType.includes("Volvo") || busType.includes("Scania") || busType.includes("Sleeper")) amenities.push("Wifi");
-    if (busType.includes("Sleeper") || busType.includes("Volvo")) amenities.push("Charging");
-    if (basePrice >= 600) amenities.push("Water Bottle");
-    if (busType.includes("Sleeper")) amenities.push("Blanket");
-    if (busType.includes("Volvo") || busType.includes("Scania")) amenities.push("Entertainment");
-    const bPoints = fromData.boarding.slice(0, 4);
-    const dPoints = toData.dropping.slice(0, 4);
-    return {
-      id: idx + 1,
-      name: op.name,
-      operator: op.name,
-      from,
-      to,
-      departure: depTime,
-      arrival: arrTime,
-      duration: durationStr,
-      price,
-      busType,
-      totalSeats,
-      seatsAvailable,
-      amenities,
-      rating: parseFloat((3.5 + (seed + idx * 7) % 15 / 10).toFixed(1)),
-      boardingPoints: bPoints,
-      droppingPoints: dPoints
-    };
-  });
-  res.json({ buses, total: buses.length, source: "generated", from, to, distanceKm: distKm });
-});
-router6.get("/buses/search", async (req, res) => {
-  const parsed = SearchBusesQueryParams.safeParse(req.query);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-  const { origin: origin2, destination } = parsed.data;
-  let query = db.select().from(busesTable).$dynamic();
-  const conditions = [];
-  if (origin2) {
-    conditions.push(ilike(busesTable.origin, `%${origin2}%`));
-  }
-  if (destination) {
-    conditions.push(ilike(busesTable.destination, `%${destination}%`));
-  }
-  if (conditions.length > 0) {
-    const { and: and3 } = await Promise.resolve().then(() => (init_drizzle_orm(), drizzle_orm_exports));
-    query = query.where(and3(...conditions));
-  }
-  const buses = await query;
-  const mapped = buses.map((b) => ({
-    ...b,
-    price: Number(b.price)
-  }));
-  res.json(SearchBusesResponse.parse(mapped));
-});
-router6.get("/buses", async (_req, res) => {
-  const buses = await db.select().from(busesTable).orderBy(busesTable.id);
-  const mapped = buses.map((b) => ({
-    ...b,
-    price: Number(b.price)
-  }));
-  res.json(ListBusesResponse.parse(mapped));
-});
-router6.get("/buses/:id", async (req, res) => {
-  const params = GetBusParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-  const [bus] = await db.select().from(busesTable).where(eq(busesTable.id, params.data.id));
-  if (!bus) {
-    res.status(404).json({ error: "Bus not found" });
-    return;
-  }
-  res.json(GetBusResponse.parse({ ...bus, price: Number(bus.price) }));
-});
-var buses_default = router6;
-
-// src/routes/hotels.ts
-var import_express7 = __toESM(require_express2(), 1);
-init_drizzle_orm();
-import { createHash } from "crypto";
-var router7 = (0, import_express7.Router)();
-var HOTELBEDS_API_BASE = (process.env["HOTELBEDS_API_BASE"] ?? "https://api.test.hotelbeds.com").replace(/\/$/, "");
-var HOTELBEDS_DEST_CODES = {
-  hyderabad: "HYD",
-  mumbai: "BOM",
-  bombay: "BOM",
-  delhi: "DEL",
-  "new delhi": "DEL",
-  bangalore: "BLR",
-  bengaluru: "BLR",
-  goa: "GOA",
-  chennai: "MAA",
-  madras: "MAA",
-  kolkata: "CCU",
-  calcutta: "CCU",
-  jaipur: "JAI",
-  kochi: "COK",
-  cochin: "COK",
-  pune: "PNQ",
-  ahmedabad: "AMD",
-  agra: "AGR",
-  varanasi: "VNS",
-  udaipur: "UDR",
-  amritsar: "ATQ"
-};
-function hotelbedsDestCode(city) {
-  return HOTELBEDS_DEST_CODES[city.toLowerCase().trim()] ?? null;
-}
-function hotelbedsSignature(apiKey, secret) {
-  const ts = Math.floor(Date.now() / 1e3).toString();
-  return createHash("sha256").update(apiKey + secret + ts).digest("hex");
-}
-router7.get("/hotels/live-search", async (req, res) => {
-  const city = req.query.city || "";
-  const checkin = req.query.checkin || "";
-  const checkout = req.query.checkout || "";
-  if (!city.trim()) {
-    res.status(400).json({ error: "City is required for hotel search." });
-    return;
-  }
-  const keysRows = await db.select().from(apiKeysTable).limit(1);
-  const keysRow = keysRows[0] ?? {};
-  const hbApiKey = keysRow.hotelApiKey || process.env.HOTELBEDS_API_KEY || "";
-  const hbSecret = keysRow.hotelApiSecret || process.env.HOTELBEDS_SECRET || "";
-  logger.info("API KEY:", hbApiKey ? `${hbApiKey.slice(0, 6)}...${hbApiKey.slice(-4)} (length ${hbApiKey.length})` : "NOT SET");
-  logger.info(`[hotels/live-search] city="${city}" checkin="${checkin}" checkout="${checkout}" hotelbeds=${hbApiKey ? "set" : "not set"}`);
-  if (hbApiKey && hbSecret) {
-    const destCode = hotelbedsDestCode(city);
-    const checkIn = checkin || new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10);
-    const checkOut = checkout || new Date(Date.now() + 9 * 864e5).toISOString().slice(0, 10);
-    if (!destCode) {
-      logger.info(`HotelBeds Error: No destination code mapped for city "${city}". Add it to HOTELBEDS_DEST_CODES.`);
-      res.json({ hotels: [], total: 0, source: "hotelbeds", city, message: `No HotelBeds destination code for "${city}".` });
-      return;
-    }
-    const requestBody = {
-      stay: { checkIn, checkOut },
-      occupancies: [{ rooms: 1, adults: 2, children: 0 }],
-      destination: { code: destCode }
-    };
-    logger.info("Calling HotelBeds API...", { city, destCode, checkIn, checkOut, endpoint: `${HOTELBEDS_API_BASE}/hotel-api/1.0/hotels` });
-    try {
-      const hbRes = await fetch(`${HOTELBEDS_API_BASE}/hotel-api/1.0/hotels`, {
-        method: "POST",
-        headers: {
-          "Api-key": hbApiKey,
-          "X-Signature": hotelbedsSignature(hbApiKey, hbSecret),
-          "Content-Type": "application/json",
-          "Accept": "application/json"
-        },
-        body: JSON.stringify(requestBody),
-        signal: AbortSignal.timeout(15e3)
-      });
-      const hbBody = await hbRes.json().catch(() => null);
-      logger.info("HotelBeds Response:", JSON.stringify(hbBody).slice(0, 1200));
-      if (!hbRes.ok) {
-        logger.error({ status: hbRes.status, body: hbBody });
-        res.json({ hotels: [], total: 0, source: "hotelbeds", city, message: `HotelBeds API error ${hbRes.status}` });
-        return;
-      }
-      const rawHotels = hbBody?.hotels?.hotels ?? [];
-      logger.info(`HotelBeds: ${rawHotels.length} hotels returned for ${city} (${destCode})`);
-      if (rawHotels.length === 0) {
-        res.json({ hotels: [], total: 0, source: "hotelbeds", city, message: `HotelBeds has no inventory for "${city}" (${destCode}) in the test environment for ${checkIn}\u2192${checkOut}.` });
-        return;
-      }
-      const FALLBACK_IMAGES = [
-        "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&q=80",
-        "https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=800&q=80",
-        "https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?w=800&q=80",
-        "https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?w=800&q=80",
-        "https://images.unsplash.com/photo-1571003123894-1f0594d2b5d9?w=800&q=80",
-        "https://images.unsplash.com/photo-1444201983204-c43cbd584d93?w=800&q=80",
-        "https://images.unsplash.com/photo-1455587734955-081b22074882?w=800&q=80"
-      ];
-      const mapped = rawHotels.slice(0, 20).map((h, idx) => {
-        const stars = parseInt(h.categoryCode) || 3;
-        const firstRate = h.rooms?.[0]?.rates?.[0];
-        const netPrice = parseFloat(firstRate?.net || "0");
-        const pricePerNight = netPrice > 0 ? Math.round(netPrice * 84) : 3500 + idx * 500;
-        const rateKey = firstRate?.rateKey ?? null;
-        const boardName = (firstRate?.boardName || "").toUpperCase();
-        const amenities = ["WiFi", "AC"];
-        if (boardName.includes("BREAKFAST") || boardName.includes("BB")) amenities.push("Breakfast");
-        if (boardName.includes("HALF") || boardName.includes("HB")) amenities.push("Half Board");
-        if (boardName.includes("FULL") || boardName.includes("FB")) amenities.push("Full Board");
-        if (stars >= 4) amenities.push("Restaurant", "Room Service");
-        if (stars >= 5) amenities.push("Spa", "Concierge");
-        if (stars >= 3) amenities.push("Parking");
-        const imageUrl = FALLBACK_IMAGES[idx % FALLBACK_IMAGES.length];
-        const baseRating = Math.min(5, (stars - 1) * 0.5 + 2.5);
-        const rating = parseFloat((baseRating + idx % 5 * 0.1).toFixed(1));
-        const ratingLabel = rating >= 4.5 ? "Exceptional" : rating >= 4 ? "Excellent" : rating >= 3.5 ? "Very Good" : "Good";
-        return {
-          id: h.code || 1e4 + idx,
-          name: h.name || `Hotel ${idx + 1}`,
-          city,
-          location: h.zoneName || h.destinationName || city,
-          stars,
-          rating,
-          ratingCount: 150 + idx * 45,
-          ratingLabel,
-          pricePerNight,
-          amenities,
-          imageUrl,
-          photos: [imageUrl],
-          description: `${h.name} \u2014 a ${h.categoryName || `${stars}-star`} property in ${h.zoneName || city}.`,
-          rateKey
-        };
-      });
-      logger.info(`[hotels/live-search] HotelBeds OK: ${mapped.length} hotels for ${city}`);
-      res.json({ hotels: mapped, total: mapped.length, source: "hotelbeds", city });
-      return;
-    } catch (err) {
-      logger.error(err?.message ?? err);
-      res.json({ hotels: [], total: 0, source: "hotelbeds", city, message: `HotelBeds request failed: ${err?.message}` });
-      return;
-    }
-  }
-  logger.warn("HotelBeds: HOTELBEDS_API_KEY and HOTELBEDS_SECRET are not configured.");
-  res.json({ hotels: [], total: 0, source: "hotelbeds", city, message: "HotelBeds credentials not configured." });
-});
-router7.get("/hotels/search", async (req, res) => {
-  const parsed = SearchHotelsQueryParams.safeParse(req.query);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-  const { location, stars } = parsed.data;
-  let query = db.select().from(hotelsTable).$dynamic();
-  const conditions = [];
-  if (location) {
-    conditions.push(ilike(hotelsTable.location, `%${location}%`));
-  }
-  if (stars) {
-    conditions.push(eq(hotelsTable.stars, stars));
-  }
-  if (conditions.length > 0) {
-    const { and: and3 } = await Promise.resolve().then(() => (init_drizzle_orm(), drizzle_orm_exports));
-    query = query.where(and3(...conditions));
-  }
-  const hotels = await query;
-  const mapped = hotels.map((h) => ({
-    ...h,
-    rating: Number(h.rating),
-    pricePerNight: Number(h.pricePerNight),
-    imageUrl: h.imageUrl ?? void 0,
-    address: h.address ?? void 0,
-    description: h.description ?? void 0
-  }));
-  res.json(SearchHotelsResponse.parse(mapped));
-});
-router7.get("/hotels", async (_req, res) => {
-  const hotels = await db.select().from(hotelsTable).orderBy(hotelsTable.id);
-  const mapped = hotels.map((h) => ({
-    ...h,
-    rating: Number(h.rating),
-    pricePerNight: Number(h.pricePerNight),
-    imageUrl: h.imageUrl ?? void 0,
-    address: h.address ?? void 0,
-    description: h.description ?? void 0
-  }));
-  res.json(ListHotelsResponse.parse(mapped));
-});
-function toTitleCase(str) {
-  return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-}
-router7.get("/hotels/rooms", async (req, res) => {
-  const hotelCode = parseInt(req.query.hotelCode || "0");
-  const checkin = req.query.checkin || "";
-  const checkout = req.query.checkout || "";
-  const adults = parseInt(req.query.adults || "2") || 2;
-  if (!hotelCode || !checkin || !checkout) {
-    res.status(400).json({ error: "hotelCode, checkin and checkout are required." });
-    return;
-  }
-  const keysRows = await db.select().from(apiKeysTable).limit(1);
-  const keysRow = keysRows[0] ?? {};
-  const hbApiKey = keysRow.hotelApiKey || process.env.HOTELBEDS_API_KEY || "";
-  const hbSecret = keysRow.hotelApiSecret || process.env.HOTELBEDS_SECRET || "";
-  if (!hbApiKey || !hbSecret) {
-    res.json({ rooms: [], message: "HotelBeds credentials not configured." });
-    return;
-  }
-  const requestBody = {
-    stay: { checkIn: checkin, checkOut: checkout },
-    occupancies: [{ rooms: 1, adults, children: 0 }],
-    hotels: { hotel: [hotelCode] }
-  };
-  logger.info(`[hotels/rooms] hotel=${hotelCode} ${checkin}\u2192${checkout} adults=${adults}`);
-  try {
-    const hbRes = await fetch(`${HOTELBEDS_API_BASE}/hotel-api/1.0/hotels`, {
-      method: "POST",
-      headers: {
-        "Api-key": hbApiKey,
-        "X-Signature": hotelbedsSignature(hbApiKey, hbSecret),
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-      },
-      body: JSON.stringify(requestBody),
-      signal: AbortSignal.timeout(15e3)
-    });
-    const data = await hbRes.json().catch(() => null);
-    if (!hbRes.ok) {
-      logger.error(hbRes.status, JSON.stringify(data).slice(0, 400));
-      res.json({ rooms: [], message: `HotelBeds error ${hbRes.status}` });
-      return;
-    }
-    const rawHotel = data?.hotels?.hotels?.[0];
-    if (!rawHotel) {
-      logger.info(`[hotels/rooms] No availability for hotel ${hotelCode}`);
-      res.json({ rooms: [], message: "Hotel not available for the selected dates." });
-      return;
-    }
-    const rooms = [];
-    for (const room of rawHotel.rooms ?? []) {
-      for (const rate of room.rates ?? []) {
-        const netUSD = parseFloat(rate.net || "0");
-        const priceINR = netUSD > 0 ? Math.round(netUSD * 84) : 0;
-        const hasFreeCancellation = rate.rateType !== "NRF" && (rate.cancellationPolicies?.length ?? 0) > 0;
-        const cancellationDeadline = [...rate.cancellationPolicies ?? []].sort((a, b) => new Date(a.from).getTime() - new Date(b.from).getTime())[0]?.from ?? "";
-        rooms.push({
-          code: room.code,
-          name: toTitleCase(room.name || room.code),
-          rateKey: rate.rateKey,
-          boardName: toTitleCase(rate.boardName || rate.boardCode || "Room Only"),
-          priceINR,
-          refundable: hasFreeCancellation,
-          cancellationDeadline
-        });
-      }
-    }
-    rooms.sort((a, b) => a.priceINR - b.priceINR);
-    logger.info(`[hotels/rooms] ${rooms.length} room options for hotel ${hotelCode}`);
-    res.json({ rooms, hotelName: rawHotel.name });
-  } catch (err) {
-    logger.error(err?.message ?? err);
-    res.json({ rooms: [], message: `Failed to fetch rooms: ${err?.message}` });
-  }
-});
-router7.get("/hotels/:id", async (req, res) => {
-  const params = GetHotelParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-  const [hotel] = await db.select().from(hotelsTable).where(eq(hotelsTable.id, params.data.id));
-  if (!hotel) {
-    res.status(404).json({ error: "Hotel not found" });
-    return;
-  }
-  res.json(
-    GetHotelResponse.parse({
-      ...hotel,
-      rating: Number(hotel.rating),
-      pricePerNight: Number(hotel.pricePerNight),
-      imageUrl: hotel.imageUrl ?? void 0,
-      address: hotel.address ?? void 0,
-      description: hotel.description ?? void 0
-    })
-  );
-});
-router7.post("/hotels/book", async (req, res) => {
-  const { rateKey, hotelId, hotelName, holder, paxes } = req.body ?? {};
-  if (!rateKey) {
-    res.status(400).json({ error: "rateKey is required to book a hotel." });
-    return;
-  }
-  const keysRows = await db.select().from(apiKeysTable).limit(1);
-  const keysRow = keysRows[0] ?? {};
-  const hbApiKey = keysRow.hotelApiKey || process.env.HOTELBEDS_API_KEY || "";
-  const hbSecret = keysRow.hotelApiSecret || process.env.HOTELBEDS_SECRET || "";
-  if (!hbApiKey || !hbSecret) {
-    res.status(503).json({ error: "HotelBeds credentials not configured." });
-    return;
-  }
-  const resolvedHolder = holder ?? { name: "Test", surname: "User" };
-  const resolvedPaxes = paxes ?? [{ roomId: 1, type: "AD", name: resolvedHolder.name, surname: resolvedHolder.surname }];
-  const bookingPayload = {
-    holder: resolvedHolder,
-    rooms: [{ rateKey, paxes: resolvedPaxes }],
-    clientReference: `DFG-${Date.now()}`,
-    remark: "Dream Fly Global booking",
-    tolerance: 2
-  };
-  logger.info(`[hotels/book] Booking hotel ${hotelId ?? "?"} ("${hotelName ?? "?"}") with rateKey: ${rateKey.slice(0, 60)}...`);
-  try {
-    const hbRes = await fetch(`${HOTELBEDS_API_BASE}/hotel-api/1.0/bookings`, {
-      method: "POST",
-      headers: {
-        "Api-key": hbApiKey,
-        "X-Signature": hotelbedsSignature(hbApiKey, hbSecret),
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-      },
-      body: JSON.stringify(bookingPayload),
-      signal: AbortSignal.timeout(2e4)
-    });
-    const data = await hbRes.json().catch(() => null);
-    logger.info("Booking Response:", JSON.stringify(data));
-    if (!hbRes.ok) {
-      logger.error(hbRes.status, JSON.stringify(data));
-      res.status(hbRes.status).json({
-        error: data?.error?.message || `HotelBeds booking failed (${hbRes.status})`,
-        details: data
-      });
-      return;
-    }
-    res.json({ success: true, booking: data?.booking ?? data });
-  } catch (err) {
-    logger.error(err?.message ?? err);
-    res.status(500).json({ error: `Booking request failed: ${err?.message}` });
-  }
-});
-var hotels_default = router7;
-
-// src/routes/packages.ts
-var import_express8 = __toESM(require_express2(), 1);
-init_drizzle_orm();
-var router8 = (0, import_express8.Router)();
-router8.get("/packages", async (req, res) => {
-  const parsed = ListPackagesQueryParams.safeParse(req.query);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-  const { destination, type } = parsed.data;
-  let query = db.select().from(packagesTable).$dynamic();
-  const conditions = [];
-  if (destination) {
-    conditions.push(ilike(packagesTable.destination, `%${destination}%`));
-  }
-  if (type) {
-    conditions.push(eq(packagesTable.type, type));
-  }
-  if (conditions.length > 0) {
-    const { and: and3 } = await Promise.resolve().then(() => (init_drizzle_orm(), drizzle_orm_exports));
-    query = query.where(and3(...conditions));
-  }
-  const packages = await query.orderBy(packagesTable.id);
-  const mapped = packages.map((p) => ({
-    ...p,
-    price: Number(p.price),
-    originalPrice: p.originalPrice ? Number(p.originalPrice) : void 0,
-    rating: Number(p.rating),
-    imageUrl: p.imageUrl ?? void 0,
-    description: p.description ?? void 0
-  }));
-  res.json(ListPackagesResponse.parse(mapped));
-});
-router8.get("/packages/:id", async (req, res) => {
-  const params = GetPackageParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-  const [pkg] = await db.select().from(packagesTable).where(eq(packagesTable.id, params.data.id));
-  if (!pkg) {
-    res.status(404).json({ error: "Package not found" });
-    return;
-  }
-  res.json(
-    GetPackageResponse.parse({
-      ...pkg,
-      price: Number(pkg.price),
-      originalPrice: pkg.originalPrice ? Number(pkg.originalPrice) : void 0,
-      rating: Number(pkg.rating),
-      imageUrl: pkg.imageUrl ?? void 0,
-      description: pkg.description ?? void 0
-    })
-  );
-});
-router8.get("/destinations/popular", async (_req, res) => {
-  const destinations = await db.select().from(destinationsTable).orderBy(destinationsTable.id).limit(8);
-  const mapped = destinations.map((d) => ({
-    ...d,
-    startingPrice: Number(d.startingPrice),
-    rating: Number(d.rating),
-    imageUrl: d.imageUrl ?? void 0
-  }));
-  res.json(GetPopularDestinationsResponse.parse(mapped));
-});
-router8.get("/deals/featured", async (_req, res) => {
-  const packages = await db.select().from(packagesTable).where(eq(packagesTable.featured, true)).orderBy(packagesTable.id).limit(6);
-  const deals = packages.map((p) => {
-    const original = p.originalPrice ? Number(p.originalPrice) : Number(p.price) * 1.2;
-    const discounted = Number(p.price);
-    const discountPercent = Math.round((original - discounted) / original * 100);
-    return {
-      id: p.id,
-      title: p.name,
-      description: p.description ?? `${p.duration} days in ${p.destination}`,
-      type: "package",
-      originalPrice: original,
-      discountedPrice: discounted,
-      discountPercent,
-      imageUrl: p.imageUrl ?? void 0,
-      validUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1e3).toISOString(),
-      referenceId: p.id
-    };
-  });
-  res.json(GetFeaturedDealsResponse.parse(deals));
-});
-var packages_default = router8;
-
-// src/routes/bookings.ts
-var import_express9 = __toESM(require_express2(), 1);
-init_drizzle_orm();
-
-// src/lib/booking-id.ts
-init_drizzle_orm();
-var TYPE_PREFIX = {
-  flight: "FLT",
-  bus: "BUS",
-  hotel: "HTL",
-  package: "HLD",
-  holiday: "HLD",
-  activity: "ACT",
-  activities: "ACT",
-  visa: "VISA",
-  insurance: "INS",
-  car: "CAR",
-  cars: "CAR"
-};
-async function nextBookingRef(bookingType) {
-  const prefix = TYPE_PREFIX[bookingType.toLowerCase()] ?? "BKG";
-  const result = await db.execute(sql`
-    INSERT INTO booking_counters (type, counter)
-    VALUES (${prefix}, 1)
-    ON CONFLICT (type) DO UPDATE
-    SET counter = booking_counters.counter + 1
-    RETURNING counter
-  `);
-  const counter = Number(result.rows[0].counter);
-  const padded = String(counter).padStart(6, "0");
-  return `${prefix}-BK-${padded}`;
-}
-
-// src/lib/location-utils.ts
-function sanitizeLocation(raw) {
-  if (!raw) return "";
-  let s = String(raw).trim();
-  s = s.replace(/[\x00-\x1F\x7F\u00AD\u200B\u200C\u200D\u2028\u2029\uFEFF]/g, "");
-  s = s.replace(/!['\u2019\u0060\u0027;]/g, " ");
-  s = s.replace(/[\u2018\u2019\u201c\u201d\uFFFD\u00e2\u0086\u0092]/g, "");
-  s = s.replace(/\u2192/g, " ");
-  s = s.replace(/&rarr;|&#8594;|&#x2192;/gi, " ");
-  s = s.replace(/\s*\([A-Z]{3,4}\)\s*/g, " ");
-  s = s.replace(/\s+[A-Z]{3}$/, "");
-  s = s.replace(/\s+/g, " ").trim();
-  const tokens = s.split(" ").filter(Boolean);
-  if (tokens.length >= 4 && tokens.every((t) => /^[A-Za-z]$/.test(t))) {
-    s = tokens.join("");
-  }
-  const isAllCaps = s === s.toUpperCase() && /[A-Z]/.test(s);
-  const isAllLower = s === s.toLowerCase() && /[a-z]/.test(s);
-  if (isAllCaps || isAllLower) {
-    s = s.split(" ").map((w) => w.length > 0 ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : "").join(" ");
-  }
-  return s;
-}
-function formatRoute(from, to, separator = " \u2192 ") {
-  const f = sanitizeLocation(from);
-  const t = sanitizeLocation(to);
-  if (!f && !t) return "";
-  if (!f) return t;
-  if (!t) return f;
-  return `${f}${separator}${t}`;
-}
-
-// src/routes/bookings.ts
-var router9 = (0, import_express9.Router)();
-function sanitizeTitle(raw) {
-  if (!raw) return null;
-  const s = String(raw).trim();
-  const parts = s.split(/\s*(?:\u2192|!['`'\u2019\u0060;])\s*/);
-  if (parts.length === 2 && parts[0].trim() && parts[1].trim()) {
-    return formatRoute(parts[0], parts[1]);
-  }
-  return s.replace(/!['\u2019\u0060\u0027;]/g, " ").replace(/\u2192/g, "").replace(/[\u200B\u200C\u200D\uFEFF]/g, "").replace(/\s+/g, " ").trim() || null;
-}
-async function findOrCreateUser(phone, email3, name2) {
-  const cleanPhone = phone?.trim() || null;
-  const cleanEmail = email3?.trim().toLowerCase() || null;
-  if (cleanPhone) {
-    const [byPhone] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.phone, cleanPhone)).limit(1);
-    if (byPhone) return { id: byPhone.id, created: false };
-  }
-  if (cleanEmail) {
-    const [byEmail] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, cleanEmail)).limit(1);
-    if (byEmail) return { id: byEmail.id, created: false };
-  }
-  const [created] = await db.insert(usersTable).values({
-    name: name2 || "Guest",
-    phone: cleanPhone,
-    email: cleanEmail,
-    role: "user",
-    isApproved: false,
-    otpUser: !!cleanPhone
-  }).returning({ id: usersTable.id });
-  return { id: created.id, created: true };
-}
-var REVENUE_STATUSES = /* @__PURE__ */ new Set(["confirmed", "ticketed", "completed"]);
-var LEAD_STATUSES = /* @__PURE__ */ new Set(["pending", "payment_failed", "failed", "cancelled", "refunded"]);
-var isSuccessful = (b) => REVENUE_STATUSES.has((b.status ?? "").toLowerCase());
-var isLead = (b) => {
-  const s = (b.status ?? "").toLowerCase();
-  const ps = (b.paymentStatus ?? "").toLowerCase();
-  return LEAD_STATUSES.has(s) || ps === "pending" || ps === "payment_failed" || ps === "failed";
-};
-router9.get("/stats/summary", async (_req, res) => {
-  const allBookings = await db.select().from(bookingsTable);
-  const confirmedBookings = allBookings.filter(isSuccessful);
-  const confirmedRevenue = confirmedBookings.reduce((sum2, b) => sum2 + Number(b.totalPrice), 0);
-  const totalRevenue = confirmedRevenue;
-  const successfulBookings = confirmedBookings.length;
-  const pendingBookings = allBookings.filter(
-    (b) => (b.status ?? "").toLowerCase() === "pending" || (b.paymentStatus ?? "").toLowerCase() === "pending"
-  ).length;
-  const failedBookings = allBookings.filter(
-    (b) => (b.status ?? "").toLowerCase() === "failed" || (b.status ?? "").toLowerCase() === "payment_failed" || (b.paymentStatus ?? "").toLowerCase() === "failed" || (b.paymentStatus ?? "").toLowerCase() === "payment_failed"
-  ).length;
-  const cancelledBookings = allBookings.filter(
-    (b) => {
-      const s = (b.status ?? "").toLowerCase();
-      return s === "cancelled" || s === "refunded";
-    }
-  ).length;
-  const pendingLeads = pendingBookings;
-  const failedPayments = failedBookings;
-  const totalLeads = allBookings.filter(isLead).length;
-  res.json(
-    GetStatsSummaryResponse.parse({
-      totalBookings: successfulBookings,
-      flightBookings: confirmedBookings.filter((b) => b.bookingType === "flight").length,
-      busBookings: confirmedBookings.filter((b) => b.bookingType === "bus").length,
-      hotelBookings: confirmedBookings.filter((b) => b.bookingType === "hotel").length,
-      packageBookings: confirmedBookings.filter((b) => b.bookingType === "package").length,
-      totalRevenue,
-      confirmedRevenue,
-      successfulBookings,
-      pendingLeads,
-      failedPayments,
-      cancelledBookings,
-      totalLeads,
-      pendingBookings,
-      failedBookings
-    })
-  );
-});
-router9.get("/bookings", async (req, res) => {
-  try {
-    const { userId, phone, email: email3 } = req.query;
-    const phoneParam = phone && typeof phone === "string" ? phone.trim() : null;
-    const emailParam = email3 && typeof email3 === "string" ? email3.trim().toLowerCase() : null;
-    let resolvedUserId = null;
-    if (userId && typeof userId === "string" && /^\d+$/.test(userId)) {
-      resolvedUserId = userId;
-    } else if (phoneParam) {
-      const [user] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.phone, phoneParam)).limit(1);
-      if (user) resolvedUserId = String(user.id);
-    } else if (emailParam) {
-      const [user] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, emailParam)).limit(1);
-      if (user) resolvedUserId = String(user.id);
-    }
-    let query = db.select().from(bookingsTable).$dynamic();
-    if (resolvedUserId) {
-      const conditions = [
-        eq(bookingsTable.userId, resolvedUserId)
-      ];
-      if (phoneParam) conditions.push(eq(bookingsTable.passengerPhone, phoneParam));
-      if (emailParam) conditions.push(eq(bookingsTable.passengerEmail, emailParam));
-      query = query.where(or(...conditions));
-    }
-    const bookings = await query.orderBy(desc(bookingsTable.createdAt));
-    const mapped = bookings.map((b) => {
-      const d = b.details ?? {};
-      const baseFare = b.baseFare != null ? Number(b.baseFare) : Number(d.rawBaseAmount ?? d.base_price ?? 0) || null;
-      const markupAmount = b.markupAmount != null ? Number(b.markupAmount) : Number(d.markupAmount ?? d.markup ?? 0) || null;
-      const convenienceFee = b.convenienceFee != null ? Number(b.convenienceFee) : Number(d.convenienceFee ?? d.convenience_fee ?? 0) || null;
-      return {
-        ...b,
-        totalPrice: Number(b.totalPrice),
-        commissionEarned: b.commissionEarned ? Number(b.commissionEarned) : null,
-        createdAt: b.createdAt.toISOString(),
-        passengerPhone: b.passengerPhone ?? void 0,
-        details: b.details ?? void 0,
-        baseFare,
-        markupAmount,
-        convenienceFee
-      };
-    });
-    res.json(mapped);
-  } catch (error40) {
-    logger.error("\u274C Error fetching bookings:", error40);
-    res.status(500).json({ error: "Failed to fetch bookings" });
-  }
-});
-router9.post("/bookings", async (req, res) => {
-  try {
-    const body = req.body;
-    const bookingData = body.data || body;
-    const details = bookingData.details || {};
-    const passengerName = bookingData.passengerName || details.customerName || "";
-    const passengerEmail = bookingData.passengerEmail || details.customerEmail || null;
-    const passengerPhone = bookingData.passengerPhone || details.customerPhone || null;
-    let userId;
-    const incomingUserId = details.userId || bookingData.userId || "";
-    if (incomingUserId && incomingUserId !== "guest" && incomingUserId !== "") {
-      userId = incomingUserId;
-      logger.info("\u{1F464} Booking: authenticated user", userId);
-    } else {
-      const { id, created } = await findOrCreateUser(passengerPhone, passengerEmail, passengerName);
-      userId = String(id);
-      logger.info(
-        created ? `\u{1F195} Booking: auto-created user ${userId} for phone=${passengerPhone} email=${passengerEmail}` : `\u2705 Booking: found existing user ${userId} for phone=${passengerPhone} email=${passengerEmail}`
-      );
-    }
-    const incomingRef = details.bookingRef || bookingData.bookingRef || null;
-    const bookingType_str = bookingData.bookingType || "flight";
-    const bookingRef = incomingRef && incomingRef.trim() !== "" ? incomingRef.trim() : await nextBookingRef(bookingType_str);
-    const title = sanitizeTitle(bookingData.title || details.title || null);
-    const referenceId = parseInt(String(bookingData.referenceId || 0), 10) || 0;
-    const totalPrice = String(details.amount || bookingData.totalPrice || 0);
-    const paymentId = details.paymentId || bookingData.paymentId || null;
-    const paymentMethod = details.paymentMethod || bookingData.paymentMethod || null;
-    const agentId = bookingData.agentId || details.agentId || null;
-    const agentCode = bookingData.agentCode || details.agentCode || null;
-    const agentEmail = bookingData.agentEmail || details.agentEmail || null;
-    const commissionEarned = details.commissionEarned || bookingData.commissionEarned ? String(details.commissionEarned || bookingData.commissionEarned) : null;
-    const rawBaseFareNum = Number(
-      bookingData.baseFare ?? details.rawBaseAmount ?? details.base_price ?? 0
-    );
-    const rawMarkupNum = Number(
-      bookingData.markupAmount ?? details.markupAmount ?? details.markup ?? 0
-    );
-    const rawConvFeeNum = Number(
-      bookingData.convenienceFee ?? details.convenienceFee ?? details.convenience_fee ?? 0
-    );
-    const baseFareVal = rawBaseFareNum > 0 ? String(rawBaseFareNum) : null;
-    const markupVal = rawMarkupNum > 0 ? String(rawMarkupNum) : null;
-    const convFeeVal = rawConvFeeNum > 0 ? String(rawConvFeeNum) : null;
-    const [inserted] = await db.insert(bookingsTable).values({
-      bookingRef,
-      userId,
-      bookingType: bookingData.bookingType || "flight",
-      title,
-      referenceId,
-      status: details.status || "confirmed",
-      passengerName,
-      passengerEmail: passengerEmail || "",
-      passengerPhone: passengerPhone || null,
-      totalPrice,
-      passengers: Number(bookingData.passengers || 1),
-      travelDate: bookingData.travelDate || (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
-      details,
-      agentId,
-      agentCode,
-      agentEmail,
-      commissionEarned,
-      paymentMethod,
-      paymentStatus: "paid",
-      paymentId,
-      baseFare: baseFareVal,
-      markupAmount: markupVal,
-      convenienceFee: convFeeVal
-    }).returning();
-    logger.info("\u2705 Booking saved to PostgreSQL:", inserted.id, "| ref:", bookingRef, "| user:", userId);
-    res.status(201).json({
-      ...inserted,
-      userId,
-      // echo back the resolved userId so frontend can update
-      totalPrice: Number(inserted.totalPrice),
-      commissionEarned: inserted.commissionEarned ? Number(inserted.commissionEarned) : null,
-      createdAt: inserted.createdAt.toISOString()
-    });
-  } catch (error40) {
-    logger.error("\u274C Error saving booking to DB:", error40);
-    res.status(500).json({ error: "Failed to save booking" });
-  }
-});
-router9.get("/invoice/:bookingRef", async (req, res) => {
-  const ref = req.params.bookingRef?.trim().toUpperCase();
-  if (!ref) {
-    res.status(400).json({ error: "bookingRef is required" });
-    return;
-  }
-  const [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.bookingRef, ref)).limit(1);
-  if (!booking) {
-    res.status(404).json({ error: "Invoice not found" });
-    return;
-  }
-  const d = booking.details || {};
-  const fi = d.flightInfo || {};
-  const bi = d.busInfo || {};
-  const hi = d.hotelInfo || {};
-  res.json({
-    bookingId: booking.bookingRef || String(booking.id),
-    bookingType: booking.bookingType,
-    passengerName: booking.passengerName,
-    passengerEmail: booking.passengerEmail,
-    passengerPhone: booking.passengerPhone ?? void 0,
-    passengers: booking.passengers,
-    travelDate: booking.travelDate,
-    checkoutDate: hi.checkout ?? void 0,
-    totalAmount: Number(booking.totalPrice),
-    paymentId: booking.paymentId || "\u2014",
-    paymentStatus: booking.paymentStatus,
-    timestamp: booking.createdAt.toISOString(),
-    title: booking.title || "",
-    selectedSeats: d.selectedSeats || bi.seats || void 0,
-    discount: d.discountAmount || void 0,
-    roomType: hi.room_type || void 0,
-    pnr: d.pnr || d.pnrNumber || fi.pnr || void 0,
-    // Flight
-    flightAirline: fi.airline || void 0,
-    flightNumber: fi.flightNum || void 0,
-    flightFrom: fi.from || void 0,
-    flightTo: fi.to || void 0,
-    flightDeparture: fi.departure || void 0,
-    flightArrival: fi.arrival || void 0,
-    flightDuration: fi.duration || void 0,
-    flightBaseFare: d.baseAmount || void 0,
-    flightConvFee: d.convenienceFee || void 0,
-    flightBaggageKg: d.extraBaggageKg || void 0,
-    flightBaggageCost: d.extraBaggageCost || void 0,
-    // Bus
-    busOperator: bi.operator || void 0,
-    busType: bi.busType || void 0,
-    busFrom: bi.from || void 0,
-    busTo: bi.to || void 0,
-    busDeparture: bi.departure || void 0,
-    busArrival: bi.arrival || void 0,
-    busBoardingPoint: bi.boarding_point || void 0,
-    busDroppingPoint: bi.dropping_point || void 0,
-    busBaseFare: d.baseAmount || void 0,
-    busConvFee: d.convenience_fee || void 0,
-    // Hotel
-    hotelName: hi.hotel_name || void 0,
-    hotelCity: hi.city || void 0,
-    hotelNights: hi.nights || void 0,
-    hotelRooms: hi.rooms || void 0,
-    hotelAdults: hi.guests || void 0
-  });
-});
-router9.get("/bookings/:id", async (req, res) => {
-  const rawId = req.params.id?.trim();
-  if (!rawId) {
-    res.status(400).json({ error: "Booking id is required" });
-    return;
-  }
-  let booking;
-  const numId = parseInt(rawId, 10);
-  if (!isNaN(numId) && String(numId) === rawId) {
-    [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, numId)).limit(1);
-  }
-  if (!booking) {
-    [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.bookingRef, rawId.toUpperCase())).limit(1);
-  }
-  if (!booking) {
-    res.status(404).json({ error: "Booking not found" });
-    return;
-  }
-  const d = booking.details ?? {};
-  const fi = d.flightInfo ?? {};
-  const bi = d.busInfo ?? {};
-  const hi = d.hotelInfo ?? {};
-  res.json({
-    id: booking.id,
-    bookingRef: booking.bookingRef || void 0,
-    bookingType: booking.bookingType,
-    referenceId: booking.referenceId,
-    status: booking.status,
-    paymentStatus: booking.paymentStatus || void 0,
-    paymentId: booking.paymentId || void 0,
-    paymentMethod: booking.paymentMethod || void 0,
-    title: booking.title || d.title || void 0,
-    passengerName: booking.passengerName,
-    passengerEmail: booking.passengerEmail,
-    passengerPhone: booking.passengerPhone ?? void 0,
-    passengers: booking.passengers,
-    travelDate: booking.travelDate,
-    createdAt: booking.createdAt.toISOString(),
-    totalPrice: Number(booking.totalPrice),
-    agentId: booking.agentId || void 0,
-    agentCode: booking.agentCode || void 0,
-    // Nested details (kept for backward compat)
-    details: booking.details ?? void 0,
-    // ── Flattened flight fields ────────────────────────────────────────────
-    flightAirline: fi.airline || void 0,
-    flightNumber: fi.flightNum || fi.flightNumber || void 0,
-    flightFrom: fi.from || fi.fromCity || void 0,
-    flightTo: fi.to || fi.toCity || void 0,
-    flightDeparture: fi.departure || void 0,
-    flightArrival: fi.arrival || void 0,
-    flightDuration: fi.duration || void 0,
-    // ── Flattened bus fields ───────────────────────────────────────────────
-    busOperator: bi.operator || void 0,
-    busType: bi.busType || void 0,
-    busFrom: bi.from || void 0,
-    busTo: bi.to || void 0,
-    busDeparture: bi.departure || void 0,
-    busArrival: bi.arrival || void 0,
-    busBoardingPoint: bi.boarding_point || bi.boardingPoint || void 0,
-    busDroppingPoint: bi.dropping_point || bi.droppingPoint || void 0,
-    // ── Flattened hotel fields ─────────────────────────────────────────────
-    hotelName: hi.hotel_name || hi.name || void 0,
-    hotelCity: hi.city || void 0,
-    hotelNights: hi.nights || void 0,
-    hotelRooms: hi.rooms || void 0,
-    hotelAdults: hi.guests || hi.adults || void 0,
-    checkoutDate: hi.checkout || void 0,
-    roomType: hi.room_type || void 0,
-    // ── Seat / misc ────────────────────────────────────────────────────────
-    selectedSeats: d.selectedSeats || bi.seats || void 0
-  });
-});
-router9.delete("/bookings/:id", async (req, res) => {
-  const params = CancelBookingParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-  const [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, params.data.id));
-  if (!booking) {
-    res.status(404).json({ error: "Booking not found" });
-    return;
-  }
-  const [updated] = await db.update(bookingsTable).set({ status: "cancelled" }).where(eq(bookingsTable.id, params.data.id)).returning();
-  res.json(
-    CancelBookingResponse.parse({
-      ...updated,
-      totalPrice: Number(updated.totalPrice),
-      createdAt: updated.createdAt.toISOString(),
-      passengerPhone: updated.passengerPhone ?? void 0,
-      details: updated.details ?? void 0
-    })
-  );
-});
-router9.post("/bookings/record-failed", async (req, res) => {
-  try {
-    const body = req.body?.data || req.body;
-    const passengerName = String(body.passengerName || "Unknown");
-    const passengerEmail = String(body.passengerEmail || "") || null;
-    const passengerPhone = String(body.passengerPhone || "") || null;
-    const bookingRef = String(body.bookingRef || `FAIL-${Date.now().toString(36).toUpperCase()}`);
-    const bookingType = String(body.bookingType || "flight");
-    const totalPrice = String(Number(body.totalPrice ?? body.amount ?? 0));
-    const paymentId = String(body.paymentId || "") || null;
-    const failureReason = String(body.failureReason || body.error || "Payment failed");
-    const failureCode = String(body.failureCode || "payment_failed");
-    const details = typeof body.details === "object" && body.details !== null ? body.details : {};
-    const travelDate = String(body.travelDate || (/* @__PURE__ */ new Date()).toISOString().split("T")[0]);
-    let userId = "guest";
-    try {
-      const { id } = await findOrCreateUser(passengerPhone, passengerEmail, passengerName);
-      userId = String(id);
-    } catch {
-    }
-    const [inserted] = await db.insert(bookingsTable).values({
-      bookingRef,
-      userId,
-      bookingType,
-      passengerName,
-      passengerEmail: passengerEmail || "",
-      passengerPhone: passengerPhone || null,
-      totalPrice,
-      passengers: Number(body.passengers ?? 1),
-      travelDate,
-      status: "booking_failed",
-      paymentStatus: "failed",
-      bookingStatus: "failed",
-      paymentId,
-      failureReason,
-      failureCode,
-      details: { ...details, failureReason, failureCode, paymentId }
-    }).returning();
-    logger.info({ bookingRef, paymentId, failureReason }, "[bookings] failed payment record saved \u2014 id:", inserted.id);
-    res.status(201).json({ success: true, id: inserted.id, bookingRef });
-  } catch (err) {
-    logger.error({ err: err?.message }, "[bookings] failed to save failed payment record");
-    res.status(500).json({ success: false, error: err?.message || "Failed to save record" });
-  }
-});
-var bookings_default = router9;
-
-// src/routes/payments.ts
-var import_express10 = __toESM(require_express2(), 1);
-var import_razorpay = __toESM(require_razorpay(), 1);
-import crypto2 from "crypto";
-
-// src/lib/notification-service.ts
-import twilio4 from "twilio";
-
-// src/lib/email-service.ts
-import nodemailer2 from "nodemailer";
-function createTransport() {
-  const user = (process.env.SMTP_USER || "").trim();
-  const pass = (process.env.SMTP_PASS || "").trim();
-  const host = (process.env.SMTP_HOST || "").trim();
-  const port2 = Number(process.env.SMTP_PORT || 465);
-  if (!user || !pass || !host) {
-    console.info("[email] SMTP_USER, SMTP_PASS, or SMTP_HOST not set \u2014 email disabled");
-    return null;
-  }
-  console.info(`[email] Using SMTP: ${host}:${port2} (secure=true)`);
-  return nodemailer2.createTransport({
-    host,
-    port: port2,
-    secure: true,
-    auth: { user, pass }
-  });
-}
-function bookingEmailHTML(ticket) {
-  const fromCity = sanitizeLocation(ticket.from) || ticket.from;
-  const toCity = sanitizeLocation(ticket.to) || ticket.to;
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Booking Confirmation \u2014 ${APP_NAME}</title>
-  <style>
-    body { margin: 0; padding: 0; background: #f1f5f9; font-family: 'Helvetica Neue', Arial, sans-serif; color: #1e293b; }
-    .wrapper { max-width: 620px; margin: 32px auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,.08); }
-    .header  { background: #1e40af; padding: 32px 40px; }
-    .header h1 { color: #fff; margin: 0 0 4px; font-size: 22px; }
-    .header p  { color: #93c5fd; margin: 0; font-size: 13px; }
-    .hero { background: #eff6ff; padding: 28px 40px; border-bottom: 3px solid #f97316; }
-    .route { display: flex; align-items: center; gap: 0; }
-    .city { font-size: 38px; font-weight: 800; color: #1e40af; }
-    .arrow { flex: 1; text-align: center; color: #94a3b8; font-size: 22px; }
-    .arrow span { display: block; font-size: 10px; color: #94a3b8; }
-    .section { padding: 24px 40px; border-bottom: 1px solid #e2e8f0; }
-    .section h3 { margin: 0 0 16px; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    .item label { display: block; font-size: 11px; color: #94a3b8; margin-bottom: 2px; text-transform: uppercase; }
-    .item p { margin: 0; font-size: 14px; font-weight: 600; color: #1e293b; }
-    .amount { color: #f97316 !important; font-size: 20px !important; }
-    .badge { display: inline-block; background: #dcfce7; color: #166534; border-radius: 6px; padding: 4px 12px; font-size: 12px; font-weight: 700; }
-    .footer { background: #1e40af; padding: 20px 40px; text-align: center; color: #93c5fd; font-size: 11px; }
-    .footer p { margin: 4px 0; }
-    .cta { text-align: center; padding: 28px 40px; }
-    .btn { display: inline-block; background: #1e40af; color: #fff; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 14px; }
-  </style>
-</head>
-<body>
-<div class="wrapper">
-  <div class="header">
-    <h1>\u2708 ${APP_NAME}</h1>
-    <p>Your flight ticket is confirmed!</p>
-  </div>
-  <div class="hero">
-    <p style="margin:0 0 8px;font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.05em">Booking ID: ${ticket.bookingId}</p>
-    <div class="route">
-      <div class="city">${fromCity}</div>
-      <div class="arrow">
-        <span>${ticket.duration}</span>
-        &#8594;
-        <span>Non-stop</span>
-      </div>
-      <div class="city">${toCity}</div>
-    </div>
-    <div style="margin-top:12px;">
-      <span class="badge">\u2713 Confirmed</span>
-      &nbsp;
-      <span style="font-size:13px;color:#64748b;margin-left:8px;">${ticket.airline} \xB7 ${ticket.flightNum}</span>
-    </div>
-  </div>
-  <div class="section">
-    <h3>Flight Details</h3>
-    <div class="grid">
-      <div class="item"><label>Date</label><p>${ticket.date}</p></div>
-      <div class="item"><label>Duration</label><p>${ticket.duration}</p></div>
-      <div class="item"><label>Departure</label><p>${ticket.departure}</p></div>
-      <div class="item"><label>Arrival</label><p>${ticket.arrival}</p></div>
-      <div class="item"><label>Flight</label><p>${ticket.flightNum}</p></div>
-      <div class="item"><label>Class</label><p>${ticket.class || "Economy"}</p></div>
-    </div>
-  </div>
-  <div class="section">
-    <h3>Passenger & Payment</h3>
-    <div class="grid">
-      <div class="item"><label>Passenger</label><p>${ticket.passengerName}</p></div>
-      <div class="item"><label>Passengers</label><p>${ticket.passengers}</p></div>
-      <div class="item"><label>Total Amount</label><p class="amount">\u20B9${ticket.amount.toLocaleString("en-IN")}</p></div>
-      ${ticket.paymentId ? `<div class="item"><label>Payment Ref</label><p style="font-size:11px;color:#64748b;">${ticket.paymentId}</p></div>` : ""}
-    </div>
-  </div>
-  <div class="cta">
-    <p style="margin:0 0 16px;color:#64748b;font-size:13px;">Your e-ticket PDF is attached to this email. Please carry a valid photo ID at the airport.</p>
-  </div>
-  <div class="footer">
-    <p>${APP_NAME} \u2014 ${APP_TAGLINE_LONG}</p>
-    <p>This is an automated message. For support, reply to this email.</p>
-  </div>
-</div>
-</body>
-</html>`;
-}
-async function sendBookingConfirmationEmail(ticket, pdfBuffer) {
-  const transport = createTransport();
-  if (!transport) {
-    console.info("[email] SMTP not configured \u2014 skipping email delivery");
-    return { sent: false, reason: "SMTP not configured" };
-  }
-  const from = (process.env.SMTP_FROM || "bookings@dreamflyglobal.com").trim();
-  try {
-    await transport.sendMail({
-      from: `"${APP_NAME} Tickets" <${from}>`,
-      to: ticket.passengerEmail,
-      subject: `\u2708 Booking Confirmed: ${sanitizeLocation(ticket.from) || ticket.from} to ${sanitizeLocation(ticket.to) || ticket.to} \xB7 ${ticket.bookingId}`,
-      html: bookingEmailHTML(ticket),
-      attachments: [
-        {
-          filename: `${APP_NAME}-Ticket-${ticket.bookingId}.pdf`,
-          content: pdfBuffer,
-          contentType: "application/pdf"
-        }
-      ]
-    });
-    logger.info(`[email] Email sent successfully to ${ticket.passengerEmail} (Booking: ${ticket.bookingId})`);
-    return { sent: true };
-  } catch (err) {
-    logger.error(`[email] Failed to send booking confirmation email: ${err.message}`);
-    return { sent: false, reason: err.message };
-  }
-}
-var SERVICE_EMOJI = {
-  flight: "\u2708\uFE0F",
-  bus: "\u{1F68C}",
-  hotel: "\u{1F3E8}",
-  package: "\u{1F334}"
-};
-function generalBookingEmailHTML(data) {
-  const emoji3 = SERVICE_EMOJI[data.bookingType] ?? "\u{1F4CB}";
-  const dateStr = new Date(data.travelDate).toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric"
-  });
-  const amount = `\u20B9${data.totalAmount.toLocaleString("en-IN")}`;
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Booking Confirmation \u2014 ${APP_NAME}</title>
-  <style>
-    * { box-sizing: border-box; }
-    body { margin: 0; padding: 0; background: #f1f5f9; font-family: 'Helvetica Neue', Arial, sans-serif; color: #1e293b; }
-    .wrapper { max-width: 600px; margin: 32px auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,.10); }
-    .header { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 32px 40px; display: flex; align-items: center; gap: 16px; }
-    .logo-circle { width: 52px; height: 52px; background: #f97316; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-    .logo-text { color: #fff; font-weight: 900; font-size: 16px; }
-    .header-info h1 { color: #fff; margin: 0 0 2px; font-size: 20px; font-weight: 800; }
-    .header-info p  { color: #94a3b8; margin: 0; font-size: 12px; }
-    .hero { background: #fff7ed; border-bottom: 3px solid #f97316; padding: 28px 40px; }
-    .confirmed-badge { display: inline-flex; align-items: center; gap: 6px; background: #dcfce7; color: #166534; padding: 5px 14px; border-radius: 20px; font-size: 12px; font-weight: 700; margin-bottom: 12px; }
-    .service-title { font-size: 22px; font-weight: 800; color: #1e293b; margin: 0 0 4px; }
-    .booking-id { font-size: 12px; color: #64748b; font-family: monospace; }
-    .section { padding: 24px 40px; border-bottom: 1px solid #e2e8f0; }
-    .row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f1f5f9; }
-    .row:last-child { border-bottom: none; }
-    .row label { font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.04em; }
-    .row span { font-size: 13px; font-weight: 600; color: #1e293b; text-align: right; }
-    .amount-highlight { font-size: 18px !important; color: #f97316 !important; }
-    .cta { text-align: center; padding: 32px 40px; background: #f8fafc; }
-    .cta p { color: #64748b; font-size: 13px; margin: 0 0 20px; line-height: 1.6; }
-    .btn { display: inline-block; background: #f97316; color: #fff; padding: 14px 36px; border-radius: 10px; text-decoration: none; font-weight: 800; font-size: 15px; letter-spacing: 0.02em; }
-    .payment-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 14px 18px; margin-top: 12px; }
-    .payment-box p { margin: 0; font-size: 11px; color: #166534; font-family: monospace; }
-    .footer { background: #0f172a; padding: 24px 40px; text-align: center; }
-    .footer p { margin: 4px 0; color: #64748b; font-size: 11px; }
-    .footer .brand { color: #94a3b8; font-weight: 600; font-size: 13px; }
-  </style>
-</head>
-<body>
-<div class="wrapper">
-  <div class="header">
-    <div class="logo-circle">
-      <span class="logo-text">${APP_INITIALS}</span>
-    </div>
-    <div class="header-info">
-      <h1>${APP_NAME}</h1>
-      <p>Your Ultimate Travel Companion</p>
-    </div>
-  </div>
-
-  <div class="hero">
-    <div class="confirmed-badge">\u2713 Booking Confirmed</div>
-    <p class="service-title">${emoji3} ${data.title}</p>
-    <p class="booking-id">Booking ID: ${data.bookingId}</p>
-  </div>
-
-  <div class="section">
-    <div class="row">
-      <label>Passenger</label>
-      <span>${data.passengerName}</span>
-    </div>
-    <div class="row">
-      <label>Service</label>
-      <span style="text-transform:capitalize">${data.bookingType}</span>
-    </div>
-    <div class="row">
-      <label>Travel Date</label>
-      <span>${dateStr}</span>
-    </div>
-    <div class="row">
-      <label>${data.bookingType === "hotel" ? "Rooms" : "Passengers"}</label>
-      <span>${data.passengers}</span>
-    </div>
-    <div class="row">
-      <label>Total Paid</label>
-      <span class="amount-highlight">${amount}</span>
-    </div>
-    <div class="payment-box">
-      <p>\u2713 Payment ID: ${data.paymentId}</p>
-    </div>
-  </div>
-
-  <div class="cta">
-    <p>
-      Hi ${data.passengerName.split(" ")[0]}, your booking is confirmed!<br />
-      Click below to view or download your invoice.
-    </p>
-    <a href="${data.invoiceUrl}" class="btn">\u{1F4C4} View Invoice &amp; Ticket</a>
-    <p style="margin-top:16px;font-size:11px;color:#94a3b8;">
-      Or copy this link: <a href="${data.invoiceUrl}" style="color:#f97316;text-decoration:none;">${data.invoiceUrl}</a>
-    </p>
-  </div>
-
-  <div class="footer">
-    <p class="brand">${APP_NAME} \u2014 ${APP_TAGLINE_LONG}</p>
-    <p>${APP_SUPPORT_PHONE} \xB7 ${APP_SUPPORT_EMAIL}</p>
-    <p>This is an automated confirmation. Do not reply to this email.</p>
-  </div>
-</div>
-</body>
-</html>`;
-}
-async function sendGeneralBookingEmail(data) {
-  const transport = createTransport();
-  if (!transport) {
-    console.info("[email] SMTP not configured \u2014 skipping general booking email. Set SMTP_USER and SMTP_PASS secrets.");
-    return { sent: false, reason: "SMTP not configured" };
-  }
-  const from = (process.env.SMTP_FROM || "bookings@dreamflyglobal.com").trim();
-  const emoji3 = SERVICE_EMOJI[data.bookingType] ?? "\u{1F4CB}";
-  const subject = `${emoji3} Booking Confirmed \u2013 ${APP_NAME} | ${data.bookingId}`;
-  try {
-    await transport.sendMail({
-      from: `"${APP_NAME}" <${from}>`,
-      to: data.passengerEmail,
-      subject,
-      html: generalBookingEmailHTML(data)
-    });
-    logger.info(`[email] General booking email sent to ${data.passengerEmail} (${data.bookingId})`);
-    return { sent: true };
-  } catch (err) {
-    logger.error(`[email] Failed to send general booking email: ${err.message}`);
-    return { sent: false, reason: err.message };
-  }
-}
-
-// src/lib/whatsapp-service.ts
-import twilio3 from "twilio";
-function formatPhone2(raw) {
-  const digits = raw.replace(/\D/g, "");
-  if (digits.startsWith("91") && digits.length === 12) return `+${digits}`;
-  if (digits.length === 10) return `+91${digits}`;
-  return `+${digits}`;
-}
-function toWhatsApp(phone) {
-  const e1644 = formatPhone2(phone);
-  return `whatsapp:${e1644}`;
-}
-function buildMessage(data) {
-  const amount = data.amount.toLocaleString("en-IN");
-  const firstName = data.passengerName.split(" ")[0];
-  const pdfLink = data.invoiceUrl || "";
-  const fromCity = sanitizeLocation(data.from) || data.from || "";
-  const toCity = sanitizeLocation(data.to) || data.to || "";
-  let serviceBlock = "";
-  const type = data.bookingType;
-  if (type === "flight") {
-    const airline = data.airline ? `\u2708\uFE0F *Airline:* ${data.airline}${data.flightNum ? ` (${data.flightNum})` : ""}
-` : "";
-    const route = fromCity && toCity ? `\u{1F4CD} *Route:* ${fromCity} \u2192 ${toCity}
-` : "";
-    const dep = data.flightDeparture ? `\u{1F550} *Departure:* ${data.flightDeparture}
-` : "";
-    const arr = data.flightArrival ? `\u{1F551} *Arrival:* ${data.flightArrival}
-` : "";
-    serviceBlock = airline + route + dep + arr;
-  } else if (type === "bus") {
-    const operator = data.busOperator ? `\u{1F68C} *Operator:* ${data.busOperator}${data.busType ? ` (${data.busType})` : ""}
-` : "";
-    const route = fromCity && toCity ? `\u{1F4CD} *Route:* ${fromCity} \u2192 ${toCity}
-` : "";
-    const boarding = data.boardingPoint ? `\u{1F7E2} *Boarding:* ${data.boardingPoint}${data.busDeparture ? ` at ${data.busDeparture}` : ""}
-` : "";
-    const dropping = data.droppingPoint ? `\u{1F534} *Dropping:* ${data.droppingPoint}${data.busArrival ? ` at ${data.busArrival}` : ""}
-` : "";
-    serviceBlock = operator + route + boarding + dropping;
-  } else if (type === "hotel") {
-    const hotel = data.hotelName ? `\u{1F3E8} *Hotel:* ${data.hotelName}
-` : "";
-    const city = data.hotelCity ? `\u{1F4CD} *City:* ${sanitizeLocation(data.hotelCity) || data.hotelCity}
-` : "";
-    const nights = data.hotelNights ? `\u{1F319} *Nights:* ${data.hotelNights}
-` : "";
-    serviceBlock = hotel + city + nights;
-  } else {
-    serviceBlock = fromCity && toCity ? `\u{1F4CD} *Route:* ${fromCity} \u2192 ${toCity}
-` : "";
-  }
-  const downloadLine = pdfLink ? `
-\u{1F4E5} *Download Ticket:*
-${pdfLink}` : "";
-  return `\u{1F389} *Booking Confirmed!*
-
-Hi ${firstName}! \u{1F44B}
-
-\u{1F194} *Booking ID:* ${data.bookingId}
-` + serviceBlock + `\u{1F4C5} *Travel Date:* ${data.date}
-\u{1F4B0} *Amount Paid:* \u20B9${amount}
-` + downloadLine + `
-
-Thank you for booking with *${APP_NAME}* \u2708\uFE0F
-Support: ${APP_SUPPORT_PHONE}`;
-}
-async function sendWhatsAppNotification(data) {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID || "";
-  const authToken = process.env.TWILIO_AUTH_TOKEN || "";
-  const rawFrom = process.env.TWILIO_WHATSAPP_FROM || "";
-  const overrideTo = process.env.TWILIO_WHATSAPP_TO || "";
-  if (!accountSid || !authToken) {
-    logger.warn("[whatsapp] TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN not set \u2014 skipping");
-    return { sent: false, reason: "Twilio credentials not configured" };
-  }
-  if (!rawFrom) {
-    logger.warn("[whatsapp] TWILIO_WHATSAPP_FROM not set \u2014 skipping (use +14155238886 for sandbox)");
-    return { sent: false, reason: "TWILIO_WHATSAPP_FROM not configured" };
-  }
-  const fromE164 = rawFrom.replace(/\D/g, "");
-  const fromNumber = `whatsapp:+${fromE164}`;
-  const rawTo = overrideTo || data.phone || "";
-  if (!rawTo) {
-    logger.warn("[whatsapp] No destination phone number \u2014 skipping");
-    return { sent: false, reason: "No phone number" };
-  }
-  if (overrideTo) {
-    logger.info(`[whatsapp] Using TWILIO_WHATSAPP_TO override: ${overrideTo}`);
-  }
-  const toNumber = toWhatsApp(rawTo);
-  const body = buildMessage(data);
-  logger.info(`[whatsapp] Sending \u2014 From: ${fromNumber}  To: ${toNumber}  Booking: ${data.bookingId}`);
-  try {
-    const client = twilio3(accountSid, authToken);
-    const res = await client.messages.create({ from: fromNumber, to: toNumber, body });
-    logger.info("WhatsApp response:", { sid: res.sid, status: res.status, to: res.to, from: res.from });
-    logger.info("WhatsApp sent");
-    return { sent: true };
-  } catch (e) {
-    const hint = e.code === 63007 ? " \u2014 FROM not WhatsApp-enabled (use Twilio sandbox +14155238886)" : e.code === 21211 ? " \u2014 TO number invalid, check phone format" : e.code === 63016 ? " \u2014 recipient has not opted in to Twilio sandbox (send 'join <keyword>' to +1 415 523 8886)" : "";
-    logger.error("WhatsApp error:", e);
-    logger.error(`[whatsapp] Failed \u2014 Code: ${e.code ?? "N/A"} | ${e.message}${hint}`);
-    return { sent: false, reason: `${e.message}${hint}` };
-  }
-}
-function buildHolidayMessage(data, pdfUrl) {
-  const name2 = data.customerName;
-  const dest = data.destination;
-  const dur = data.duration ? ` | ${data.duration}` : "";
-  const people = data.people ? ` | ${data.people} traveller${data.people > 1 ? "s" : ""}` : "";
-  const price = data.totalPrice ? `
-\u{1F4B0} *Package Price:* \u20B9${data.totalPrice.toLocaleString("en-IN")}` : "";
-  if (data.trigger === "booking") {
-    return `\u{1F389} *Booking Confirmed!*
-
-Hi *${name2}*,
-
-Your *${dest}* holiday package is booked! \u{1F334}
-\u{1F4C5} *Trip:* ${dest}${dur}${people}` + price + `
-
-\u{1F4E5} *Download Your Itinerary:*
-${pdfUrl}
-
-Our travel expert will call you within 24 hours.
-
-_${APP_NAME} \u2708\uFE0F \u2014 ${APP_TAGLINE_LONG}_`;
-  }
-  return `\u{1F44B} Hi *${name2}*,
-
-Thanks for your interest in *${dest}*! \u{1F334}
-
-We've prepared a personalised itinerary for you:
-\u{1F5D3}\uFE0F *Destination:* ${dest}${dur}${people}
-
-\u{1F4E5} *Download Your Itinerary PDF:*
-${pdfUrl}
-
-Our travel expert will call you within *24 hours* with the best package options.
-
-_${APP_NAME} \u2708\uFE0F \u2014 ${APP_TAGLINE_LONG}_`;
-}
-function buildLeadAdminAlertMessage(lead) {
-  const typeLabel = lead.type.charAt(0).toUpperCase() + lead.type.slice(1);
-  const time4 = (/* @__PURE__ */ new Date()).toLocaleString("en-IN", {
-    timeZone: "Asia/Kolkata",
-    hour: "2-digit",
-    minute: "2-digit",
-    day: "2-digit",
-    month: "short",
-    year: "numeric"
-  });
-  return `\u{1F514} *New Lead Alert \u2014 ${APP_NAME}*
-
-\u{1F464} *Name:* ${lead.name}
-\u{1F4F1} *Phone:* ${lead.phone}
-\u{1F50D} *Looking for:* ${typeLabel}
-` + (lead.email ? `\u{1F4E7} *Email:* ${lead.email}
-` : "") + `\u{1F194} *Lead ID:* ${lead.leadId}
-\u23F1\uFE0F *Received:* ${time4} IST
-
-Reply quickly to increase conversion! \u{1F680}
-_CRM: dreamflyglobal.com/crm_`;
-}
-function buildLeadCustomerConfirmationMessage(lead) {
-  const typeLabel = lead.type.charAt(0).toUpperCase() + lead.type.slice(1);
-  const firstName = lead.name.split(" ")[0];
-  return `\u{1F44B} Hi *${firstName}*!
-
-\u2705 We've received your enquiry for a *${typeLabel}* booking.
-
-Our travel expert will contact you within *30 minutes*.
-
-\u{1F4DE} Support: ${APP_SUPPORT_PHONE}
-\u{1F4E7} ${APP_SUPPORT_EMAIL}
-
-_${APP_NAME} \u2708\uFE0F \u2014 ${APP_TAGLINE_LONG}_`;
-}
-function buildAbandonedLeadMessage(lead) {
-  const typeLabel = lead.type === "flight" ? "flights" : lead.type === "hotel" ? "hotels" : lead.type + "s";
-  const firstName = lead.name.split(" ")[0];
-  return `\u{1F44B} Hi *${firstName}*!
-
-\u{1F50D} You were searching for *${typeLabel}* on ${APP_NAME}.
-
-Did you find what you were looking for? Our experts can help you find the *best deals* tailored to your needs!
-
-\u{1F4DE} Call us: *+91 9000978856*
-\u{1F4AC} Or reply to this message
-
-_${APP_NAME} \u2708\uFE0F \u2014 Don't miss out on great deals!_`;
-}
-function buildStaffFollowUpMessage(lead) {
-  const typeLabel = lead.type.charAt(0).toUpperCase() + lead.type.slice(1);
-  return `\u23F0 *30-Min Follow-Up Reminder*
-
-Lead *${lead.name}* (\u{1F4F1} ${lead.phone}) has *NOT been contacted* in 30 minutes!
-
-\u{1F50D} *Service:* ${typeLabel}
-\u{1F194} *Lead ID:* ${lead.leadId}
-
-Please reach out now to increase conversion! \u{1F3AF}
-_${APP_NAME} CRM_`;
-}
-async function sendRawWhatsApp(toPhone, body, logTag) {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID || "";
-  const authToken = process.env.TWILIO_AUTH_TOKEN || "";
-  const rawFrom = process.env.TWILIO_WHATSAPP_FROM || "";
-  const overrideTo = process.env.TWILIO_WHATSAPP_TO || "";
-  if (!accountSid || !authToken || !rawFrom) {
-    logger.warn(`[${logTag}] Twilio not fully configured \u2014 skipping`);
-    return { sent: false, reason: "Twilio not configured" };
-  }
-  const fromE164 = rawFrom.replace(/\D/g, "");
-  const fromNumber = `whatsapp:+${fromE164}`;
-  const resolvedTo = overrideTo || toPhone;
-  if (!resolvedTo) return { sent: false, reason: "No destination phone" };
-  const toNumber = toWhatsApp(resolvedTo);
-  logger.info(`[${logTag}] Sending \u2192 From: ${fromNumber}  To: ${toNumber}`);
-  try {
-    const client = twilio3(accountSid, authToken);
-    const res = await client.messages.create({ from: fromNumber, to: toNumber, body });
-    logger.info(`[${logTag}] Sent \u2713 SID: ${res.sid}  Status: ${res.status}`);
-    return { sent: true };
-  } catch (e) {
-    logger.error(`[${logTag}] WhatsApp error:`, e);
-    logger.error(`[${logTag}] Failed \u2014 Code: ${e.code ?? "N/A"} | ${e.message}`);
-    return { sent: false, reason: e.message };
-  }
-}
-async function sendLeadAdminAlert(lead) {
-  const adminPhone = process.env.TWILIO_WHATSAPP_TO || "";
-  if (!adminPhone) {
-    console.info("[lead-admin-alert] TWILIO_WHATSAPP_TO not set \u2014 skipping admin alert");
-    return { sent: false, reason: "Admin phone not configured" };
-  }
-  const body = buildLeadAdminAlertMessage(lead);
-  return sendRawWhatsApp(adminPhone, body, "lead-admin-alert");
-}
-async function sendLeadCustomerConfirmation(lead) {
-  if (!lead.phone) return { sent: false, reason: "No customer phone" };
-  const body = buildLeadCustomerConfirmationMessage(lead);
-  return sendRawWhatsApp(lead.phone, body, "lead-customer-confirm");
-}
-async function sendAbandonedLeadReminder(lead) {
-  if (!lead.phone) return { sent: false, reason: "No customer phone" };
-  const body = buildAbandonedLeadMessage(lead);
-  return sendRawWhatsApp(lead.phone, body, "abandoned-reminder");
-}
-async function sendStaffFollowUpReminder(lead) {
-  const adminPhone = process.env.TWILIO_WHATSAPP_TO || "";
-  if (!adminPhone) {
-    console.info("[staff-followup] TWILIO_WHATSAPP_TO not set \u2014 skipping staff reminder");
-    return { sent: false, reason: "Admin phone not configured" };
-  }
-  const body = buildStaffFollowUpMessage(lead);
-  return sendRawWhatsApp(adminPhone, body, "staff-followup");
-}
-async function sendHolidayWhatsApp(data) {
-  const domain2 = process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(",")[0] || "localhost";
-  const baseUrl = domain2 === "localhost" ? `http://localhost:${process.env.PORT || 3e3}` : `https://${domain2}`;
-  const pdfParams = new URLSearchParams({
-    name: data.customerName,
-    phone: data.phone,
-    dest: data.destination,
-    duration: data.duration || "4D/3N",
-    people: String(data.people || 2),
-    ...data.travelDate ? { date: data.travelDate } : {},
-    ...data.packageName ? { pkg: data.packageName } : {},
-    ...data.pricePerPerson ? { price: String(data.pricePerPerson) } : {},
-    ...data.totalPrice ? { total: String(data.totalPrice) } : {}
-  });
-  const pdfUrl = `${baseUrl}/api/itinerary-pdf?${pdfParams.toString()}`;
-  logger.info(`[holiday-whatsapp] PDF URL: ${pdfUrl}`);
-  const accountSid = process.env.TWILIO_ACCOUNT_SID || "";
-  const authToken = process.env.TWILIO_AUTH_TOKEN || "";
-  const rawFrom = process.env.TWILIO_WHATSAPP_FROM || "+14155238886";
-  const overrideTo = process.env.TWILIO_WHATSAPP_TO || "";
-  const fromNumber = rawFrom.startsWith("whatsapp:") ? rawFrom : `whatsapp:${rawFrom}`;
-  if (!accountSid || !authToken) {
-    console.info("[holiday-whatsapp] Twilio credentials not configured \u2014 skipping message send");
-    return { sent: false, pdfUrl, reason: "Twilio not configured" };
-  }
-  const resolvedPhone = overrideTo || data.phone;
-  if (!resolvedPhone) {
-    return { sent: false, pdfUrl, reason: "No phone number" };
-  }
-  const toNumber = toWhatsApp(resolvedPhone);
-  const body = buildHolidayMessage(data, pdfUrl);
-  logger.info(`[holiday-whatsapp] Sending to: ${toNumber}`);
-  try {
-    const client = twilio3(accountSid, authToken);
-    const message = await client.messages.create({ from: fromNumber, to: toNumber, body });
-    logger.info(`[holiday-whatsapp] Sent \u2014 SID: ${message.sid}`);
-    return { sent: true, pdfUrl };
-  } catch (err) {
-    logger.error(`[holiday-whatsapp] Failed: ${err.message}`);
-    return { sent: false, pdfUrl, reason: err.message };
-  }
-}
-
-// src/lib/notification-service.ts
-function formatPhone3(raw) {
-  const digits = raw.replace(/\D/g, "");
-  if (digits.startsWith("91") && digits.length === 12) return `+${digits}`;
-  if (digits.length === 10) return `+91${digits}`;
-  return `+${digits}`;
-}
-function buildSmsBody(data) {
-  const typeLabel = data.bookingType.charAt(0).toUpperCase() + data.bookingType.slice(1);
-  const dateStr = (() => {
-    try {
-      return new Date(data.travelDate).toLocaleDateString("en-IN", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric"
-      });
-    } catch {
-      return data.travelDate;
-    }
-  })();
-  const amount = `Rs.${data.totalAmount.toLocaleString("en-IN")}`;
-  let detail = "";
-  if ((data.bookingType === "flight" || data.bookingType === "bus") && data.from && data.to) {
-    const fromCity = sanitizeLocation(data.from) || data.from;
-    const toCity = sanitizeLocation(data.to) || data.to;
-    detail = ` | ${fromCity} to ${toCity}`;
-  } else if (data.bookingType === "hotel" && data.hotelName) {
-    detail = ` | ${data.hotelName}`;
-  }
-  return `Your ${typeLabel} booking with ${APP_NAME} is confirmed${detail}. Booking ID: ${data.bookingId} | Date: ${dateStr} | Amount: ${amount}. Support: ${APP_SUPPORT_PHONE}`;
-}
-async function sendBookingEmail(data) {
-  if (!data.passengerEmail) {
-    logger.warn(`[notification/email] No email address \u2014 skipping (booking: ${data.bookingId})`);
-    return { sent: false, reason: "No passenger email address" };
-  }
-  const emailData = {
-    bookingId: data.bookingId,
-    bookingType: data.bookingType,
-    passengerName: data.passengerName,
-    passengerEmail: data.passengerEmail,
-    title: data.title || data.bookingId,
-    travelDate: data.travelDate,
-    passengers: data.passengers ?? 1,
-    totalAmount: data.totalAmount,
-    paymentId: data.paymentId,
-    invoiceUrl: data.invoiceUrl || ""
-  };
-  try {
-    const result = await sendGeneralBookingEmail(emailData);
-    if (result.sent) {
-      logger.info(`[notification/email] Sent \u2713 \u2014 booking: ${data.bookingId}  to: ${data.passengerEmail}`);
-    } else {
-      logger.warn(`[notification/email] Not sent \u2014 booking: ${data.bookingId}  reason: ${result.reason}`);
-    }
-    return result;
-  } catch (err) {
-    logger.error(`[notification/email] Error: ${err.message}  booking: ${data.bookingId}`);
-    return { sent: false, reason: err.message };
-  }
-}
-async function sendBookingSMS(data) {
-  if (!data.passengerPhone) {
-    logger.warn(`[notification/sms] No phone number \u2014 skipping (booking: ${data.bookingId})`);
-    return { sent: false, reason: "No passenger phone number" };
-  }
-  const accountSid = (process.env.TWILIO_ACCOUNT_SID || "").trim();
-  const authToken = (process.env.TWILIO_AUTH_TOKEN || "").trim();
-  const fromNumber = (process.env.TWILIO_SMS_FROM || "").trim();
-  if (!accountSid || !authToken || !fromNumber) {
-    logger.warn(`[notification/sms] Twilio SMS not fully configured \u2014 skipping (booking: ${data.bookingId})`);
-    return { sent: false, reason: "Twilio SMS credentials not configured" };
-  }
-  const toNumber = formatPhone3(data.passengerPhone);
-  const body = buildSmsBody(data);
-  logger.info(`[notification/sms] Sending \u2192 ${toNumber}  booking: ${data.bookingId}`);
-  try {
-    const client = twilio4(accountSid, authToken);
-    const message = await client.messages.create({ from: fromNumber, to: toNumber, body });
-    logger.info(`[notification/sms] Sent \u2713 SID: ${message.sid}  Status: ${message.status}  booking: ${data.bookingId}`);
-    return { sent: true };
-  } catch (err) {
-    const hint = err.code === 21211 ? " \u2014 Invalid 'to' number format" : err.code === 21214 ? " \u2014 Number cannot receive SMS" : err.code === 21608 ? " \u2014 'from' number not SMS-capable" : "";
-    logger.error(`[notification/sms] Failed \u2014 Code: ${err.code ?? "N/A"} | ${err.message}${hint}  booking: ${data.bookingId}`);
-    return { sent: false, reason: `${err.message}${hint}` };
-  }
-}
-async function sendBookingWhatsApp(data) {
-  if (!data.passengerPhone) {
-    logger.warn(`[notification/whatsapp] No phone number \u2014 skipping (booking: ${data.bookingId})`);
-    return { sent: false, reason: "No passenger phone number" };
-  }
-  const dateStr = (() => {
-    try {
-      return new Date(data.travelDate).toLocaleDateString("en-IN", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric"
-      });
-    } catch {
-      return data.travelDate;
-    }
-  })();
-  const waData = {
-    bookingId: data.bookingId,
-    passengerName: data.passengerName,
-    phone: data.passengerPhone,
-    bookingType: data.bookingType,
-    from: data.from || "",
-    to: data.to || "",
-    date: dateStr,
-    amount: data.totalAmount,
-    invoiceUrl: data.invoiceUrl,
-    airline: data.airline,
-    flightNum: data.flightNumber,
-    flightDeparture: data.flightDeparture,
-    flightArrival: data.flightArrival,
-    flightDuration: data.flightDuration,
-    busOperator: data.busOperator,
-    busType: data.busType,
-    boardingPoint: data.boardingPoint,
-    droppingPoint: data.droppingPoint,
-    busDeparture: data.busDeparture,
-    busArrival: data.busArrival,
-    hotelName: data.hotelName,
-    hotelCity: data.hotelCity,
-    hotelNights: data.hotelNights
-  };
-  try {
-    const result = await sendWhatsAppNotification(waData);
-    if (result.sent) {
-      logger.info(`[notification/whatsapp] Sent \u2713 \u2014 booking: ${data.bookingId}`);
-    } else {
-      logger.warn(`[notification/whatsapp] Not sent \u2014 booking: ${data.bookingId}  reason: ${result.reason}`);
-    }
-    return result;
-  } catch (err) {
-    logger.error(`[notification/whatsapp] Error: ${err.message}  booking: ${data.bookingId}`);
-    return { sent: false, reason: err.message };
-  }
-}
-async function sendRawSMS(phone, body) {
-  const accountSid = (process.env.TWILIO_ACCOUNT_SID || "").trim();
-  const authToken = (process.env.TWILIO_AUTH_TOKEN || "").trim();
-  const fromNumber = (process.env.TWILIO_SMS_FROM || "").trim();
-  if (!accountSid || !authToken || !fromNumber) return { sent: false, reason: "Twilio SMS not configured" };
-  try {
-    const client = twilio4(accountSid, authToken);
-    await client.messages.create({ from: fromNumber, to: formatPhone3(phone), body });
-    return { sent: true };
-  } catch (err) {
-    return { sent: false, reason: err.message };
-  }
-}
-async function sendRawWhatsApp2(phone, body) {
-  const accountSid = (process.env.TWILIO_ACCOUNT_SID || "").trim();
-  const authToken = (process.env.TWILIO_AUTH_TOKEN || "").trim();
-  const fromWA = (process.env.TWILIO_WHATSAPP_FROM || "").trim();
-  if (!accountSid || !authToken || !fromWA) return { sent: false, reason: "Twilio WhatsApp not configured" };
-  try {
-    const client = twilio4(accountSid, authToken);
-    await client.messages.create({ from: fromWA, to: `whatsapp:${formatPhone3(phone)}`, body });
-    return { sent: true };
-  } catch (err) {
-    return { sent: false, reason: err.message };
-  }
-}
-async function sendBookingFailureNotifications(data, reason) {
-  logger.info(`[notification/failure] booking: ${data.bookingId}  reason: ${reason}`);
-  const amount = `Rs.${data.totalAmount.toLocaleString("en-IN")}`;
-  const msg = `Hi ${data.passengerName}, your payment of ${amount} was received for booking ${data.bookingId}, but the booking could not be confirmed. Reason: ${reason}. A full refund has been initiated and will reflect within 5-7 business days. Support: ${APP_SUPPORT_PHONE}`;
-  const [emailRes, smsRes, waRes] = await Promise.allSettled([
-    sendBookingEmail(data),
-    data.passengerPhone ? sendRawSMS(data.passengerPhone, msg) : Promise.resolve({ sent: false, reason: "No phone" }),
-    data.passengerPhone ? sendRawWhatsApp2(data.passengerPhone, msg) : Promise.resolve({ sent: false, reason: "No phone" })
-  ]);
-  return {
-    email: emailRes.status === "fulfilled" ? emailRes.value : { sent: false, reason: String(emailRes.reason) },
-    sms: smsRes.status === "fulfilled" ? smsRes.value : { sent: false, reason: String(smsRes.reason) },
-    whatsapp: waRes.status === "fulfilled" ? waRes.value : { sent: false, reason: String(waRes.reason) }
-  };
-}
-async function sendRefundNotifications(data, refundStatus, refundId) {
-  logger.info(`[notification/refund] booking: ${data.bookingId}  status: ${refundStatus}`);
-  const amount = `Rs.${data.totalAmount.toLocaleString("en-IN")}`;
-  const ref = refundId ? ` (Ref: ${refundId})` : "";
-  const msg = refundStatus === "initiated" ? `Hi ${data.passengerName}, your refund of ${amount} for booking ${data.bookingId} has been initiated${ref}. It will reflect within 5-7 business days. Support: ${APP_SUPPORT_PHONE}` : refundStatus === "completed" ? `Hi ${data.passengerName}, your refund of ${amount} for booking ${data.bookingId} has been successfully processed${ref}. The amount will appear in your account shortly. Support: ${APP_SUPPORT_PHONE}` : `Hi ${data.passengerName}, we were unable to process your refund of ${amount} for booking ${data.bookingId}. Please contact our support: ${APP_SUPPORT_PHONE}`;
-  const [emailRes, smsRes, waRes] = await Promise.allSettled([
-    sendBookingEmail(data),
-    data.passengerPhone ? sendRawSMS(data.passengerPhone, msg) : Promise.resolve({ sent: false, reason: "No phone" }),
-    data.passengerPhone ? sendRawWhatsApp2(data.passengerPhone, msg) : Promise.resolve({ sent: false, reason: "No phone" })
-  ]);
-  return {
-    email: emailRes.status === "fulfilled" ? emailRes.value : { sent: false, reason: String(emailRes.reason) },
-    sms: smsRes.status === "fulfilled" ? smsRes.value : { sent: false, reason: String(smsRes.reason) },
-    whatsapp: waRes.status === "fulfilled" ? waRes.value : { sent: false, reason: String(waRes.reason) }
-  };
-}
-async function sendAllBookingNotifications(data) {
-  logger.info(`[notification] Sending all channels \u2014 booking: ${data.bookingId}  type: ${data.bookingType}`);
-  const [emailResult, smsResult, whatsappResult] = await Promise.allSettled([
-    sendBookingEmail(data),
-    sendBookingSMS(data),
-    sendBookingWhatsApp(data)
-  ]);
-  const email3 = emailResult.status === "fulfilled" ? emailResult.value : { sent: false, reason: String(emailResult.reason) };
-  const sms = smsResult.status === "fulfilled" ? smsResult.value : { sent: false, reason: String(smsResult.reason) };
-  const whatsapp = whatsappResult.status === "fulfilled" ? whatsappResult.value : { sent: false, reason: String(whatsappResult.reason) };
-  logger.info(
-    `[notification] Done \u2014 booking: ${data.bookingId}  email:${email3.sent} sms:${sms.sent} whatsapp:${whatsapp.sent}`
-  );
-  return { email: email3, sms, whatsapp };
-}
-
-// src/routes/payments.ts
-var router10 = (0, import_express10.Router)();
-function resolveKeyMode(keyId, keySecret) {
-  if (keyId.startsWith("rzp_test_") && keySecret) return "test";
-  if (keyId.startsWith("rzp_live_") && keySecret) return "live";
-  return "demo";
-}
-function buildRazorpayClient(keyId, keySecret) {
-  const mode = resolveKeyMode(keyId, keySecret);
-  if (mode === "test" || mode === "live") {
-    return new import_razorpay.default({ key_id: keyId, key_secret: keySecret });
-  }
-  return null;
-}
-router10.post("/create-order", async (req, res) => {
-  try {
-    const { amount, currency = "INR", receipt, notes } = req.body;
-    if (!amount || Number(amount) <= 0) {
-      return res.status(400).json({ success: false, error: "Invalid amount" });
-    }
-    const cfg = await getProviderConfig();
-    const KEY_ID = cfg.paymentKeyId;
-    const KEY_SEC = cfg.paymentKeySecret;
-    const mode = resolveKeyMode(KEY_ID, KEY_SEC);
-    logger.info(
-      {
-        keyMode: mode,
-        keyIdPrefix: KEY_ID ? `${KEY_ID.slice(0, 14)}***` : "(empty)",
-        keySecLoaded: KEY_SEC ? `${KEY_SEC.slice(0, 6)}***` : "(empty)",
-        keyIdSource: KEY_ID ? KEY_ID === process.env["RAZORPAY_KEY_ID"] ? "env" : "db" : "none"
-      },
-      "[payments] create-order \u2014 key check"
-    );
-    if (mode !== "test" && mode !== "live") {
-      logger.error(
-        { keyIdPrefix: KEY_ID ? `${KEY_ID.slice(0, 14)}***` : "(empty)", keySecLoaded: !!KEY_SEC },
-        "[payments] RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET not configured or unrecognised prefix"
-      );
-      return res.status(503).json({
-        success: false,
-        error: "Payment gateway is not configured. Please contact support."
-      });
-    }
-    const amountPaise = Math.round(Number(amount) * 100);
-    logger.info(
-      {
-        url: "https://api.razorpay.com/v1/orders",
-        keyMode: mode,
-        amountINR: amount,
-        amountPaise,
-        currency
-      },
-      "[payments] calling Razorpay orders.create"
-    );
-    const rzp = buildRazorpayClient(KEY_ID, KEY_SEC);
-    const order = await rzp.orders.create({
-      amount: amountPaise,
-      currency,
-      receipt: receipt || `rcpt_${Date.now()}`,
-      notes: notes || {}
-    });
-    logger.info(
-      { keyMode: mode, orderId: order.id, amountINR: amount },
-      "[payments] Razorpay order created \u2713"
-    );
-    return res.json({ success: true, order, key: KEY_ID, keyMode: mode });
-  } catch (err) {
-    const rzpErr = err?.error ?? {};
-    const httpStatus = err?.statusCode ?? 500;
-    logger.error(
-      {
-        httpStatus,
-        url: "https://api.razorpay.com/v1/orders",
-        code: rzpErr.code,
-        description: rzpErr.description,
-        source: rzpErr.source,
-        step: rzpErr.step,
-        reason: rzpErr.reason,
-        field: rzpErr.field,
-        rawMessage: err?.message,
-        fullError: JSON.stringify(err?.error ?? err ?? null)
-      },
-      "[payments] create-order FAILED"
-    );
-    res.status(httpStatus >= 400 && httpStatus < 600 ? httpStatus : 500).json({
-      success: false,
-      error: rzpErr.description || err?.message || "Failed to create order",
-      razorpay: {
-        httpStatus,
-        code: rzpErr.code || null,
-        description: rzpErr.description || null,
-        source: rzpErr.source || null,
-        step: rzpErr.step || null,
-        reason: rzpErr.reason || null
-      }
-    });
-  }
-});
-router10.post("/verify", async (req, res) => {
-  try {
-    const {
-      razorpay_order_id,
-      razorpay_payment_id,
-      razorpay_signature,
-      bookingContext
-    } = req.body;
-    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-      return res.status(400).json({ success: false, error: "Missing required fields" });
-    }
-    const cfg = await getProviderConfig();
-    const KEY_SEC = cfg.paymentKeySecret;
-    if (!KEY_SEC) {
-      logger.error("[payments] RAZORPAY_KEY_SECRET not configured \u2014 cannot verify");
-      return res.status(503).json({ success: false, error: "Payment gateway not configured" });
-    }
-    const sign = `${razorpay_order_id}|${razorpay_payment_id}`;
-    const expectedSign = crypto2.createHmac("sha256", KEY_SEC).update(sign).digest("hex");
-    const verified = expectedSign === razorpay_signature;
-    if (!verified) {
-      logger.warn(`[payments] Signature mismatch \u2014 order: ${razorpay_order_id}  payment: ${razorpay_payment_id}`);
-    }
-    if (!verified) {
-      return res.status(400).json({ success: false, error: "Payment verification failed. Invalid signature." });
-    }
-    logger.info(`[payments] Payment verified \u2713 \u2014 ${razorpay_payment_id}`);
-    return res.json({
-      success: true,
-      message: "Payment verified",
-      paymentId: razorpay_payment_id
-    });
-  } catch (err) {
-    logger.error("[payments] verify error:", err.message);
-    res.status(500).json({ success: false, error: err.message || "Verification failed" });
-  }
-});
-router10.post("/notify", async (req, res) => {
-  const { bookingContext, frontendBaseUrl } = req.body;
-  if (!bookingContext?.bookingId) {
-    return res.status(400).json({ success: false, error: "bookingContext.bookingId is required" });
-  }
-  const invoiceUrl = `${frontendBaseUrl || "https://dreamflyglobal.in"}/invoice/${bookingContext.bookingId}`;
-  logger.info(`[notify] Sending all channels \u2014 booking: ${bookingContext.bookingId}  invoiceUrl: ${invoiceUrl}`);
-  const notifData = {
-    bookingId: bookingContext.bookingId,
-    bookingType: bookingContext.bookingType || "flight",
-    passengerName: bookingContext.passengerName || "Traveller",
-    passengerEmail: bookingContext.passengerEmail || void 0,
-    passengerPhone: bookingContext.phone || void 0,
-    travelDate: bookingContext.travelDate || (/* @__PURE__ */ new Date()).toISOString(),
-    totalAmount: bookingContext.totalAmount || 0,
-    paymentId: bookingContext.paymentId || "",
-    passengers: bookingContext.passengers || 1,
-    invoiceUrl,
-    title: bookingContext.title || bookingContext.bookingId,
-    from: bookingContext.from || bookingContext.flightFrom || bookingContext.busFrom || bookingContext.hotelCity || "",
-    to: bookingContext.to || bookingContext.flightTo || bookingContext.busTo || "",
-    // Flight
-    airline: bookingContext.flightAirline,
-    flightNumber: bookingContext.flightNumber,
-    flightDeparture: bookingContext.flightDeparture,
-    flightArrival: bookingContext.flightArrival,
-    flightDuration: bookingContext.flightDuration,
-    // Bus
-    busOperator: bookingContext.busOperator,
-    busType: bookingContext.busType,
-    boardingPoint: bookingContext.busBoardingPoint,
-    droppingPoint: bookingContext.busDroppingPoint,
-    busDeparture: bookingContext.busDeparture,
-    busArrival: bookingContext.busArrival,
-    // Hotel
-    hotelName: bookingContext.hotelName,
-    hotelCity: bookingContext.hotelCity,
-    hotelNights: bookingContext.hotelNights
-  };
-  const { email: email3, sms, whatsapp } = await sendAllBookingNotifications(notifData);
-  if (bookingContext.phone) {
-    const userId = bookingContext.userId || `guest_${Date.now()}`;
-    scheduleBookingFollowUp({
-      userId,
-      name: bookingContext.passengerName || "Traveller",
-      phone: bookingContext.phone,
-      bookingId: bookingContext.bookingId,
-      bookingType: bookingContext.bookingType || "flight",
-      from: notifData.from || "",
-      to: notifData.to || ""
-    });
-  }
-  return res.json({
-    success: true,
-    invoiceUrl,
-    emailSent: email3.sent,
-    smsSent: sms.sent,
-    whatsappSent: whatsapp.sent,
-    ...email3.reason ? { emailReason: email3.reason } : {},
-    ...sms.reason ? { smsReason: sms.reason } : {},
-    ...whatsapp.reason ? { whatsappReason: whatsapp.reason } : {}
-  });
-});
-router10.post("/webhook", async (req, res) => {
-  try {
-    const sig = req.headers["x-razorpay-signature"];
-    const body = JSON.stringify(req.body);
-    const WEBHOOK_SECRET = process.env["RAZORPAY_WEBHOOK_SECRET"];
-    if (!WEBHOOK_SECRET) {
-      logger.warn(
-        "[payments] RAZORPAY_WEBHOOK_SECRET not configured \u2014 webhook signature is NOT being verified. Set RAZORPAY_WEBHOOK_SECRET (from Razorpay Dashboard \u2192 Settings \u2192 Webhooks) to enable verification."
-      );
-    } else {
-      if (!sig) {
-        logger.error("[payments] Webhook rejected \u2014 missing x-razorpay-signature header");
-        return res.status(400).json({ error: "Missing webhook signature" });
-      }
-      const expected = crypto2.createHmac("sha256", WEBHOOK_SECRET).update(body).digest("hex");
-      if (sig !== expected) {
-        logger.error(
-          { event: req.body?.event },
-          "[payments] Webhook rejected \u2014 signature mismatch (check RAZORPAY_WEBHOOK_SECRET matches the Dashboard value)"
-        );
-        return res.status(400).json({ error: "Invalid webhook signature" });
-      }
-    }
-    const { event, payload } = req.body;
-    logger.info(`[payments] Webhook verified: ${event}`, payload?.payment?.entity?.id ?? "");
-    res.json({ success: true });
-  } catch (err) {
-    logger.error({ err: err?.message }, "[payments] webhook error");
-    res.status(500).json({ error: err.message || "Webhook error" });
-  }
-});
-router10.get("/check-config", requireAdmin, async (_req, res) => {
-  const cfg = await getProviderConfig();
-  const KEY_ID = cfg.paymentKeyId;
-  const KEY_SEC = cfg.paymentKeySecret;
-  const mode = resolveKeyMode(KEY_ID, KEY_SEC);
-  const maskedKeyId = KEY_ID ? `${KEY_ID.slice(0, 8)}***` : "(not set)";
-  const warning = mode === "test" ? "Test key detected \u2014 switch to a live key (rzp_live_\u2026) before going to production." : mode === "demo" ? "No Razorpay keys configured. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET." : null;
-  logger.info(
-    {
-      keyMode: mode,
-      maskedKeyId,
-      keyIdSource: KEY_ID ? KEY_ID === process.env["RAZORPAY_KEY_ID"] ? "env" : "db" : "none",
-      keySecLoaded: KEY_SEC ? `${KEY_SEC.slice(0, 6)}***` : "(empty)"
-    },
-    "[payments/check-config] key check"
-  );
-  if (mode === "demo") {
-    return res.json({
-      keyMode: "demo",
-      maskedKeyId,
-      connected: false,
-      httpStatus: null,
-      razorpay: null,
-      warning,
-      error: "RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET are not set or have an unrecognised prefix."
-    });
-  }
-  try {
-    const auth = Buffer.from(`${KEY_ID}:${KEY_SEC}`).toString("base64");
-    const resp = await fetch(
-      "https://api.razorpay.com/v1/payments?count=1&skip=0",
-      { headers: { Authorization: `Basic ${auth}` } }
-    );
-    const body = await resp.json().catch(() => ({}));
-    const rzpErr = body?.error ?? null;
-    logger.info(
-      {
-        keyMode: mode,
-        maskedKeyId,
-        httpStatus: resp.status,
-        connected: resp.ok,
-        code: rzpErr?.code ?? null,
-        description: rzpErr?.description ?? null,
-        source: rzpErr?.source ?? null,
-        step: rzpErr?.step ?? null,
-        reason: rzpErr?.reason ?? null
-      },
-      resp.ok ? "[payments/check-config] Razorpay connection verified \u2713" : "[payments/check-config] Razorpay connection FAILED"
-    );
-    return res.json({
-      keyMode: mode,
-      maskedKeyId,
-      connected: resp.ok,
-      httpStatus: resp.status,
-      razorpay: rzpErr ? {
-        code: rzpErr.code ?? null,
-        description: rzpErr.description ?? null,
-        source: rzpErr.source ?? null,
-        step: rzpErr.step ?? null,
-        reason: rzpErr.reason ?? null
-      } : null,
-      warning,
-      error: resp.ok ? null : rzpErr?.description ?? `HTTP ${resp.status}`
-    });
-  } catch (err) {
-    logger.error(
-      { keyMode: mode, maskedKeyId, err: err?.message },
-      "[payments/check-config] network error reaching Razorpay"
-    );
-    return res.status(502).json({
-      keyMode: mode,
-      maskedKeyId,
-      connected: false,
-      httpStatus: null,
-      razorpay: null,
-      warning,
-      error: `Network error: ${err?.message ?? "could not reach Razorpay API"}`
-    });
-  }
-});
-var payments_default = router10;
-
-// src/routes/tickets.ts
-var import_express11 = __toESM(require_express2(), 1);
-
-// src/lib/ticket-pdf.ts
-import PDFDocument from "pdfkit";
-var BLUE = "#1E40AF";
-var LIGHT = "#EFF6FF";
-var ACCENT = "#F97316";
-var GRAY = "#64748B";
-var BORDER = "#CBD5E1";
-var WHITE = "#FFFFFF";
-function hr(doc, y) {
-  doc.moveTo(50, y).lineTo(545, y).strokeColor(BORDER).lineWidth(0.5).stroke();
-}
-function labelValue(doc, x, y, label, value, accentValue = false) {
-  doc.font("Helvetica").fontSize(8).fillColor(GRAY).text(label.toUpperCase(), x, y);
-  doc.font("Helvetica-Bold").fontSize(11).fillColor(accentValue ? ACCENT : "#1E293B").text(value, x, y + 13);
-}
-function cityFontSize(city) {
-  const len = city.length;
-  if (len <= 6) return 34;
-  if (len <= 8) return 30;
-  if (len <= 11) return 24;
-  if (len <= 14) return 20;
-  return 16;
-}
-function generateFlightTicketPDF(ticket) {
-  return new Promise((resolve2, reject) => {
-    const doc = new PDFDocument({ size: "A4", margin: 0 });
-    const chunks = [];
-    doc.on("data", (c) => chunks.push(c));
-    doc.on("end", () => resolve2(Buffer.concat(chunks)));
-    doc.on("error", reject);
-    const fromCity = sanitizeLocation(ticket.from) || ticket.from;
-    const toCity = sanitizeLocation(ticket.to) || ticket.to;
-    const W = 595;
-    const margin = 50;
-    doc.rect(0, 0, W, 90).fill(BLUE);
-    doc.font("Helvetica-Bold").fontSize(22).fillColor(WHITE).text(APP_NAME, margin, 24);
-    doc.font("Helvetica").fontSize(10).fillColor("#93C5FD").text("Explore the world", margin, 50);
-    doc.font("Helvetica-Bold").fontSize(12).fillColor(WHITE).text("FLIGHT TICKET", W - 160, 24, { width: 110, align: "right" });
-    doc.font("Helvetica").fontSize(9).fillColor("#93C5FD").text(`Booking ID: ${ticket.bookingId}`, W - 180, 44, { width: 130, align: "right" });
-    doc.rect(0, 90, W, 110).fill(LIGHT);
-    const routeY = 108;
-    const col1 = margin;
-    const col3 = W - margin - 165;
-    const fromFs = cityFontSize(fromCity);
-    const toFs = cityFontSize(toCity);
-    const fromY = routeY + Math.max(0, Math.round((34 - fromFs) * 0.4));
-    const toY = routeY + Math.max(0, Math.round((34 - toFs) * 0.4));
-    doc.font("Helvetica-Bold").fontSize(fromFs).fillColor(BLUE).text(fromCity, col1, fromY, { width: 165, lineBreak: false });
-    doc.font("Helvetica").fontSize(9).fillColor(GRAY).text("ORIGIN", col1, routeY + 46);
-    doc.font("Helvetica-Bold").fontSize(13).fillColor("#1E293B").text(ticket.departure, col1, routeY + 59);
-    const midX = W / 2 - 50;
-    doc.font("Helvetica").fontSize(9).fillColor(GRAY).text(ticket.duration, midX, routeY + 16, { width: 100, align: "center" });
-    doc.moveTo(midX, routeY + 32).lineTo(midX + 100, routeY + 32).strokeColor(BLUE).lineWidth(1.5).stroke();
-    doc.moveTo(midX + 90, routeY + 27).lineTo(midX + 100, routeY + 32).lineTo(midX + 90, routeY + 37).strokeColor(BLUE).lineWidth(1.5).stroke();
-    doc.font("Helvetica").fontSize(9).fillColor(GRAY).text("NON-STOP", midX, routeY + 40, { width: 100, align: "center" });
-    doc.font("Helvetica-Bold").fontSize(toFs).fillColor(BLUE).text(toCity, col3, toY, { width: 165, align: "right", lineBreak: false });
-    doc.font("Helvetica").fontSize(9).fillColor(GRAY).text("DESTINATION", col3, routeY + 46, { width: 165, align: "right" });
-    doc.font("Helvetica-Bold").fontSize(13).fillColor("#1E293B").text(ticket.arrival, col3, routeY + 59, { width: 165, align: "right" });
-    let y = 222;
-    doc.rect(0, 200, W, 2).fill(ACCENT);
-    y = 220;
-    hr(doc, y + 60);
-    const cols = [margin, 200, 360, 460];
-    labelValue(doc, cols[0], y + 8, "Passenger", ticket.passengerName);
-    labelValue(doc, cols[1], y + 8, "Date", ticket.date);
-    labelValue(doc, cols[2], y + 8, "Class", ticket.class || "Economy");
-    labelValue(doc, cols[3], y + 8, "Pax", String(ticket.passengers));
-    y += 68;
-    hr(doc, y + 60);
-    labelValue(doc, cols[0], y + 8, "Airline", ticket.airline);
-    labelValue(doc, cols[1], y + 8, "Flight No.", ticket.flightNum);
-    labelValue(doc, cols[2], y + 8, "Duration", ticket.duration);
-    labelValue(doc, cols[3], y + 8, "Amount", `\u20B9${ticket.amount.toLocaleString("en-IN")}`, true);
-    y += 68;
-    hr(doc, y + 60);
-    labelValue(doc, cols[0], y + 8, "Passenger Email", ticket.passengerEmail);
-    if (ticket.paymentId) {
-      labelValue(doc, cols[2], y + 8, "Payment Ref", ticket.paymentId);
-    }
-    y += 90;
-    const barcodeY = y;
-    doc.moveTo(margin, barcodeY).lineTo(W - margin, barcodeY).dash(4, { space: 4 }).strokeColor(BORDER).lineWidth(0.8).stroke().undash();
-    const stripeX = W - 180;
-    for (let i = 0; i < 40; i++) {
-      const w = i % 3 === 0 ? 4 : 2;
-      doc.rect(stripeX + i * 3.5, barcodeY + 16, w, 50).fill(i % 5 === 0 ? "#1E293B" : GRAY);
-    }
-    doc.font("Courier").fontSize(8).fillColor("#1E293B").text(ticket.bookingId, stripeX, barcodeY + 72, { width: 140, align: "center" });
-    doc.font("Helvetica-Bold").fontSize(14).fillColor(BLUE).text("BOARDING PASS", margin, barcodeY + 20);
-    doc.font("Helvetica").fontSize(9).fillColor(GRAY).text(`${fromCity}  to  ${toCity}   |   ${ticket.departure}`, margin, barcodeY + 40);
-    doc.font("Helvetica-Bold").fontSize(11).fillColor("#1E293B").text(ticket.passengerName, margin, barcodeY + 58);
-    const footerY = 760;
-    doc.rect(0, footerY, W, 82).fill(BLUE);
-    doc.font("Helvetica").fontSize(8).fillColor("#93C5FD").text(
-      `This is an electronically generated ticket. Please carry a valid photo ID at the airport. Check-in closes 45 minutes before departure for domestic flights. For assistance contact ${APP_NAME} Support.`,
-      margin,
-      footerY + 16,
-      { width: W - margin * 2, align: "center" }
-    );
-    doc.font("Helvetica-Bold").fontSize(9).fillColor(WHITE).text(`${APP_NAME} \u2014 ${APP_TAGLINE}`, margin, footerY + 52, { width: W - margin * 2, align: "center" });
-    doc.end();
-  });
-}
-
-// src/routes/tickets.ts
-var router11 = (0, import_express11.Router)();
-router11.post("/generate", async (req, res) => {
-  try {
-    const ticket = req.body;
-    if (!ticket.bookingId || !ticket.from || !ticket.to) {
-      return res.status(400).json({ error: "Missing required ticket fields" });
-    }
-    const pdfBuffer = await generateFlightTicketPDF(ticket);
-    res.set({
-      "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="${APP_NAME}-Ticket-${ticket.bookingId}.pdf"`,
-      "Content-Length": pdfBuffer.length
-    });
-    res.send(pdfBuffer);
-  } catch (err) {
-    console.error("ticket/generate error:", err);
-    res.status(500).json({ error: err.message || "Failed to generate ticket" });
-  }
-});
-router11.post("/send-email", async (req, res) => {
-  try {
-    const ticket = req.body;
-    if (!ticket.bookingId || !ticket.passengerEmail) {
-      return res.status(400).json({ error: "Missing bookingId or passengerEmail" });
-    }
-    const pdfBuffer = await generateFlightTicketPDF(ticket);
-    const { sent, reason } = await sendBookingConfirmationEmail(ticket, pdfBuffer);
-    res.json({ success: true, emailSent: sent, reason });
-  } catch (err) {
-    console.error("ticket/send-email error:", err);
-    res.status(500).json({ error: err.message || "Failed to send email" });
-  }
-});
-var tickets_default = router11;
-
-// src/routes/whatsapp.ts
-var import_express12 = __toESM(require_express2(), 1);
-var router12 = (0, import_express12.Router)();
-router12.post("/", async (req, res) => {
-  try {
-    const data = req.body;
-    if (!data.bookingId || !data.phone) {
-      return res.status(400).json({ error: "Missing required fields: bookingId, phone" });
-    }
-    const result = await sendWhatsAppNotification(data);
-    res.json({ success: true, ...result });
-  } catch (err) {
-    console.error("send-whatsapp error:", err);
-    res.status(500).json({ error: err.message || "Failed to send WhatsApp message" });
-  }
-});
-var whatsapp_default = router12;
-
-// src/routes/itinerary-pdf.ts
-var import_express13 = __toESM(require_express2(), 1);
-
-// src/lib/holiday-pdf.ts
-import PDFDocument2 from "pdfkit";
-var ITINERARIES = {
-  Goa: [
-    { day: 1, title: "Arrival & North Goa Beach Evening", activities: ["Airport pickup", "Check-in at resort", "Calangute & Baga Beach", "Sunset at Fort Aguada", "Beachside seafood dinner"], meals: "Dinner" },
-    { day: 2, title: "North Goa Sightseeing", activities: ["Basilica of Bom Jesus", "Old Goa churches tour", "Anjuna flea market", "Vagator Beach", "Nightlife at Tito's Lane"], meals: "Breakfast, Dinner" },
-    { day: 3, title: "South Goa & Water Sports", activities: ["Colva & Benaulim Beach", "Dolphin watching cruise", "Dudhsagar Waterfall", "Parasailing & jet ski", "Panjim market shopping"], meals: "Breakfast, Lunch" },
-    { day: 4, title: "Checkout & Departure", activities: ["Morning beach walk", "Breakfast and checkout", "Souvenir shopping", "Airport drop"], meals: "Breakfast" }
-  ],
-  Kashmir: [
-    { day: 1, title: "Arrival & Dal Lake", activities: ["Airport pickup in Srinagar", "Houseboat check-in on Dal Lake", "Shikara ride at sunset", "Dal Lake floating market"], meals: "Dinner" },
-    { day: 2, title: "Mughal Gardens Tour", activities: ["Shalimar Bagh", "Nishat Bagh", "Chashme Shahi", "Shankaracharya Temple", "Local handicraft shopping"], meals: "Breakfast, Dinner" },
-    { day: 3, title: "Gulmarg Day Trip", activities: ["Drive to Gulmarg", "Gondola cable car ride", "Snow activities", "Meadow walk", "Return to Srinagar"], meals: "Breakfast, Lunch" },
-    { day: 4, title: "Pahalgam Excursion", activities: ["Drive to Pahalgam", "Betaab Valley", "Aru Valley nature walk", "Lidder River rafting"], meals: "Breakfast, Dinner" },
-    { day: 5, title: "Sonamarg & Departure", activities: ["Sonamarg Glacier pony ride", "Sindh River photography", "Return to Srinagar", "Airport drop"], meals: "Breakfast" }
-  ],
-  Kerala: [
-    { day: 1, title: "Arrival in Kochi", activities: ["Cochin airport pickup", "Chinese fishing nets", "Fort Kochi heritage walk", "Kathakali dance show"], meals: "Dinner" },
-    { day: 2, title: "Munnar Tea Country", activities: ["Drive to Munnar", "Mattupetty Dam", "Tea Garden factory tour", "Spice plantation walk"], meals: "Breakfast, Lunch, Dinner" },
-    { day: 3, title: "Thekkady Wildlife", activities: ["Periyar boat cruise", "Elephant interaction", "Spice garden tour", "Bamboo rafting"], meals: "Breakfast, Dinner" },
-    { day: 4, title: "Alleppey Houseboat", activities: ["Board Kerala houseboat", "Village walk along canals", "Village fishing", "Sunset cruise"], meals: "All meals on houseboat" },
-    { day: 5, title: "Kovalam & Departure", activities: ["Morning backwater cruise", "Kovalam Beach", "Ayurvedic spa session", "Airport drop"], meals: "Breakfast, Lunch" }
-  ],
-  Rajasthan: [
-    { day: 1, title: "Jaipur \u2013 Pink City", activities: ["Airport pickup", "City Palace", "Jantar Mantar", "Hawa Mahal", "Johri Bazaar shopping"], meals: "Dinner" },
-    { day: 2, title: "Amber Fort & Forts", activities: ["Amber Fort elephant ride", "Sheesh Mahal mirror palace", "Nahargarh Fort sunset", "Jal Mahal photos"], meals: "Breakfast, Dinner" },
-    { day: 3, title: "Jaisalmer \u2013 Golden City", activities: ["Drive to Jaisalmer", "Jaisalmer Fort", "Patwon ki Haveli", "Gadi Sagar Lake"], meals: "Breakfast, Dinner" },
-    { day: 4, title: "Sam Sand Dunes Desert Safari", activities: ["Camel safari at Sam Dunes", "Jeep safari", "Folk dance & bonfire", "Stargazing in the desert"], meals: "Breakfast, Dinner at camp" },
-    { day: 5, title: "Jodhpur & Departure", activities: ["Drive to Jodhpur", "Mehrangarh Fort", "Blue City walk", "Sardar Market & departure"], meals: "Breakfast, Lunch" }
-  ],
-  Manali: [
-    { day: 1, title: "Arrival in Manali", activities: ["Airport pickup", "Old Manali walk", "Hadimba Devi Temple", "Vashisht hot springs"], meals: "Dinner" },
-    { day: 2, title: "Solang Valley Adventure", activities: ["Solang Valley", "Gondola ride", "Zorbing & paragliding", "River rafting", "Bonfire camp"], meals: "Breakfast, Lunch, Dinner" },
-    { day: 3, title: "Rohtang Pass", activities: ["Early drive to Rohtang Pass", "Snow play & photography", "Gulaba Valley meadows", "Glacier views"], meals: "Breakfast, Lunch" },
-    { day: 4, title: "Kullu & Manikaran", activities: ["Kullu shawl weaving tour", "Manikaran hot springs", "Raghunath Temple", "Parvati River drive"], meals: "Breakfast, Dinner" },
-    { day: 5, title: "Departure", activities: ["Morning Himalayan walk", "Breakfast & checkout", "Tibetan market shopping", "Airport drop"], meals: "Breakfast" }
-  ],
-  Andaman: [
-    { day: 1, title: "Port Blair Arrival", activities: ["Airport pickup", "Cellular Jail visit", "Sound & Light Show", "Seafood dinner"], meals: "Dinner" },
-    { day: 2, title: "Ross & North Bay Islands", activities: ["Ross Island British HQ ruins", "North Bay snorkeling", "Glass-bottom boat ride", "Market shopping"], meals: "Breakfast, Lunch" },
-    { day: 3, title: "Havelock Island", activities: ["Ferry to Havelock", "Radhanagar Beach", "Elephant Beach snorkeling", "Sunset viewing"], meals: "Breakfast, Dinner" },
-    { day: 4, title: "Neil Island", activities: ["Ferry to Neil Island", "Natural Bridge Rock", "Bharatpur Beach sports", "Sitapur Beach sunrise"], meals: "Breakfast, Lunch" },
-    { day: 5, title: "Departure", activities: ["Ferry back to Port Blair", "Naval Marine Museum", "Souvenir shopping", "Airport drop"], meals: "Breakfast" }
-  ]
-};
-function getItinerary(destination) {
-  const key = Object.keys(ITINERARIES).find(
-    (k) => destination.toLowerCase().includes(k.toLowerCase()) || k.toLowerCase().includes(destination.toLowerCase())
-  );
-  return ITINERARIES[key ?? "Goa"] ?? ITINERARIES["Goa"];
-}
-var PURPLE = "#6D28D9";
-var LIGHT_P = "#EDE9FE";
-var WHITE2 = "#FFFFFF";
-var DARK = "#1E293B";
-var GRAY2 = "#64748B";
-var GREEN = "#059669";
-var ACCENT2 = "#F59E0B";
-var BORDER2 = "#E2E8F0";
-function hr2(doc, y, color = BORDER2) {
-  doc.moveTo(50, y).lineTo(545, y).strokeColor(color).lineWidth(0.5).stroke();
-}
-function badge(doc, x, y, text2, bg, fg, w = 80) {
-  doc.rect(x, y, w, 16).fill(bg);
-  doc.font("Helvetica-Bold").fontSize(8).fillColor(fg).text(text2, x, y + 4, { width: w, align: "center" });
-}
-function generateHolidayItineraryPDF(data) {
-  return new Promise((resolve2, reject) => {
-    const doc = new PDFDocument2({ size: "A4", margin: 0, bufferPages: true });
-    const chunks = [];
-    doc.on("data", (c) => chunks.push(c));
-    doc.on("end", () => resolve2(Buffer.concat(chunks)));
-    doc.on("error", reject);
-    const W = 595;
-    const margin = 50;
-    const itin = getItinerary(data.destination);
-    doc.rect(0, 0, W, 110).fill(PURPLE);
-    doc.font("Helvetica-Bold").fontSize(24).fillColor(WHITE2).text(APP_NAME, margin, 22);
-    doc.font("Helvetica").fontSize(9).fillColor("#C4B5FD").text("Explore the world", margin, 50);
-    doc.font("Helvetica-Bold").fontSize(11).fillColor(WHITE2).text("HOLIDAY ITINERARY", W - 190, 22, { width: 140, align: "right" });
-    doc.font("Helvetica").fontSize(9).fillColor("#C4B5FD").text(`Prepared for: ${data.customerName}`, W - 190, 42, { width: 140, align: "right" });
-    doc.font("Helvetica").fontSize(9).fillColor("#C4B5FD").text((/* @__PURE__ */ new Date()).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }), W - 190, 58, { width: 140, align: "right" });
-    doc.rect(0, 110, W, 72).fill(LIGHT_P);
-    doc.font("Helvetica-Bold").fontSize(32).fillColor(PURPLE).text(data.destination, margin, 120);
-    doc.font("Helvetica").fontSize(11).fillColor(GRAY2).text(data.packageName || `${data.destination} Holiday Package`, margin, 158);
-    const badgeY = 128;
-    const badgeX = W - 260;
-    badge(doc, badgeX, badgeY, data.duration, PURPLE, WHITE2, 80);
-    badge(doc, badgeX + 88, badgeY, `${data.people} Traveller${data.people > 1 ? "s" : ""}`, GREEN, WHITE2, 88);
-    if (data.travelDate) {
-      badge(doc, badgeX, badgeY + 22, data.travelDate, ACCENT2, WHITE2, 180);
-    }
-    let y = 200;
-    doc.rect(0, y, W, 2).fill(ACCENT2);
-    y += 10;
-    doc.font("Helvetica-Bold").fontSize(13).fillColor(DARK).text("Traveller Details", margin, y);
-    y += 20;
-    hr2(doc, y);
-    y += 10;
-    const col1 = margin;
-    const col2 = 230;
-    const col3 = 390;
-    doc.font("Helvetica").fontSize(8).fillColor(GRAY2).text("NAME", col1, y);
-    doc.font("Helvetica").fontSize(8).fillColor(GRAY2).text("CONTACT", col2, y);
-    doc.font("Helvetica").fontSize(8).fillColor(GRAY2).text("NO. OF TRAVELLERS", col3, y);
-    y += 12;
-    doc.font("Helvetica-Bold").fontSize(11).fillColor(DARK).text(data.customerName, col1, y);
-    doc.font("Helvetica-Bold").fontSize(11).fillColor(DARK).text(data.phone || "\u2014", col2, y);
-    doc.font("Helvetica-Bold").fontSize(11).fillColor(DARK).text(String(data.people), col3, y);
-    y += 24;
-    hr2(doc, y);
-    y += 12;
-    doc.font("Helvetica-Bold").fontSize(14).fillColor(PURPLE).text("Day-Wise Itinerary", margin, y);
-    y += 22;
-    for (const day of itin) {
-      const estimatedHeight = 28 + day.activities.length * 14 + 20;
-      if (y + estimatedHeight > 780) {
-        doc.addPage();
-        y = 50;
-        doc.rect(0, 0, W, 30).fill(PURPLE);
-        doc.font("Helvetica-Bold").fontSize(10).fillColor(WHITE2).text(`${APP_NAME}  \u2022  Holiday Itinerary`, margin, 10);
-        doc.font("Helvetica").fontSize(9).fillColor("#C4B5FD").text(data.destination, W - margin - 80, 10, { width: 80, align: "right" });
-        y = 45;
-      }
-      doc.rect(margin, y, W - margin * 2, 24).fill(LIGHT_P);
-      doc.rect(margin, y, 36, 24).fill(PURPLE);
-      doc.font("Helvetica-Bold").fontSize(9).fillColor(WHITE2).text(`D${day.day}`, margin, y + 8, { width: 36, align: "center" });
-      doc.font("Helvetica-Bold").fontSize(11).fillColor(PURPLE).text(day.title, margin + 44, y + 7);
-      y += 28;
-      for (const act of day.activities) {
-        if (y > 780) {
-          doc.addPage();
-          y = 50;
-        }
-        doc.rect(margin + 8, y + 4, 4, 4).fill(PURPLE);
-        doc.font("Helvetica").fontSize(9).fillColor(DARK).text(act, margin + 20, y, { width: W - margin * 2 - 30 });
-        y += 14;
-      }
-      doc.font("Helvetica").fontSize(8).fillColor(GRAY2).text(`Meals: ${day.meals}`, margin + 8, y, { width: 300 });
-      y += 18;
-    }
-    if (y + 120 > 800) {
-      doc.addPage();
-      y = 50;
-    }
-    y += 4;
-    hr2(doc, y, PURPLE);
-    y += 12;
-    doc.font("Helvetica-Bold").fontSize(13).fillColor(GREEN).text("What's Included", margin, y);
-    y += 18;
-    const inclusions = data.inclusions?.length ? data.inclusions : ["Hotel accommodation", "Daily breakfast", "Airport transfers", "AC vehicle for sightseeing", "Tour escort assistance"];
-    for (const inc of inclusions) {
-      if (y > 780) {
-        doc.addPage();
-        y = 50;
-      }
-      doc.font("Helvetica").fontSize(8).fillColor(GREEN).text("\u2713", margin, y);
-      doc.font("Helvetica").fontSize(9).fillColor(DARK).text(inc, margin + 14, y);
-      y += 15;
-    }
-    y += 8;
-    if (data.pricePerPerson && y + 90 < 800) {
-      hr2(doc, y, BORDER2);
-      y += 12;
-      doc.font("Helvetica-Bold").fontSize(13).fillColor(DARK).text("Price Summary", margin, y);
-      y += 18;
-      const priceTotal = data.totalPrice || data.pricePerPerson * data.people;
-      doc.font("Helvetica").fontSize(9).fillColor(GRAY2).text(`\u20B9${data.pricePerPerson.toLocaleString("en-IN")} \xD7 ${data.people} traveller${data.people > 1 ? "s" : ""}`, margin, y);
-      doc.font("Helvetica-Bold").fontSize(9).fillColor(DARK).text(`\u20B9${priceTotal.toLocaleString("en-IN")}`, W - margin - 100, y, { width: 100, align: "right" });
-      y += 20;
-      doc.rect(margin, y, W - margin * 2, 32).fill(PURPLE);
-      doc.font("Helvetica-Bold").fontSize(12).fillColor(WHITE2).text("TOTAL PACKAGE PRICE", margin + 12, y + 10);
-      doc.font("Helvetica-Bold").fontSize(16).fillColor(WHITE2).text(`\u20B9${priceTotal.toLocaleString("en-IN")}`, W - margin - 130, y + 8, { width: 120, align: "right" });
-      y += 44;
-    }
-    const footerY = 810;
-    doc.rect(0, footerY, W, 32).fill(PURPLE);
-    doc.font("Helvetica-Bold").fontSize(9).fillColor(WHITE2).text(`${APP_NAME} \u2708\uFE0F  |  Explore the world with confidence`, margin, footerY + 11, { align: "center", width: W - margin * 2 });
-    doc.end();
-  });
-}
-
-// src/routes/itinerary-pdf.ts
-var router13 = (0, import_express13.Router)();
-router13.get("/", async (req, res) => {
-  try {
-    const {
-      name: name2 = "Guest",
-      phone = "",
-      dest = "Goa",
-      duration: duration3 = "4D/3N",
-      people = "2",
-      date: date6,
-      pkg,
-      price,
-      total
-    } = req.query;
-    const pdfBuffer = await generateHolidayItineraryPDF({
-      customerName: name2,
-      phone,
-      destination: dest,
-      duration: duration3,
-      people: parseInt(people) || 2,
-      travelDate: date6,
-      packageName: pkg,
-      pricePerPerson: price ? parseInt(price) : void 0,
-      totalPrice: total ? parseInt(total) : void 0
-    });
-    const filename = `${APP_NAME}_${dest.replace(/\s+/g, "_")}_Itinerary.pdf`;
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
-    res.setHeader("Content-Length", pdfBuffer.length);
-    res.setHeader("Cache-Control", "no-store");
-    res.send(pdfBuffer);
-  } catch (err) {
-    console.error("[itinerary-pdf] Error:", err);
-    res.status(500).json({ error: "Failed to generate PDF", detail: err.message });
-  }
-});
-var itinerary_pdf_default = router13;
-
-// src/routes/holiday-whatsapp.ts
-var import_express14 = __toESM(require_express2(), 1);
-var router14 = (0, import_express14.Router)();
-router14.post("/", async (req, res) => {
-  try {
-    const data = req.body;
-    if (!data.phone || !data.destination) {
-      return res.status(400).json({ error: "Missing required fields: phone, destination" });
-    }
-    const result = await sendHolidayWhatsApp(data);
-    res.json({ success: true, ...result });
-  } catch (err) {
-    console.error("[holiday-whatsapp] Error:", err);
-    res.status(500).json({ error: err.message || "Failed to send WhatsApp" });
-  }
-});
-var holiday_whatsapp_default = router14;
-
-// src/routes/followup.ts
-var import_express15 = __toESM(require_express2(), 1);
-init_drizzle_orm();
-
-// src/lib/followup-scheduler.ts
-init_drizzle_orm();
-var DEFAULT_SETTINGS = {
-  enabled: true,
-  msg10min: "Hi {name}, just checking \u{1F60A}\nDid you see your {destination} itinerary? Our travel expert is ready to help you plan the perfect trip!",
-  msg2hr: "We have limited slots for your {destination} trip \u{1F334}\nLet us know if you want to customize your plan. Our expert can create a tailored package just for you!",
-  msg24hr: "Special offer \u{1F389}\nGet \u20B9500 OFF if you confirm your {destination} booking today!\nOffer valid for the next 24 hours only. Call us now to avail!"
-};
-var cachedSettings = null;
-var timers2 = /* @__PURE__ */ new Map();
-var STEPS = [
-  { key: "10min", delayMs: 10 * 60 * 1e3, msgKey: "msg10min" },
-  { key: "2hr", delayMs: 2 * 60 * 60 * 1e3, msgKey: "msg2hr" },
-  { key: "24hr", delayMs: 24 * 60 * 60 * 1e3, msgKey: "msg24hr" }
-];
-async function getFollowUpSettings() {
-  if (cachedSettings) return cachedSettings;
-  try {
-    const rows = await db.select().from(followupSettingsTable).limit(1);
-    if (rows.length > 0) {
-      cachedSettings = {
-        enabled: rows[0].enabled,
-        msg10min: rows[0].msg10min,
-        msg2hr: rows[0].msg2hr,
-        msg24hr: rows[0].msg24hr
-      };
-      return cachedSettings;
-    }
-    await db.insert(followupSettingsTable).values({});
-    cachedSettings = { ...DEFAULT_SETTINGS };
-    return cachedSettings;
-  } catch {
-    return { ...DEFAULT_SETTINGS };
-  }
-}
-async function updateFollowUpSettings(updates) {
-  const current = await getFollowUpSettings();
-  const next = { ...current, ...updates };
-  try {
-    const rows = await db.select().from(followupSettingsTable).limit(1);
-    if (rows.length > 0) {
-      await db.update(followupSettingsTable).set({ enabled: next.enabled, msg10min: next.msg10min, msg2hr: next.msg2hr, msg24hr: next.msg24hr, updatedAt: /* @__PURE__ */ new Date() }).where(eq(followupSettingsTable.id, rows[0].id));
-    } else {
-      await db.insert(followupSettingsTable).values(next);
-    }
-  } catch (err) {
-    console.error("[followup] Failed to persist settings:", err);
-  }
-  cachedSettings = next;
-  return next;
-}
-function formatMessage(template, lead) {
-  return template.replace(/\{name\}/g, lead.name).replace(/\{destination\}/g, lead.destination);
-}
-async function scheduleFollowUps(lead) {
-  const settings = await getFollowUpSettings();
-  if (!settings.enabled) {
-    console.info(`[followup] Auto follow-up disabled \u2014 skipping lead ${lead.leadId}`);
-    return;
-  }
-  const now = Date.now();
-  for (const step of STEPS) {
-    const message = formatMessage(settings[step.msgKey], lead);
-    const scheduledAt = new Date(now + step.delayMs);
-    let rowId;
-    try {
-      const inserted = await db.insert(leadFollowupsTable).values({
-        leadId: lead.leadId,
-        leadName: lead.name,
-        phone: lead.phone,
-        destination: lead.destination,
-        step: step.key,
-        message,
-        status: "pending",
-        scheduledAt
-      }).returning({ id: leadFollowupsTable.id });
-      rowId = inserted[0]?.id;
-    } catch (err) {
-      console.error(`[followup] DB insert failed for step ${step.key}:`, err);
-    }
-    const timerKey = `${lead.leadId}:${step.key}`;
-    const handle = setTimeout(
-      () => executeFollowUp(lead, step.key, rowId),
-      step.delayMs
-    );
-    timers2.set(timerKey, handle);
-    console.info(`[followup] Scheduled ${step.key} for lead ${lead.leadId} at ${scheduledAt.toISOString()}`);
-  }
-}
-async function cancelFollowUps(leadId) {
-  for (const step of STEPS) {
-    const timerKey = `${leadId}:${step.key}`;
-    const handle = timers2.get(timerKey);
-    if (handle) {
-      clearTimeout(handle);
-      timers2.delete(timerKey);
-    }
-  }
-  try {
-    await db.update(leadFollowupsTable).set({ status: "cancelled" }).where(
-      and(
-        eq(leadFollowupsTable.leadId, leadId),
-        eq(leadFollowupsTable.status, "pending")
-      )
-    );
-    console.info(`[followup] Cancelled all pending follow-ups for lead ${leadId}`);
-  } catch (err) {
-    console.error(`[followup] Failed to cancel DB rows for ${leadId}:`, err);
-  }
-}
-async function executeFollowUp(lead, step, rowId) {
-  const timerKey = `${lead.leadId}:${step}`;
-  timers2.delete(timerKey);
-  const settings = await getFollowUpSettings();
-  if (!settings.enabled) {
-    console.info(`[followup] Skipping ${step} for ${lead.leadId} \u2014 follow-up disabled`);
-    if (rowId) {
-      await db.update(leadFollowupsTable).set({ status: "cancelled" }).where(eq(leadFollowupsTable.id, rowId)).catch(() => {
-      });
-    }
-    return;
-  }
-  const stepConfig = STEPS.find((s) => s.key === step);
-  const message = formatMessage(settings[stepConfig.msgKey], lead);
-  console.info(`[followup] Sending ${step} message to ${lead.phone} for lead ${lead.leadId}`);
-  const result = await sendHolidayWhatsApp({
-    customerName: lead.name,
-    phone: lead.phone,
-    destination: lead.destination,
-    duration: lead.duration,
-    people: lead.people,
-    travelDate: lead.travelDate,
-    trigger: "lead"
-  });
-  const now = /* @__PURE__ */ new Date();
-  if (rowId) {
-    try {
-      await db.update(leadFollowupsTable).set({
-        status: result.sent ? "sent" : "failed",
-        message,
-        sentAt: now,
-        error: result.sent ? null : result.reason ?? "Unknown error"
-      }).where(eq(leadFollowupsTable.id, rowId));
-    } catch (err) {
-      console.error(`[followup] DB update failed for row ${rowId}:`, err);
-    }
-  }
-  console.info(`[followup] ${step} for ${lead.leadId}: ${result.sent ? "sent \u2713" : `failed \u2014 ${result.reason}`}`);
-}
-async function recoverPendingFollowUps() {
-  try {
-    const pending = await db.select().from(leadFollowupsTable).where(eq(leadFollowupsTable.status, "pending"));
-    if (pending.length === 0) return;
-    const now = Date.now();
-    let recovered = 0;
-    for (const row of pending) {
-      const fireAt = new Date(row.scheduledAt).getTime();
-      const delay = Math.max(0, fireAt - now);
-      const lead = {
-        leadId: row.leadId,
-        name: row.leadName,
-        phone: row.phone,
-        destination: row.destination
-      };
-      const step = row.step;
-      const timerKey = `${row.leadId}:${step}`;
-      if (!timers2.has(timerKey)) {
-        const handle = setTimeout(
-          () => executeFollowUp(lead, step, row.id),
-          delay
-        );
-        timers2.set(timerKey, handle);
-        recovered++;
-      }
-    }
-    if (recovered > 0) {
-      console.info(`[followup] Recovered ${recovered} pending follow-up(s) from DB`);
-    }
-  } catch (err) {
-    console.error("[followup] Recovery error:", err);
-  }
-}
-
-// src/routes/followup.ts
-var router15 = (0, import_express15.Router)();
-router15.post("/schedule", async (req, res) => {
-  try {
-    const lead = req.body;
-    if (!lead.leadId || !lead.phone || !lead.destination || !lead.name) {
-      return res.status(400).json({ error: "Missing required fields: leadId, name, phone, destination" });
-    }
-    await scheduleFollowUps(lead);
-    res.json({ success: true, message: "Follow-up sequence scheduled" });
-  } catch (err) {
-    console.error("[followup] /schedule error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-router15.post("/cancel", async (req, res) => {
-  try {
-    const { leadId } = req.body;
-    if (!leadId) return res.status(400).json({ error: "Missing leadId" });
-    await cancelFollowUps(leadId);
-    res.json({ success: true });
-  } catch (err) {
-    console.error("[followup] /cancel error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-router15.get("/log", async (req, res) => {
-  try {
-    const { leadId } = req.query;
-    const rows = leadId ? await db.select().from(leadFollowupsTable).where(eq(leadFollowupsTable.leadId, leadId)) : await db.select().from(leadFollowupsTable).orderBy(leadFollowupsTable.scheduledAt);
-    res.json(rows);
-  } catch (err) {
-    console.error("[followup] /log error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-router15.get("/settings", async (_req, res) => {
-  try {
-    const settings = await getFollowUpSettings();
-    res.json(settings);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-router15.put("/settings", async (req, res) => {
-  try {
-    const updates = req.body;
-    const updated = await updateFollowUpSettings(updates);
-    res.json({ success: true, settings: updated });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-var followup_default = router15;
-
-// src/routes/leads.ts
-var import_express16 = __toESM(require_express2(), 1);
-init_drizzle_orm();
-var router16 = (0, import_express16.Router)();
-router16.get("/leads", async (req, res) => {
-  try {
-    const { status, type, assignedTo } = req.query;
-    const rows = await db.select().from(leadsTable).orderBy(desc(leadsTable.createdAt));
-    const filtered = rows.filter((l) => {
-      if (status && l.status !== status) return false;
-      if (type && l.type !== type) return false;
-      if (assignedTo && l.assignedTo !== assignedTo) return false;
-      return true;
-    });
-    res.json(filtered.map((l) => ({
-      ...l,
-      createdAt: l.createdAt.toISOString(),
-      updatedAt: l.updatedAt.toISOString()
-    })));
-  } catch (err) {
-    console.error("[leads] GET error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-router16.post("/leads/convert", async (req, res) => {
-  try {
-    const { phone, type, bookingRef } = req.body;
-    if (!phone || !type) {
-      res.status(400).json({ error: "phone and type required" });
-      return;
-    }
-    const existing = await db.select().from(leadsTable).where(and(eq(leadsTable.phone, phone), eq(leadsTable.type, type)));
-    if (existing.length === 0) {
-      res.json({ skipped: true });
-      return;
-    }
-    const [updated] = await db.update(leadsTable).set({ status: "booked", bookingRef: bookingRef ?? null, updatedAt: /* @__PURE__ */ new Date() }).where(eq(leadsTable.id, existing[0].id)).returning();
-    res.json({ ...updated, createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString() });
-  } catch (err) {
-    console.error("[leads] convert error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-router16.post("/leads", async (req, res) => {
-  try {
-    const {
-      name: name2,
-      phone,
-      email: email3,
-      type = "flight",
-      source = "form",
-      status = "new",
-      packageId,
-      packageName,
-      notes
-    } = req.body;
-    if (!name2 || !phone) {
-      res.status(400).json({ error: "name and phone are required" });
-      return;
-    }
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1e3);
-    if (packageId) {
-      const existing = await db.select().from(leadsTable).where(
-        and(
-          eq(leadsTable.phone, phone),
-          eq(leadsTable.packageId, packageId),
-          gte(leadsTable.createdAt, oneHourAgo)
-        )
-      );
-      if (existing.length > 0) {
-        const lead = existing[0];
-        res.json({ ...lead, createdAt: lead.createdAt.toISOString(), updatedAt: lead.updatedAt.toISOString() });
-        return;
-      }
-    } else {
-      const existing = await db.select().from(leadsTable).where(
-        and(
-          eq(leadsTable.phone, phone),
-          eq(leadsTable.type, type),
-          gte(leadsTable.createdAt, oneHourAgo)
-        )
-      );
-      if (existing.length > 0) {
-        const lead = existing[0];
-        if (lead.status === "booked") {
-          res.json({ ...lead, createdAt: lead.createdAt.toISOString(), updatedAt: lead.updatedAt.toISOString() });
-          return;
-        }
-        const [updated] = await db.update(leadsTable).set({ name: name2, email: email3 ?? lead.email, notes: notes ?? lead.notes, updatedAt: /* @__PURE__ */ new Date() }).where(eq(leadsTable.id, lead.id)).returning();
-        res.json({ ...updated, createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString() });
-        return;
-      }
-    }
-    const leadId = `LD-${Date.now()}`;
-    const [created] = await db.insert(leadsTable).values({
-      leadId,
-      name: name2,
-      phone,
-      email: email3 ?? null,
-      type,
-      source,
-      status,
-      packageId: packageId ?? null,
-      packageName: packageName ?? null,
-      notes: notes ?? null
-    }).returning();
-    const notifData = {
-      leadId: created.leadId,
-      name: created.name,
-      phone: created.phone,
-      type: created.type,
-      email: created.email ?? void 0
-    };
-    sendLeadAdminAlert(notifData).catch(() => {
-    });
-    sendLeadCustomerConfirmation(notifData).catch(() => {
-    });
-    setTimeout(async () => {
-      try {
-        const [lead] = await db.select().from(leadsTable).where(eq(leadsTable.leadId, leadId));
-        if (lead && lead.status === "new") {
-          console.info(`[leads] 30-min elapsed, lead ${leadId} still new \u2014 sending staff reminder`);
-          sendStaffFollowUpReminder(notifData).catch(() => {
-          });
-          await db.update(leadsTable).set({ notes: (lead.notes ? lead.notes + " | " : "") + "Auto 30-min reminder sent" }).where(eq(leadsTable.leadId, leadId));
-        }
-      } catch (err) {
-        console.error("[leads] 30-min followup error:", err);
-      }
-    }, 30 * 60 * 1e3);
-    res.status(201).json({ ...created, createdAt: created.createdAt.toISOString(), updatedAt: created.updatedAt.toISOString() });
-  } catch (err) {
-    console.error("[leads] POST error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-router16.post("/leads/abandoned", async (req, res) => {
-  try {
-    const { name: name2, phone, type = "flight", notes, email: email3 } = req.body;
-    if (!name2 || !phone) {
-      res.status(400).json({ error: "name and phone required" });
-      return;
-    }
-    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1e3);
-    const existing = await db.select().from(leadsTable).where(and(eq(leadsTable.phone, phone), eq(leadsTable.type, type), eq(leadsTable.status, "abandoned"), gte(leadsTable.createdAt, twoHoursAgo)));
-    if (existing.length > 0) {
-      res.json({ ...existing[0], createdAt: existing[0].createdAt.toISOString(), updatedAt: existing[0].updatedAt.toISOString() });
-      return;
-    }
-    const leadId = `LD-${Date.now()}`;
-    const [created] = await db.insert(leadsTable).values({ leadId, name: name2, phone, email: email3 ?? null, type, source: "auto", status: "abandoned", notes: notes ?? null }).returning();
-    const notifData = { leadId: created.leadId, name: created.name, phone: created.phone, type: created.type };
-    sendLeadAdminAlert(notifData).catch(() => {
-    });
-    sendAbandonedLeadReminder(notifData).catch(() => {
-    });
-    res.status(201).json({ ...created, createdAt: created.createdAt.toISOString(), updatedAt: created.updatedAt.toISOString() });
-  } catch (err) {
-    console.error("[leads] abandoned POST error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-router16.patch("/leads/:leadId", async (req, res) => {
-  try {
-    const { leadId } = req.params;
-    const { status, assignedTo, assignedName, notes, bookingRef } = req.body;
-    const existing = await db.select().from(leadsTable).where(eq(leadsTable.leadId, leadId));
-    if (existing.length === 0) {
-      res.status(404).json({ error: "Lead not found" });
-      return;
-    }
-    const updates = { updatedAt: /* @__PURE__ */ new Date() };
-    if (status !== void 0) updates.status = status;
-    if (assignedTo !== void 0) updates.assignedTo = assignedTo;
-    if (assignedName !== void 0) updates.assignedName = assignedName;
-    if (notes !== void 0) updates.notes = notes;
-    if (bookingRef !== void 0) updates.bookingRef = bookingRef;
-    const [updated] = await db.update(leadsTable).set(updates).where(eq(leadsTable.leadId, leadId)).returning();
-    res.json({ ...updated, createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString() });
-  } catch (err) {
-    console.error("[leads] PATCH error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-var leads_default = router16;
-
-// src/routes/holiday-packages.ts
-var import_express17 = __toESM(require_express2(), 1);
-init_drizzle_orm();
-var router17 = (0, import_express17.Router)();
-var ITINERARY_TEMPLATES = {
-  Goa: [
-    { day: 1, title: "Arrival & North Goa Beach Evening", activities: ["Airport pickup", "Check-in at hotel", "Visit Calangute & Baga Beach", "Sunset at Fort Aguada", "Beach-side dinner with seafood"], meals: "Dinner", accommodation: "3\u2605 Beach Resort" },
-    { day: 2, title: "North Goa Sightseeing Tour", activities: ["Visit Basilica of Bom Jesus", "Old Goa churches tour", "Anjuna flea market", "Vagator Beach", "Nightlife at Tito's Lane"], meals: "Breakfast, Dinner", accommodation: "3\u2605 Beach Resort" },
-    { day: 3, title: "South Goa & Water Sports", activities: ["Colva Beach & Benaulim Beach", "Dolphin watching cruise", "Dudhsagar Waterfall visit", "Water sports: parasailing, jet ski", "Shopping at Panjim market"], meals: "Breakfast, Lunch", accommodation: "3\u2605 Beach Resort" },
-    { day: 4, title: "Checkout & Departure", activities: ["Morning beach walk", "Breakfast and checkout", "Last-minute souvenir shopping", "Airport/railway station drop"], meals: "Breakfast", accommodation: "\u2014" }
-  ],
-  Kashmir: [
-    { day: 1, title: "Arrival in Srinagar & Dal Lake", activities: ["Airport pickup in Srinagar", "Check-in to Houseboat on Dal Lake", "Shikara ride at sunset", "Dal Lake floating market visit", "Welcome Wazwan dinner"], meals: "Dinner", accommodation: "Houseboat, Dal Lake" },
-    { day: 2, title: "Mughal Gardens & City Tour", activities: ["Shalimar Bagh (Mughal garden)", "Nishat Bagh garden", "Chashme Shahi garden", "Shankaracharya Temple visit", "Local handicraft shopping"], meals: "Breakfast, Dinner", accommodation: "Houseboat, Dal Lake" },
-    { day: 3, title: "Gulmarg Day Trip", activities: ["Drive to Gulmarg (56km)", "Gondola cable car ride to Kongdoori", "Snow activities (season permitting)", "Meadow walk & photography", "Evening back to Srinagar"], meals: "Breakfast, Lunch", accommodation: "Houseboat, Dal Lake" },
-    { day: 4, title: "Pahalgam Day Trip", activities: ["Drive to Pahalgam (95km)", "Betaab Valley visit", "Aru Valley nature walk", "Lidder River rafting", "Evening return to Srinagar"], meals: "Breakfast, Dinner", accommodation: "Houseboat, Dal Lake" },
-    { day: 5, title: "Sonamarg Excursion & Departure", activities: ["Drive to Sonamarg (80km)", "Thajiwas Glacier pony ride", "Photography at Sindh River", "Return to Srinagar", "Airport drop"], meals: "Breakfast", accommodation: "\u2014" }
-  ],
-  Kerala: [
-    { day: 1, title: "Arrival in Kochi & Fort Kochi Tour", activities: ["Cochin airport pickup", "Chinese fishing nets visit", "Fort Kochi heritage walk", "Jew Town & Paradesi Synagogue", "Kathakali dance performance evening"], meals: "Dinner", accommodation: "Heritage Homestay, Fort Kochi" },
-    { day: 2, title: "Munnar Hills \u2013 Tea & Spice Country", activities: ["Drive to Munnar (130km)", "Mattupetty Dam & Echo Point", "Tea Garden tour & factory visit", "Spice plantation walk", "Sunset at Top Station"], meals: "Breakfast, Lunch, Dinner", accommodation: "Tea Estate Resort, Munnar" },
-    { day: 3, title: "Thekkady Wildlife & Spice Tour", activities: ["Drive to Thekkady (90km)", "Periyar Wildlife Sanctuary boat cruise", "Elephant interaction experience", "Spice garden guided tour", "Cultural bamboo rafting (optional)"], meals: "Breakfast, Dinner", accommodation: "Jungle Resort, Thekkady" },
-    { day: 4, title: "Alleppey Houseboat & Backwaters", activities: ["Drive to Alleppey (100km)", "Board traditional Kerala houseboat", "Village walk along backwater canals", "Village fishing experience", "Sunset cruise"], meals: "Breakfast, Lunch, Dinner (on houseboat)", accommodation: "Luxury Houseboat, Alleppey" },
-    { day: 5, title: "Kovalam Beach & Departure", activities: ["Morning cruise on backwaters", "Drive to Kovalam Beach (150km)", "Lighthouse Beach relaxation", "Ayurvedic massage session", "Thiruvananthapuram airport drop"], meals: "Breakfast, Lunch", accommodation: "\u2014" }
-  ],
-  Rajasthan: [
-    { day: 1, title: "Arrival in Jaipur \u2013 Pink City", activities: ["Jaipur airport/station pickup", "Check-in & freshen up", "City Palace visit", "Jantar Mantar observatory", "Hawa Mahal (Palace of Winds)", "Johri Bazaar evening shopping"], meals: "Dinner", accommodation: "Heritage Haveli, Jaipur" },
-    { day: 2, title: "Jaipur Forts & Amber Palace", activities: ["Amber Fort elephant ride", "Sheesh Mahal (mirror palace)", "Nahargarh Fort sunset view", "Jal Mahal (water palace) photos", "Traditional Rajasthani dinner with folk music"], meals: "Breakfast, Dinner", accommodation: "Heritage Haveli, Jaipur" },
-    { day: 3, title: "Jaisalmer \u2013 Golden City", activities: ["Drive/fly to Jaisalmer", "Jaisalmer Fort (living fort)", "Patwon ki Haveli", "Gadi Sagar Lake sunset", "Overnight desert camp arrangements"], meals: "Breakfast, Dinner", accommodation: "Desert Haveli, Jaisalmer" },
-    { day: 4, title: "Sam Sand Dunes Desert Safari", activities: ["Morning fort walk", "Sam Sand Dunes camel safari", "Desert jeep safari", "Cultural evening \u2013 folk dance, bonfire", "Stargazing in the desert"], meals: "Breakfast, Dinner (at desert camp)", accommodation: "Luxury Desert Camp, Sam" },
-    { day: 5, title: "Jodhpur \u2013 Blue City & Departure", activities: ["Drive to Jodhpur (275km)", "Mehrangarh Fort visit", "Jaswant Thada memorial", "Blue City old town walk", "Sardar Market shopping & departure"], meals: "Breakfast, Lunch", accommodation: "\u2014" }
-  ],
-  Manali: [
-    { day: 1, title: "Arrival in Manali & Old Town", activities: ["Bhuntar airport pickup", "Check-in at hotel", "Old Manali walk", "Hadimba Devi Temple visit", "Vashisht hot water springs"], meals: "Dinner", accommodation: "Mountain Resort, Manali" },
-    { day: 2, title: "Solang Valley & Adventure Sports", activities: ["Solang Valley (13km)", "Ropeway / Gondola ride", "Zorbing, paragliding, snow scooter", "Beas River rafting", "Evening bonfire at camp"], meals: "Breakfast, Lunch, Dinner", accommodation: "Mountain Resort, Manali" },
-    { day: 3, title: "Rohtang Pass Excursion", activities: ["Early morning drive to Rohtang Pass (51km)", "Snow play and photography", "Gulaba Valley meadows", "View of glaciers", "Return via Marhi dhaba lunch"], meals: "Breakfast, Lunch", accommodation: "Mountain Resort, Manali" },
-    { day: 4, title: "Kullu & Manikaran", activities: ["Drive to Kullu (40km)", "Kullu shawl weaving tour", "Raghunath temple visit", "Manikaran hot springs & Gurudwara", "Parvati River valley scenic drive"], meals: "Breakfast, Dinner", accommodation: "Mountain Resort, Manali" },
-    { day: 5, title: "Departure", activities: ["Morning leisure walk", "Breakfast and checkout", "Tibetan market souvenir shopping", "Bhuntar airport drop"], meals: "Breakfast", accommodation: "\u2014" }
-  ],
-  Andaman: [
-    { day: 1, title: "Arrival in Port Blair", activities: ["Port Blair airport pickup", "Cellular Jail visit", "Sound & Light Show at Cellular Jail", "Corbyn's Cove Beach evening", "Welcome dinner at seafood restaurant"], meals: "Dinner", accommodation: "3\u2605 Hotel, Port Blair" },
-    { day: 2, title: "Ross & North Bay Islands", activities: ["Ross Island (former British HQ)", "Snorkeling at North Bay Island", "Glass-bottom boat ride", "Rajiv Gandhi Water Sports Complex", "Aberdeen Bazaar evening shopping"], meals: "Breakfast, Lunch", accommodation: "3\u2605 Hotel, Port Blair" },
-    { day: 3, title: "Havelock Island \u2013 Radhanagar Beach", activities: ["Ferry to Havelock Island (90 mins)", "Check-in at eco resort", "Radhanagar Beach (Asia's best beach)", "Elephant Beach snorkeling trip", "Sunset viewing"], meals: "Breakfast, Dinner", accommodation: "Eco Resort, Havelock" },
-    { day: 4, title: "Neil Island Exploration", activities: ["Ferry to Neil Island (45 mins)", "Natural Bridge Rock formation", "Bharatpur Beach water sports", "Sitapur Beach sunrise", "Return to Havelock"], meals: "Breakfast, Lunch", accommodation: "Eco Resort, Havelock" },
-    { day: 5, title: "Departure from Port Blair", activities: ["Ferry back to Port Blair", "Samudrika Naval Marine Museum", "Local market shopping", "Airport departure"], meals: "Breakfast", accommodation: "\u2014" }
-  ],
-  Maldives: [
-    { day: 1, title: "Arrival & Resort Check-in", activities: ["Speedboat transfer to resort", "Overwater villa check-in", "Welcome cocktail & orientation", "Snorkeling at house reef", "Sunset deck dinner"], meals: "Dinner", accommodation: "Overwater Villa" },
-    { day: 2, title: "Snorkeling & Water Sports", activities: ["Morning snorkeling at coral garden", "Glass-bottom kayaking", "Dolphin cruise", "Stand-up paddleboarding", "Beachfront barbecue"], meals: "Breakfast, Dinner", accommodation: "Overwater Villa" },
-    { day: 3, title: "Diving & Spa Day", activities: ["Intro scuba diving session", "Visit marine biology centre", "Luxury spa treatment", "Private beach picnic", "Stargazing from the deck"], meals: "Breakfast, Lunch, Dinner", accommodation: "Overwater Villa" },
-    { day: 4, title: "Island Hopping & Departure", activities: ["Local island village visit", "Traditional Maldivian breakfast", "Last snorkeling", "Checkout & speedboat transfer", "Airport departure"], meals: "Breakfast", accommodation: "\u2014" }
-  ],
-  "Himachal Pradesh": [
-    { day: 1, title: "Arrival in Shimla", activities: ["Chandigarh pickup & drive to Shimla", "Mall Road walk", "Christ Church visit", "Jakhu Temple trek", "Sunset at Shimla Ridge"], meals: "Dinner", accommodation: "Heritage Hotel, Shimla" },
-    { day: 2, title: "Kufri & Chail", activities: ["Kufri snow valley visit", "Himalayan Nature Park", "Chail Palace visit", "Chail Cricket Ground (world's highest)", "Return to Shimla"], meals: "Breakfast, Dinner", accommodation: "Heritage Hotel, Shimla" },
-    { day: 3, title: "Shimla to Manali Drive", activities: ["Scenic drive via Kullu valley", "Kullu Shawl factory visit", "Pandoh Dam stop", "Arrive Manali", "Evening at Old Manali"], meals: "Breakfast, Dinner", accommodation: "Mountain Resort, Manali" },
-    { day: 4, title: "Solang Valley & Rohtang", activities: ["Solang Valley snow activities", "Ropeway ride", "Drive to Rohtang Pass", "Snow play & photography", "Return to Manali"], meals: "Breakfast, Lunch, Dinner", accommodation: "Mountain Resort, Manali" },
-    { day: 5, title: "Hadimba & River Rafting", activities: ["Hadimba Temple visit", "Manu Temple", "Beas River rafting", "Tibetan Monastery", "Candlelight dinner"], meals: "Breakfast, Dinner", accommodation: "Mountain Resort, Manali" },
-    { day: 6, title: "Leisure & Local Exploration", activities: ["Naggar Castle visit", "Jana Waterfall trek", "Rozy Falls", "Local market souvenir shopping", "Farewell dinner"], meals: "Breakfast, Dinner", accommodation: "Mountain Resort, Manali" },
-    { day: 7, title: "Departure", activities: ["Breakfast & checkout", "Drive back to Chandigarh/Delhi", "En-route Kullu valley views", "Railway station / airport drop"], meals: "Breakfast", accommodation: "\u2014" }
-  ]
-};
-function getItineraryForDest(destination) {
-  const key = Object.keys(ITINERARY_TEMPLATES).find(
-    (k) => destination.toLowerCase().includes(k.toLowerCase()) || k.toLowerCase().includes(destination.toLowerCase())
-  );
-  return key ? ITINERARY_TEMPLATES[key] : [
-    { day: 1, title: "Arrival & Check-in", activities: ["Airport/station pickup", "Hotel check-in", "Local area orientation", "Welcome dinner"], meals: "Dinner", accommodation: "Hotel" },
-    { day: 2, title: "Main Attractions Tour", activities: ["Major sightseeing spots", "Local cuisine experience", "Cultural show"], meals: "Breakfast, Dinner", accommodation: "Hotel" },
-    { day: 3, title: "Leisure & Activities", activities: ["Free time for shopping", "Adventure activities", "Spa or relaxation"], meals: "Breakfast", accommodation: "Hotel" },
-    { day: 4, title: "Departure", activities: ["Breakfast and checkout", "Last-minute shopping", "Airport/station drop"], meals: "Breakfast", accommodation: "\u2014" }
-  ];
-}
-var SEED_PACKAGES = [
-  {
-    name: "Goa Beach Bliss",
-    destination: "Goa",
-    type: "beach",
-    duration: 4,
-    nights: 3,
-    category: "domestic",
-    price: "12000",
-    rating: "4.5",
-    reviewCount: 1840,
-    featured: true,
-    imageUrl: "https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?w=800&q=80",
-    images: ["https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?w=800&q=80", "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&q=80", "https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=800&q=80"],
-    highlights: ["Baga & Calangute Beach", "Fort Aguada", "Water Sports", "Old Goa Churches", "Seafood Dinners"],
-    description: "Experience the sun, sand, and soul of India's party capital. Enjoy pristine beaches, vibrant nightlife, and fresh Goan seafood.",
-    includes: ["Hotel (3\u2605 Beach Resort)", "Daily breakfast", "Airport transfers", "Sightseeing by AC cab", "Tour escort"],
-    exclusions: ["Flights", "Personal expenses", "Alcohol", "Adventure sports charges", "Room service"],
-    createdBy: "admin"
-  },
-  {
-    name: "Kashmir Paradise",
-    destination: "Kashmir",
-    type: "honeymoon",
-    duration: 6,
-    nights: 5,
-    category: "domestic",
-    price: "32000",
-    rating: "4.8",
-    reviewCount: 1120,
-    featured: true,
-    imageUrl: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&q=80",
-    images: ["https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&q=80", "https://images.unsplash.com/photo-1518684079-3c830dcef090?w=800&q=80", "https://images.unsplash.com/photo-1455156218388-5e61b526818b?w=800&q=80"],
-    highlights: ["Houseboat on Dal Lake", "Gulmarg Gondola", "Pahalgam Valley", "Shikara Ride", "Mughal Gardens"],
-    description: "The paradise on Earth awaits you \u2014 snow-capped mountains, blooming gardens, and shimmering Dal Lake form the backdrop of your dream vacation.",
-    includes: ["Houseboat accommodation", "All meals", "Shikara rides", "All transfers", "Sightseeing"],
-    exclusions: ["Flights to/from Srinagar", "Gondola tickets", "Pony rides", "Personal expenses", "Travel insurance"],
-    createdBy: "admin"
-  },
-  {
-    name: "Kerala Backwaters & Hills",
-    destination: "Kerala",
-    type: "family",
-    duration: 6,
-    nights: 5,
-    category: "domestic",
-    price: "22000",
-    rating: "4.6",
-    reviewCount: 2310,
-    featured: false,
-    imageUrl: "https://images.unsplash.com/photo-1558618047-3c8c76ca7d13?w=800&q=80",
-    images: ["https://images.unsplash.com/photo-1558618047-3c8c76ca7d13?w=800&q=80", "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=800&q=80", "https://images.unsplash.com/photo-1571003123894-1f0594d2b5d9?w=800&q=80"],
-    highlights: ["Houseboat on backwaters", "Munnar tea gardens", "Periyar Wildlife Sanctuary", "Ayurvedic spa", "Kathakali dance show"],
-    description: "God's Own Country in all its glory \u2014 lush green hills, serene backwaters, spice-scented air, and unmatched Ayurvedic hospitality.",
-    includes: ["Hotel + Houseboat stay", "Daily breakfast & dinner", "Houseboat meals", "AC transfers", "Wildlife safari"],
-    exclusions: ["Flights", "Kathakali tickets", "Elephant rides", "Water sports", "Personal expenses"],
-    createdBy: "admin"
-  },
-  {
-    name: "Rajasthan Royal Tour",
-    destination: "Rajasthan",
-    type: "cultural",
-    duration: 6,
-    nights: 5,
-    category: "domestic",
-    price: "28000",
-    rating: "4.7",
-    reviewCount: 1560,
-    featured: true,
-    imageUrl: "https://images.unsplash.com/photo-1568084680786-a84f91d1153c?w=800&q=80",
-    images: ["https://images.unsplash.com/photo-1568084680786-a84f91d1153c?w=800&q=80", "https://images.unsplash.com/photo-1599661046289-e31897846e41?w=800&q=80", "https://images.unsplash.com/photo-1583422409516-2895a77efded?w=800&q=80"],
-    highlights: ["Amber Fort elephant ride", "Jaisalmer Desert Safari", "Sam Sand Dunes camp", "Heritage havelis", "Camel safari"],
-    description: "Step into a royal world of majestic forts, golden deserts, and opulent palaces. Rajasthan's colours, culture, and cuisine will leave you spellbound.",
-    includes: ["Heritage hotel stays", "Daily breakfast & dinner", "Elephant ride (Amber)", "Desert camp night", "All transfers"],
-    exclusions: ["Flights", "Camel safari extra", "Museum entry fees", "Personal expenses", "Travel insurance"],
-    createdBy: "admin"
-  },
-  {
-    name: "Manali Adventure Escape",
-    destination: "Manali",
-    type: "adventure",
-    duration: 5,
-    nights: 4,
-    category: "domestic",
-    price: "18000",
-    rating: "4.4",
-    reviewCount: 980,
-    featured: false,
-    imageUrl: "https://images.unsplash.com/photo-1587213811864-49e7b31bb862?w=800&q=80",
-    images: ["https://images.unsplash.com/photo-1587213811864-49e7b31bb862?w=800&q=80", "https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=800&q=80", "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80"],
-    highlights: ["Rohtang Pass (snow)", "Solang Valley skiing", "River rafting", "Paragliding", "Hadimba Temple"],
-    description: "For thrill-seekers and mountain lovers \u2014 rivers to raft, snowy peaks to climb, and misty valleys to explore in the majestic Himalayas.",
-    includes: ["Mountain resort stay", "Daily breakfast & dinner", "Rohtang Pass permit", "River rafting", "All transfers"],
-    exclusions: ["Flights/train to Manali", "Skiing equipment", "Paragliding charges", "Personal expenses", "Travel insurance"],
-    createdBy: "admin"
-  },
-  {
-    name: "Andaman Island Getaway",
-    destination: "Andaman",
-    type: "beach",
-    duration: 5,
-    nights: 4,
-    category: "domestic",
-    price: "26000",
-    rating: "4.6",
-    reviewCount: 740,
-    featured: false,
-    imageUrl: "https://images.unsplash.com/photo-1562973597-2c63e0c1b1ad?w=800&q=80",
-    images: ["https://images.unsplash.com/photo-1562973597-2c63e0c1b1ad?w=800&q=80", "https://images.unsplash.com/photo-1500916434205-0c77489c6cf7?w=800&q=80", "https://images.unsplash.com/photo-1439405326854-014607f694d7?w=800&q=80"],
-    highlights: ["Radhanagar Beach (Asia's best)", "Cellular Jail", "Snorkeling & scuba diving", "Havelock Island", "Glass-bottom boat ride"],
-    description: "Turquoise waters, white-sand beaches, and vibrant coral reefs \u2014 the Andaman Islands are India's best-kept tropical secret.",
-    includes: ["Hotel + Eco Resort stay", "Daily breakfast", "Ferry tickets", "Island transfers", "Snorkeling gear"],
-    exclusions: ["Flights to Port Blair", "Scuba diving charges", "Water sports", "Personal expenses", "Liquor"],
-    createdBy: "admin"
-  },
-  {
-    name: "Maldives Luxury Escape",
-    destination: "Maldives",
-    type: "luxury",
-    duration: 5,
-    nights: 4,
-    category: "international",
-    price: "85000",
-    rating: "4.9",
-    reviewCount: 430,
-    featured: true,
-    imageUrl: "https://images.unsplash.com/photo-1573843981267-be1999ff37cd?w=800&q=80",
-    images: ["https://images.unsplash.com/photo-1573843981267-be1999ff37cd?w=800&q=80", "https://images.unsplash.com/photo-1514282401047-d79a71a590e8?w=800&q=80", "https://images.unsplash.com/photo-1540202403-b7abd6747a18?w=800&q=80"],
-    highlights: ["Overwater villa", "Private beach", "Sunset dolphin cruise", "Snorkeling & diving", "Spa treatments"],
-    description: "Ultimate luxury in the middle of the Indian Ocean \u2014 private overwater villas, crystal-clear lagoons, and world-class dining await you.",
-    includes: ["Overwater villa stay", "All meals (full board)", "Speedboat transfers", "Snorkeling", "Sunset cruise"],
-    exclusions: ["International flights", "Scuba diving courses", "Spa (extra)", "Excursions not listed", "Travel insurance"],
-    createdBy: "admin"
-  },
-  {
-    name: "Shimla\u2013Manali Honeymoon",
-    destination: "Himachal Pradesh",
-    type: "honeymoon",
-    duration: 7,
-    nights: 6,
-    category: "domestic",
-    price: "24000",
-    rating: "4.5",
-    reviewCount: 860,
-    featured: false,
-    imageUrl: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80",
-    images: ["https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80", "https://images.unsplash.com/photo-1445257508802-b52e6e13b1ae?w=800&q=80", "https://images.unsplash.com/photo-1553428811-8a8a6e32e86a?w=800&q=80"],
-    highlights: ["Mall Road Shimla", "Kufri snow valley", "Rohtang Pass", "Solang Valley", "Romantic candlelight dinner"],
-    description: "The ultimate hill-station honeymoon \u2014 from colonial Shimla to adventurous Manali, paint your love story against a backdrop of snow peaks.",
-    includes: ["Hotel stay (couple rooms)", "Daily breakfast & dinner", "All transfers", "Romantic dinner (1 night)", "Sightseeing"],
-    exclusions: ["Flights/train", "Adventure sports", "Personal expenses", "Honeymoon suite upgrade", "Travel insurance"],
-    createdBy: "admin"
-  }
-];
-var PACKAGE_TYPE_MARKUP = {
-  honeymoon: 30,
-  luxury: 50,
-  family: 20,
-  friends: 15,
-  budget: 5
-};
-var PEAK_MONTHS = /* @__PURE__ */ new Set([4, 5, 6, 10, 11, 12]);
-var OFF_MONTHS = /* @__PURE__ */ new Set([7, 8, 9]);
-function getEffectiveMarkupPct(pkg) {
-  if (pkg.markupPct !== null && pkg.markupPct !== void 0) return Number(pkg.markupPct);
-  return PACKAGE_TYPE_MARKUP[pkg.packageType ?? ""] ?? PACKAGE_TYPE_MARKUP[pkg.type ?? ""] ?? 0;
-}
-function getDateMarkupInfo(travelDate) {
-  if (!travelDate) return { pct: 0, label: "", kind: "normal" };
-  const d = new Date(travelDate);
-  if (isNaN(d.getTime())) return { pct: 0, label: "", kind: "normal" };
-  const month = d.getMonth() + 1;
-  const weekday = d.getDay();
-  const isWeekend = weekday === 0 || weekday === 6;
-  if (PEAK_MONTHS.has(month)) {
-    const pct = isWeekend ? 30 : 20;
-    return { pct, label: `Peak Season (+${pct}%)`, kind: "peak" };
-  }
-  if (OFF_MONTHS.has(month)) {
-    const pct = isWeekend ? 0 : -10;
-    return pct < 0 ? { pct, label: `Off-Season Deal (${pct}%)`, kind: "offseason" } : { pct: 0, label: "Weekend", kind: "weekend" };
-  }
-  if (isWeekend) return { pct: 10, label: "Weekend (+10%)", kind: "weekend" };
-  return { pct: 0, label: "", kind: "normal" };
-}
-function computeSmartPrice(pkg, travelDate) {
-  const base = Number(pkg.price);
-  if (pkg.adminPrice !== null && pkg.adminPrice !== void 0) {
-    const adminFinal = Number(pkg.adminPrice);
-    return {
-      basePrice: base,
-      typeMarkupPct: 0,
-      typeMarkupAmt: 0,
-      dateMarkupPct: 0,
-      dateMarkupAmt: 0,
-      originalPrice: adminFinal,
-      finalPrice: adminFinal,
-      dateLabel: "",
-      dateKind: "normal"
-    };
-  }
-  const typeMarkupPct = getEffectiveMarkupPct(pkg);
-  const typeMarkupAmt = Math.round(base * typeMarkupPct / 100);
-  const originalPrice = base + typeMarkupAmt;
-  const { pct: dateMarkupPct, label: dateLabel, kind: dateKind } = getDateMarkupInfo(travelDate);
-  const dateMarkupAmt = Math.round(base * dateMarkupPct / 100);
-  const finalPrice = originalPrice + dateMarkupAmt;
-  return { basePrice: base, typeMarkupPct, typeMarkupAmt, dateMarkupPct, dateMarkupAmt, originalPrice, finalPrice, dateLabel, dateKind };
-}
-async function seedPackagesIfEmpty() {
-  try {
-    await db.execute(sql`ALTER TABLE packages ADD COLUMN IF NOT EXISTS package_type TEXT`);
-    await db.execute(sql`ALTER TABLE packages ADD COLUMN IF NOT EXISTS markup_pct NUMERIC(5,2)`);
-    const [{ count: count2 }] = await db.select({ count: sql`count(*)::int` }).from(packagesTable);
-    if (count2 === 0) {
-      logger.info("[holiday-packages] Seeding packages into DB\u2026");
-      for (const pkg of SEED_PACKAGES) {
-        await db.insert(packagesTable).values({
-          ...pkg,
-          itinerary: getItineraryForDest(pkg.destination)
-        });
-      }
-      logger.info(`[holiday-packages] Seeded ${SEED_PACKAGES.length} packages.`);
-    }
-  } catch (err) {
-    logger.error("[holiday-packages] Seed error:", err);
-  }
-}
-var PKG_TYPE_OVERLAYS = {
-  honeymoon: {
-    extraActivities: [
-      "Couples spa & aromatherapy massage",
-      "Candlelight dinner by the pool",
-      "Private sunset photography session",
-      "Rose petal room decoration",
-      "Champagne welcome & romantic turndown"
-    ],
-    accommodationSuffix: " (Deluxe Couple Suite)",
-    mealSuffix: " (Candlelight Dinner included)"
-  },
-  family: {
-    extraActivities: [
-      "Kid-friendly beach / snow games",
-      "Family group photo session",
-      "Children's activity corner",
-      "Family picnic with packed lunch"
-    ],
-    accommodationSuffix: " (Family Suite)",
-    mealSuffix: ""
-  },
-  friends: {
-    extraActivities: [
-      "Group adventure sports session",
-      "Street food & local nightlife tour",
-      "Group bonfire & music night",
-      "Pub crawl / bar hopping"
-    ],
-    accommodationSuffix: " (Shared Rooms / Dorm)",
-    mealSuffix: ""
-  },
-  budget: {
-    extraActivities: [
-      "Local market bargain shopping",
-      "Budget street food lunch",
-      "Free public viewpoints & attractions"
-    ],
-    accommodationSuffix: " (Budget Hotel)",
-    mealSuffix: ""
-  },
-  luxury: {
-    extraActivities: [
-      "Private luxury spa treatment",
-      "Fine dining at rooftop restaurant",
-      "Helicopter / seaplane sightseeing",
-      "Personal butler & concierge service"
-    ],
-    accommodationSuffix: " (5\u2605 Luxury Suite)",
-    mealSuffix: " (Fine Dining experience)"
-  }
-};
-function applyPackageType(days, packageType) {
-  const overlay = PKG_TYPE_OVERLAYS[packageType];
-  if (!overlay) return days;
-  return days.map((d, i) => {
-    const isLast = i === days.length - 1;
-    const extraAct = overlay.extraActivities[i % overlay.extraActivities.length];
-    return {
-      ...d,
-      activities: isLast ? d.activities : [...d.activities, extraAct],
-      accommodation: isLast ? d.accommodation : d.accommodation + (d.accommodation === "\u2014" ? "" : overlay.accommodationSuffix),
-      meals: isLast ? d.meals : d.meals + (i === 1 ? overlay.mealSuffix : "")
-    };
-  });
-}
-function mapPackage(p, includeAdminPrices = false, travelDate) {
-  const pricing = computeSmartPrice(p, travelDate);
-  const base = {
-    id: p.id,
-    name: p.name,
-    destination: p.destination,
-    type: p.type,
-    duration: p.duration,
-    nights: p.nights,
-    durationLabel: `${p.duration}D/${p.nights}N`,
-    pricePerPerson: pricing.finalPrice,
-    // what customers see
-    originalPrice: pricing.originalPrice,
-    // "was" price (type markup, no date)
-    pricingBreakdown: {
-      basePrice: pricing.basePrice,
-      typeMarkupPct: pricing.typeMarkupPct,
-      typeMarkupAmt: pricing.typeMarkupAmt,
-      dateMarkupPct: pricing.dateMarkupPct,
-      dateMarkupAmt: pricing.dateMarkupAmt,
-      dateLabel: pricing.dateLabel,
-      dateKind: pricing.dateKind
-    },
-    rating: Number(p.rating),
-    ratingCount: p.reviewCount,
-    images: p.images && p.images.length > 0 ? p.images : p.imageUrl ? [p.imageUrl] : [],
-    highlights: p.highlights,
-    description: p.description ?? "",
-    inclusions: p.includes,
-    exclusions: p.exclusions,
-    itinerary: normaliseItinerary(p.itinerary),
-    packageType: p.packageType ?? null,
-    category: p.category ?? null,
-    markupPct: p.markupPct !== null && p.markupPct !== void 0 ? Number(p.markupPct) : null,
-    featured: p.featured,
-    isEnabled: p.isEnabled,
-    createdBy: p.createdBy,
-    createdAt: p.createdAt
-  };
-  if (includeAdminPrices) {
-    base.aiPrice = p.aiPrice !== null ? Number(p.aiPrice) : null;
-    base.adminPrice = p.adminPrice !== null ? Number(p.adminPrice) : null;
-    base.basePrice = Number(p.price);
-  }
-  return base;
-}
-router17.get("/holiday-packages/generate-itinerary", async (req, res) => {
-  try {
-    const { destination = "", duration: durationStr = "4", packageType = "" } = req.query;
-    const duration3 = Math.max(1, Math.min(20, Number(durationStr) || 4));
-    let rawDays = getItineraryForDest(destination);
-    if (rawDays.length < duration3) {
-      while (rawDays.length < duration3) {
-        const n = rawDays.length + 1;
-        rawDays.push({
-          day: n,
-          title: n === duration3 ? "Departure" : `Day ${n} \u2014 Leisure & Exploration`,
-          activities: n === duration3 ? ["Breakfast and checkout", "Last-minute souvenir shopping", "Airport/station drop"] : ["Morning at leisure", "Visit local markets", "Cultural activity", "Evening free"],
-          meals: n === duration3 ? "Breakfast" : "Breakfast, Dinner",
-          accommodation: n === duration3 ? "\u2014" : "Hotel"
-        });
-      }
-    }
-    rawDays = rawDays.slice(0, duration3).map((d, i) => ({ ...d, day: i + 1 }));
-    if (packageType) {
-      rawDays = applyPackageType(rawDays, packageType);
-    }
-    const days = rawDays.map((d) => ({
-      day: d.day,
-      title: d.title,
-      description: Array.isArray(d.activities) ? d.activities.join(", ") : d.activities ?? "",
-      meals: d.meals,
-      hotel: d.accommodation ?? ""
-    }));
-    res.json({ itinerary: days, packageType: packageType || null });
-  } catch (err) {
-    logger.error(err);
-    res.status(500).json({ error: "Failed to generate itinerary" });
-  }
-});
-router17.get("/holiday-packages", async (req, res) => {
-  try {
-    const { destination, type, includeDisabled, travelDate } = req.query;
-    const isAdminView = includeDisabled === "true";
-    let query = db.select().from(packagesTable).$dynamic();
-    const conditions = [];
-    if (!isAdminView) {
-      conditions.push(eq(packagesTable.isEnabled, true));
-    }
-    if (destination) {
-      conditions.push(ilike(packagesTable.destination, `%${destination}%`));
-    }
-    if (type) {
-      conditions.push(eq(packagesTable.type, type));
-    }
-    if (conditions.length > 0) {
-      query = query.where(and(...conditions));
-    }
-    const rows = await query.orderBy(packagesTable.id);
-    res.json(rows.map((p) => mapPackage(p, isAdminView, travelDate)));
-  } catch (err) {
-    logger.error(err);
-    res.status(500).json({ error: "Failed to fetch packages" });
-  }
-});
-router17.get("/holiday-packages/check-destination", async (req, res) => {
-  try {
-    const { destination } = req.query;
-    if (!destination) {
-      res.status(400).json({ error: "destination required" });
-      return;
-    }
-    const [existing] = await db.select().from(packagesTable).where(
-      and(
-        eq(packagesTable.createdBy, "ai"),
-        ilike(packagesTable.destination, destination.trim())
-      )
-    ).limit(1);
-    if (existing) {
-      res.json({ exists: true, package: mapPackage(existing, true) });
-    } else {
-      res.json({ exists: false });
-    }
-  } catch (err) {
-    logger.error(err);
-    res.status(500).json({ error: "Failed to check destination" });
-  }
-});
-router17.get("/holiday-packages/:id", async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    if (isNaN(id)) {
-      res.status(400).json({ error: "Invalid id" });
-      return;
-    }
-    const [pkg] = await db.select().from(packagesTable).where(eq(packagesTable.id, id));
-    if (!pkg) {
-      res.status(404).json({ error: "Package not found" });
-      return;
-    }
-    const isAdminView = req.query.admin === "true";
-    const travelDate = req.query.travelDate;
-    res.json(mapPackage(pkg, isAdminView, travelDate));
-  } catch (err) {
-    logger.error(err);
-    res.status(500).json({ error: "Failed to fetch package" });
-  }
-});
-function parseItinerary(raw) {
-  if (raw === void 0 || raw === null) return null;
-  if (Array.isArray(raw)) return raw;
-  if (typeof raw === "string") {
-    try {
-      return JSON.parse(raw);
-    } catch {
-      return null;
-    }
-  }
-  return null;
-}
-function normaliseItinerary(raw) {
-  const parsed = parseItinerary(raw);
-  if (!parsed) return null;
-  return parsed.map((d) => ({
-    day: d.day,
-    title: d.title ?? "",
-    description: d.description ?? (Array.isArray(d.activities) ? d.activities.join(", ") : d.activities ?? ""),
-    meals: d.meals ?? "",
-    hotel: d.hotel ?? d.accommodation ?? ""
-  }));
-}
-router17.post("/holiday-packages", async (req, res) => {
-  try {
-    const body = req.body;
-    if (!body.name || !body.destination) {
-      res.status(400).json({ error: "name and destination are required" });
-      return;
-    }
-    const isAI = body.createdBy === "ai";
-    if (isAI && body.aiPrice === void 0) {
-      res.status(400).json({ error: "aiPrice is required for AI-generated packages" });
-      return;
-    }
-    if (!isAI && body.pricePerPerson === void 0 && body.adminPrice === void 0) {
-      res.status(400).json({ error: "pricePerPerson is required" });
-      return;
-    }
-    const duration3 = body.duration ?? 3;
-    const nights = body.nights ?? duration3 - 1;
-    const basePrice = isAI ? String(body.aiPrice) : String(body.pricePerPerson ?? body.adminPrice);
-    const itinerary = parseItinerary(body.itinerary) ?? getItineraryForDest(body.destination);
-    const [inserted] = await db.insert(packagesTable).values({
-      name: body.name,
-      destination: body.destination,
-      type: body.type ?? "beach",
-      duration: duration3,
-      nights,
-      price: basePrice,
-      aiPrice: body.aiPrice !== void 0 ? String(body.aiPrice) : null,
-      adminPrice: body.adminPrice !== void 0 ? String(body.adminPrice) : null,
-      images: body.images ?? [],
-      imageUrl: (body.images ?? [])[0] ?? null,
-      highlights: body.highlights ?? [],
-      description: body.description ?? null,
-      includes: body.inclusions ?? [],
-      exclusions: body.exclusions ?? [],
-      itinerary,
-      packageType: body.packageType ?? null,
-      category: body.category ?? null,
-      markupPct: body.markupPct !== void 0 && body.markupPct !== null ? String(body.markupPct) : null,
-      featured: body.featured ?? false,
-      isEnabled: body.isEnabled ?? true,
-      createdBy: body.createdBy ?? "admin"
-    }).returning();
-    res.status(201).json(mapPackage(inserted, true));
-  } catch (err) {
-    logger.error("SAVE ERROR [POST /holiday-packages]:", err);
-    res.status(500).json({ error: "Failed to create package \u2013 check itinerary format" });
-  }
-});
-router17.patch("/holiday-packages/:id", async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    if (isNaN(id)) {
-      res.status(400).json({ error: "Invalid id" });
-      return;
-    }
-    const body = req.body;
-    const updateData = {};
-    if ("adminPrice" in body) {
-      updateData.adminPrice = body.adminPrice !== null && body.adminPrice !== void 0 ? String(body.adminPrice) : null;
-    }
-    if ("markupPct" in body) {
-      updateData.markupPct = body.markupPct !== null && body.markupPct !== void 0 ? String(body.markupPct) : null;
-    }
-    if ("isEnabled" in body) updateData.isEnabled = body.isEnabled;
-    if ("featured" in body) updateData.featured = body.featured;
-    if (Object.keys(updateData).length === 0) {
-      res.status(400).json({ error: "No updatable fields provided" });
-      return;
-    }
-    const [updated] = await db.update(packagesTable).set(updateData).where(eq(packagesTable.id, id)).returning();
-    if (!updated) {
-      res.status(404).json({ error: "Package not found" });
-      return;
-    }
-    res.json(mapPackage(updated, true));
-  } catch (err) {
-    logger.error(err);
-    res.status(500).json({ error: "Failed to update package" });
-  }
-});
-router17.put("/holiday-packages/:id", async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    if (isNaN(id)) {
-      res.status(400).json({ error: "Invalid id" });
-      return;
-    }
-    const body = req.body;
-    const updateData = {};
-    if (body.name !== void 0) updateData.name = body.name;
-    if (body.destination !== void 0) updateData.destination = body.destination;
-    if (body.type !== void 0) updateData.type = body.type;
-    if (body.duration !== void 0) updateData.duration = body.duration;
-    if (body.nights !== void 0) updateData.nights = body.nights;
-    if (body.pricePerPerson !== void 0) updateData.price = String(body.pricePerPerson);
-    if ("adminPrice" in body) {
-      updateData.adminPrice = body.adminPrice !== null && body.adminPrice !== void 0 ? String(body.adminPrice) : null;
-    }
-    if (body.images !== void 0) {
-      updateData.images = body.images;
-      updateData.imageUrl = body.images[0] ?? null;
-    }
-    if (body.highlights !== void 0) updateData.highlights = body.highlights;
-    if (body.description !== void 0) updateData.description = body.description;
-    if (body.inclusions !== void 0) updateData.includes = body.inclusions;
-    if (body.exclusions !== void 0) updateData.exclusions = body.exclusions;
-    if (body.itinerary !== void 0) {
-      const parsed = parseItinerary(body.itinerary);
-      if (parsed === null || !Array.isArray(parsed)) {
-        res.status(400).json({ error: "Invalid itinerary format \u2013 must be a valid JSON array" });
-        return;
-      }
-      if (parsed.length === 0) {
-        res.status(400).json({ error: "Itinerary cannot be empty" });
-        return;
-      }
-      updateData.itinerary = parsed;
-    }
-    if ("packageType" in body) updateData.packageType = body.packageType ?? null;
-    if ("category" in body) updateData.category = body.category ?? null;
-    if ("markupPct" in body) {
-      updateData.markupPct = body.markupPct !== null && body.markupPct !== void 0 ? String(body.markupPct) : null;
-    }
-    if (body.featured !== void 0) updateData.featured = body.featured;
-    if (body.isEnabled !== void 0) updateData.isEnabled = body.isEnabled;
-    const [updated] = await db.update(packagesTable).set(updateData).where(eq(packagesTable.id, id)).returning();
-    if (!updated) {
-      res.status(404).json({ error: "Package not found" });
-      return;
-    }
-    res.json(mapPackage(updated, true));
-  } catch (err) {
-    logger.error("SAVE ERROR [PUT /holiday-packages/:id]:", err);
-    res.status(500).json({ error: "Failed to update package \u2013 check itinerary format" });
-  }
-});
-router17.delete("/holiday-packages/:id", async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    if (isNaN(id)) {
-      res.status(400).json({ error: "Invalid id" });
-      return;
-    }
-    await db.delete(packagesTable).where(eq(packagesTable.id, id));
-    res.json({ success: true });
-  } catch (err) {
-    logger.error(err);
-    res.status(500).json({ error: "Failed to delete package" });
-  }
-});
-var holiday_packages_default = router17;
-
-// src/routes/enquiries.ts
-var import_express18 = __toESM(require_express2(), 1);
-init_drizzle_orm();
-var router18 = (0, import_express18.Router)();
-router18.get("/enquiries", async (req, res) => {
-  try {
-    const { packageId, userId, phone } = req.query;
-    const rows = await db.select().from(enquiriesTable).orderBy(desc(enquiriesTable.createdAt));
-    const filtered = rows.filter((e) => {
-      if (packageId && String(e.packageId) !== packageId) return false;
-      if (userId && e.userId !== userId) return false;
-      if (phone && e.phone !== phone) return false;
-      return true;
-    });
-    res.json(filtered.map((e) => ({
-      ...e,
-      createdAt: e.createdAt.toISOString(),
-      updatedAt: e.updatedAt.toISOString()
-    })));
-  } catch (err) {
-    console.error("[enquiries] GET error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-router18.get("/enquiries/check", async (req, res) => {
-  try {
-    const { packageId, userId, phone } = req.query;
-    if (!packageId) {
-      res.status(400).json({ error: "packageId required" });
-      return;
-    }
-    const rows = await db.select().from(enquiriesTable).where(eq(enquiriesTable.packageId, Number(packageId)));
-    const exists2 = rows.some((e) => {
-      if (userId && e.userId === userId) return true;
-      if (phone && e.phone === phone) return true;
-      return false;
-    });
-    res.json({ exists: exists2 });
-  } catch (err) {
-    console.error("[enquiries] check error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-router18.post("/enquiries", async (req, res) => {
-  try {
-    const {
-      packageId,
-      packageName,
-      destination,
-      name: name2,
-      phone,
-      email: email3,
-      userId,
-      source = "guest",
-      agentId,
-      agentName,
-      travelDate,
-      people,
-      notes
-    } = req.body;
-    if (!packageId || !name2 || !phone && !userId) {
-      res.status(400).json({ error: "packageId, name and (phone or userId) are required" });
-      return;
-    }
-    const existingRows = await db.select().from(enquiriesTable).where(eq(enquiriesTable.packageId, packageId));
-    const existing = existingRows.filter((e) => {
-      if (phone && e.phone === phone) return true;
-      if (userId && e.userId === userId) return true;
-      return false;
-    });
-    if (existing.length > 0) {
-      const e = existing[0];
-      res.json({ ...e, createdAt: e.createdAt.toISOString(), updatedAt: e.updatedAt.toISOString(), duplicate: true });
-      return;
-    }
-    const enquiryId = `ENQ-${Date.now()}`;
-    const [created] = await db.insert(enquiriesTable).values({
-      enquiryId,
-      packageId,
-      packageName,
-      destination,
-      name: name2,
-      phone,
-      email: email3 ?? null,
-      userId: userId ?? null,
-      source,
-      agentId: agentId ?? null,
-      agentName: agentName ?? null,
-      travelDate: travelDate ?? null,
-      people: people ?? 2,
-      notes: notes ?? null,
-      status: "enquiry"
-    }).returning();
-    res.status(201).json({
-      ...created,
-      createdAt: created.createdAt.toISOString(),
-      updatedAt: created.updatedAt.toISOString()
-    });
-  } catch (err) {
-    console.error("[enquiries] POST error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-router18.patch("/enquiries/:enquiryId", async (req, res) => {
-  try {
-    const { enquiryId } = req.params;
-    const { status, notes } = req.body;
-    const existing = await db.select().from(enquiriesTable).where(eq(enquiriesTable.enquiryId, enquiryId));
-    if (existing.length === 0) {
-      res.status(404).json({ error: "Enquiry not found" });
-      return;
-    }
-    const updates = { updatedAt: /* @__PURE__ */ new Date() };
-    if (status !== void 0) updates.status = status;
-    if (notes !== void 0) updates.notes = notes;
-    const [updated] = await db.update(enquiriesTable).set(updates).where(eq(enquiriesTable.enquiryId, enquiryId)).returning();
-    res.json({ ...updated, createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString() });
-  } catch (err) {
-    console.error("[enquiries] PATCH error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-var enquiries_default = router18;
-
-// src/routes/push.ts
-var import_express19 = __toESM(require_express2(), 1);
-init_drizzle_orm();
-
-// src/lib/firebase-admin.ts
-import admin from "firebase-admin";
-var app = null;
-function getApp() {
-  if (app) return app;
-  const projectId = process.env.FIREBASE_PROJECT_ID || "";
-  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || "";
-  const privateKey = (process.env.FIREBASE_PRIVATE_KEY || "").replace(/\\n/g, "\n");
-  if (!projectId || !clientEmail || !privateKey) {
-    console.info("[firebase-admin] Credentials not configured \u2014 push disabled");
-    return null;
-  }
-  try {
-    app = admin.initializeApp({
-      credential: admin.credential.cert({ projectId, clientEmail, privateKey })
-    });
-    console.info("[firebase-admin] App initialised \u2713");
-  } catch (err) {
-    console.error("[firebase-admin] Init failed:", err.message);
-    app = null;
-  }
-  return app;
-}
-async function sendPushToToken(payload) {
-  const firebaseApp = getApp();
-  if (!firebaseApp) return { sent: false, reason: "Firebase not configured" };
-  try {
-    const messaging = firebaseApp.messaging();
-    const messageId = await messaging.send({
-      token: payload.token,
-      notification: {
-        title: payload.title,
-        body: payload.body,
-        ...payload.imageUrl ? { imageUrl: payload.imageUrl } : {}
-      },
-      webpush: {
-        notification: {
-          icon: payload.icon || "/favicon.svg",
-          badge: payload.icon || "/favicon.svg",
-          ...payload.url ? { click_action: payload.url } : {}
-        },
-        fcmOptions: payload.url ? { link: payload.url } : void 0
-      },
-      data: payload.data || {}
-    });
-    console.info(`[firebase-admin] Sent \u2713 messageId: ${messageId}`);
-    return { sent: true, messageId };
-  } catch (err) {
-    const reason = err.message || "Unknown error";
-    const isExpired = err.code === "messaging/registration-token-not-registered" || err.code === "messaging/invalid-registration-token";
-    console.error(`[firebase-admin] Failed: ${reason} (expired=${isExpired})`);
-    return { sent: false, reason, ...isExpired ? { expired: true } : {} };
-  }
-}
-async function sendPushToTokens(tokens, payload) {
-  const results = await Promise.allSettled(
-    tokens.map((token) => sendPushToToken({ ...payload, token }))
-  );
-  let sent = 0;
-  let failed = 0;
-  const expiredTokens = [];
-  results.forEach((result, i) => {
-    if (result.status === "fulfilled" && result.value.sent) {
-      sent++;
-    } else {
-      failed++;
-      const val = result.status === "fulfilled" ? result.value : null;
-      if (val?.expired) expiredTokens.push(tokens[i]);
-    }
-  });
-  return { sent, failed, expiredTokens };
-}
-
-// src/routes/push.ts
-var router19 = (0, import_express19.Router)();
-var DOMAIN = () => {
-  const d = process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(",")[0];
-  return d ? `https://${d}` : "http://localhost:5000";
-};
-router19.post("/push/register", async (req, res) => {
-  try {
-    const { token, userId, phone, email: email3, name: name2, platform = "web" } = req.body;
-    if (!token) {
-      res.status(400).json({ error: "token required" });
-      return;
-    }
-    const existing = await db.select().from(pushTokensTable).where(eq(pushTokensTable.token, token));
-    if (existing.length > 0) {
-      const [updated] = await db.update(pushTokensTable).set({
-        userId: userId ?? existing[0].userId,
-        phone: phone ?? existing[0].phone,
-        email: email3 ?? existing[0].email,
-        name: name2 ?? existing[0].name,
-        active: true,
-        updatedAt: /* @__PURE__ */ new Date()
-      }).where(eq(pushTokensTable.token, token)).returning();
-      res.json({ registered: true, id: updated.id, existing: true });
-      return;
-    }
-    const [created] = await db.insert(pushTokensTable).values({
-      token,
-      userId: userId ?? null,
-      phone: phone ?? null,
-      email: email3 ?? null,
-      name: name2 ?? null,
-      platform
-    }).returning();
-    sendPushToToken({
-      token,
-      title: `Welcome to ${APP_NAME}! \u2708\uFE0F`,
-      body: "Explore flights, hotels, and holiday packages. Great deals await you!",
-      url: DOMAIN()
-    }).then(async (result) => {
-      await db.insert(pushNotificationsLogTable).values({
-        token,
-        type: "welcome",
-        title: `Welcome to ${APP_NAME}! \u2708\uFE0F`,
-        body: "Explore flights, hotels, and holiday packages. Great deals await you!",
-        status: result.sent ? "sent" : "failed",
-        error: result.reason ?? null
-      }).catch(() => {
-      });
-    }).catch(() => {
-    });
-    res.status(201).json({ registered: true, id: created.id });
-  } catch (err) {
-    console.error("[push] register error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-router19.delete("/push/unregister", async (req, res) => {
-  try {
-    const { token } = req.body;
-    if (!token) {
-      res.status(400).json({ error: "token required" });
-      return;
-    }
-    await db.update(pushTokensTable).set({ active: false, updatedAt: /* @__PURE__ */ new Date() }).where(eq(pushTokensTable.token, token));
-    res.json({ unregistered: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-router19.post("/push/send-booking-confirmation", async (req, res) => {
-  try {
-    const { token, userId, phone, bookingId, route, amount } = req.body;
-    let tokens = [];
-    if (token) {
-      tokens = [token];
-    } else if (userId || phone) {
-      const rows = await db.select().from(pushTokensTable).where(
-        and(
-          eq(pushTokensTable.active, true),
-          userId ? eq(pushTokensTable.userId, userId) : eq(pushTokensTable.phone, phone)
-        )
-      );
-      tokens = rows.map((r) => r.token);
-    }
-    if (tokens.length === 0) {
-      res.json({ sent: 0, reason: "No tokens found" });
-      return;
-    }
-    const title = "Booking Confirmed! \u{1F389}";
-    const body = `${route} | Booking ID: ${bookingId} | \u20B9${amount.toLocaleString("en-IN")} paid`;
-    const { sent, failed, expiredTokens } = await sendPushToTokens(tokens, {
-      title,
-      body,
-      url: `${DOMAIN()}/my-bookings`
-    });
-    if (expiredTokens.length > 0) {
-      await Promise.all(expiredTokens.map(
-        (t) => db.update(pushTokensTable).set({ active: false }).where(eq(pushTokensTable.token, t))
-      ));
-    }
-    await db.insert(pushNotificationsLogTable).values(
-      tokens.map((t) => ({
-        token: t,
-        type: "booking_confirmation",
-        title,
-        body,
-        status: expiredTokens.includes(t) ? "expired" : "sent"
-      }))
-    ).catch(() => {
-    });
-    res.json({ sent, failed });
-  } catch (err) {
-    console.error("[push] booking-confirmation error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-router19.post("/push/broadcast", async (req, res) => {
-  try {
-    const { title, body, url: url3 } = req.body;
-    if (!title || !body) {
-      res.status(400).json({ error: "title and body required" });
-      return;
-    }
-    const rows = await db.select().from(pushTokensTable).where(eq(pushTokensTable.active, true));
-    const tokens = rows.map((r) => r.token);
-    if (tokens.length === 0) {
-      res.json({ sent: 0, total: 0, reason: "No active tokens" });
-      return;
-    }
-    const { sent, failed, expiredTokens } = await sendPushToTokens(tokens, {
-      title,
-      body,
-      url: url3 || DOMAIN()
-    });
-    if (expiredTokens.length > 0) {
-      await Promise.all(expiredTokens.map(
-        (t) => db.update(pushTokensTable).set({ active: false }).where(eq(pushTokensTable.token, t))
-      ));
-    }
-    await db.insert(pushNotificationsLogTable).values(
-      tokens.map((t) => ({
-        token: t,
-        type: "broadcast",
-        title,
-        body,
-        status: expiredTokens.includes(t) ? "expired" : "sent"
-      }))
-    ).catch(() => {
-    });
-    res.json({ sent, failed, total: tokens.length, expiredDeactivated: expiredTokens.length });
-  } catch (err) {
-    console.error("[push] broadcast error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-router19.get("/push/stats", async (req, res) => {
-  try {
-    const all3 = await db.select().from(pushTokensTable);
-    const active = all3.filter((r) => r.active).length;
-    const logs = await db.select().from(pushNotificationsLogTable);
-    const byType = logs.reduce((acc, l) => {
-      acc[l.type] = (acc[l.type] || 0) + 1;
-      return acc;
-    }, {});
-    res.json({ totalTokens: all3.length, activeTokens: active, notificationsByType: byType });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-var push_default = router19;
-
-// src/routes/currency.ts
-var import_express20 = __toESM(require_express2(), 1);
-var router20 = (0, import_express20.Router)();
-var cachedRates = null;
-var cacheExpiry = 0;
-var CACHE_TTL_MS2 = 60 * 60 * 1e3;
-var BASE_RATES_INR = {
-  USD: 83.5,
-  EUR: 90.2,
-  GBP: 105.8,
-  AED: 22.7,
-  SGD: 61.8,
-  AUD: 54.3,
-  CAD: 61.2,
-  JPY: 0.55,
-  THB: 2.32,
-  MYR: 17.8,
-  LKR: 0.26,
-  NPR: 0.63,
-  CNY: 11.5,
-  CHF: 93.1,
-  HKD: 10.7,
-  QAR: 22.9,
-  SAR: 22.2,
-  KWD: 272,
-  BHD: 221.5,
-  OMR: 217
-};
-router20.get("/currency/rates", async (_req, res) => {
-  const now = Date.now();
-  if (cachedRates && now < cacheExpiry) {
-    res.json({ rates: cachedRates, source: "cache", updatedAt: new Date(cacheExpiry - CACHE_TTL_MS2).toISOString() });
-    return;
-  }
-  try {
-    const apiRes = await fetch("https://open.er-api.com/v6/latest/INR", {
-      signal: AbortSignal.timeout(5e3)
-    });
-    if (apiRes.ok) {
-      const body = await apiRes.json();
-      if (body?.rates) {
-        const inv = body.rates;
-        const inrPer = {};
-        for (const [cur, rateFromInr] of Object.entries(inv)) {
-          if (rateFromInr > 0) inrPer[cur] = parseFloat((1 / rateFromInr).toFixed(4));
-        }
-        cachedRates = inrPer;
-        cacheExpiry = now + CACHE_TTL_MS2;
-        res.json({ rates: inrPer, source: "live", updatedAt: (/* @__PURE__ */ new Date()).toISOString() });
-        return;
-      }
-    }
-  } catch {
-  }
-  res.json({ rates: BASE_RATES_INR, source: "static", updatedAt: (/* @__PURE__ */ new Date()).toISOString() });
-});
-router20.get("/currency/convert", (req, res) => {
-  const amount = parseFloat(req.query.amount || "0");
-  const from = (req.query.from || "INR").toUpperCase();
-  const to = (req.query.to || "USD").toUpperCase();
-  if (!amount || isNaN(amount)) {
-    res.status(400).json({ error: "Valid amount required" });
-    return;
-  }
-  const rates = cachedRates || BASE_RATES_INR;
-  let amountInInr = amount;
-  if (from !== "INR") {
-    const rateFromToInr = rates[from];
-    if (!rateFromToInr) {
-      res.status(400).json({ error: `Unknown currency: ${from}` });
-      return;
-    }
-    amountInInr = amount * rateFromToInr;
-  }
-  let result = amountInInr;
-  if (to !== "INR") {
-    const rateToFromInr = rates[to];
-    if (!rateToFromInr) {
-      res.status(400).json({ error: `Unknown currency: ${to}` });
-      return;
-    }
-    result = amountInInr / rateToFromInr;
-  }
-  res.json({ amount, from, to, result: parseFloat(result.toFixed(2)), rate: parseFloat((result / amount).toFixed(6)) });
-});
-var currency_default = router20;
-
-// src/routes/marketing.ts
-var import_express21 = __toESM(require_express2(), 1);
-var router21 = (0, import_express21.Router)();
-router21.post("/marketing/search-event", async (req, res) => {
-  const {
-    userId,
-    name: name2,
-    phone,
-    searchType,
-    from,
-    to
-  } = req.body;
-  if (!userId || !searchType) {
-    return res.status(400).json({ error: "userId and searchType are required" });
-  }
-  if (!phone) {
-    await upsertUserActivity({ userId, name: name2, phone, searchType, searchFrom: from, searchTo: to }).catch(() => {
-    });
-    return res.json({ ok: true, scheduled: false, reason: "No phone number" });
-  }
-  scheduleSearchFollowUp({ userId, name: name2 || "Traveller", phone, searchType, from, to });
-  res.json({ ok: true, scheduled: true });
-});
-router21.post("/marketing/cancel-search", (req, res) => {
-  const { userId } = req.body;
-  if (!userId) return res.status(400).json({ error: "userId is required" });
-  cancelSearchFollowUp(userId);
-  res.json({ ok: true });
-});
-router21.post("/marketing/booking-followup", async (req, res) => {
-  const {
-    userId,
-    name: name2,
-    phone,
-    bookingId,
-    bookingType,
-    from,
-    to
-  } = req.body;
-  if (!userId || !bookingId) {
-    return res.status(400).json({ error: "userId and bookingId are required" });
-  }
-  if (!phone) {
-    await upsertUserActivity({ userId, name: name2, phone, bookingId, bookingType }).catch(() => {
-    });
-    return res.json({ ok: true, scheduled: false, reason: "No phone number" });
-  }
-  scheduleBookingFollowUp({
-    userId,
-    name: name2 || "Traveller",
-    phone,
-    bookingId,
-    bookingType: bookingType || "flight",
-    from,
-    to
-  });
-  res.json({ ok: true, scheduled: true });
-});
-router21.post("/marketing/activity", async (req, res) => {
-  const { userId, name: name2, phone, searchType, searchFrom, searchTo, bookingId, bookingType } = req.body;
-  if (!userId) return res.status(400).json({ error: "userId is required" });
-  await upsertUserActivity({ userId, name: name2, phone, searchType, searchFrom, searchTo, bookingId, bookingType });
-  res.json({ ok: true });
-});
-router21.post("/marketing/send-daily-offers", requireAuth, async (req, res) => {
-  if (req.user?.role !== "admin") {
-    return res.status(403).json({ error: "Admin only" });
-  }
-  const result = await triggerDailyOffersNow();
-  res.json({ ok: true, ...result });
-});
-router21.get("/marketing/status", requireAuth, async (req, res) => {
-  if (req.user?.role !== "admin") {
-    return res.status(403).json({ error: "Admin only" });
-  }
-  const stats = await getMarketingStats();
-  res.json(stats);
-});
-var marketing_default = router21;
-
-// src/routes/admin-bookings.ts
-var import_express22 = __toESM(require_express2(), 1);
-init_drizzle_orm();
-var router22 = (0, import_express22.Router)();
-var ALLOWED_STATUSES = ["pending", "confirmed", "cancelled", "refunded", "booking_failed"];
-function isAllowedStatus(s) {
-  return typeof s === "string" && ALLOWED_STATUSES.includes(s);
-}
-var ALLOWED_BOOKING_STATUSES = ["pending", "processing", "confirmed", "failed"];
-var ALLOWED_PAYMENT_STATUSES = ["pending", "paid", "failed"];
-async function loadRefundsForBookings(bookingIds) {
-  if (bookingIds.length === 0) return /* @__PURE__ */ new Map();
-  const rows = await db.select().from(bookingRefundsTable).where(inArray(bookingRefundsTable.bookingId, bookingIds));
-  const map2 = /* @__PURE__ */ new Map();
-  for (const r of rows) {
-    const existing = map2.get(r.bookingId);
-    if (!existing || existing.createdAt < r.createdAt) {
-      map2.set(r.bookingId, r);
-    }
-  }
-  return map2;
-}
-function shapeBooking(b, refund) {
-  const d = b.details ?? {};
-  const baseFare = b.baseFare != null ? Number(b.baseFare) : Number(d.rawBaseAmount ?? d.base_price ?? 0) || null;
-  const markupAmount = b.markupAmount != null ? Number(b.markupAmount) : Number(d.markupAmount ?? d.markup ?? 0) || null;
-  const convenienceFee = b.convenienceFee != null ? Number(b.convenienceFee) : Number(d.convenienceFee ?? d.convenience_fee ?? 0) || null;
-  return {
-    id: b.id,
-    bookingRef: b.bookingRef,
-    userId: b.userId,
-    userName: b.passengerName,
-    userEmail: b.passengerEmail,
-    userPhone: b.passengerPhone,
-    serviceType: b.bookingType,
-    title: b.title,
-    amount: Number(b.totalPrice),
-    baseFare,
-    markupAmount,
-    convenienceFee,
-    status: b.status,
-    bookingStatus: b.bookingStatus ?? "confirmed",
-    failureReason: b.failureReason ?? null,
-    failureCode: b.failureCode ?? null,
-    paymentMethod: b.paymentMethod,
-    paymentStatus: b.paymentStatus,
-    paymentId: b.paymentId,
-    razorpayOrderId: b.razorpayOrderId,
-    travelDate: b.travelDate,
-    passengers: b.passengers,
-    details: b.details,
-    createdAt: b.createdAt.toISOString(),
-    refund: refund ? {
-      id: refund.id,
-      status: refund.status,
-      amount: Number(refund.amount),
-      refundId: refund.refundId,
-      errorMessage: refund.errorMessage,
-      initiatedBy: refund.initiatedBy,
-      createdAt: refund.createdAt.toISOString(),
-      updatedAt: refund.updatedAt.toISOString()
-    } : null
-  };
-}
-function buildNotificationData(b) {
-  const d = b.details ?? {};
-  return {
-    bookingId: b.bookingRef ?? String(b.id),
-    bookingType: b.bookingType,
-    passengerName: b.passengerName,
-    passengerEmail: b.passengerEmail || void 0,
-    passengerPhone: b.passengerPhone || void 0,
-    travelDate: b.travelDate,
-    totalAmount: Number(b.totalPrice),
-    paymentId: b.paymentId ?? "",
-    passengers: b.passengers,
-    title: b.title || void 0,
-    // flight
-    from: d.from || d.origin || d.departure?.airport || void 0,
-    to: d.to || d.destination || d.arrival?.airport || void 0,
-    airline: d.airline || d.airlineName || void 0,
-    flightNumber: d.flightNumber || d.flight_number || void 0,
-    flightDeparture: d.departureTime || d.departure?.time || void 0,
-    flightArrival: d.arrivalTime || d.arrival?.time || void 0,
-    flightDuration: d.duration || void 0,
-    // bus
-    busOperator: d.operator || d.busName || void 0,
-    busType: d.busType || void 0,
-    boardingPoint: d.boardingPoint || void 0,
-    droppingPoint: d.droppingPoint || void 0,
-    busDeparture: d.departure || d.departureTime || void 0,
-    busArrival: d.arrival || d.arrivalTime || void 0,
-    // hotel
-    hotelName: d.hotelName || d.name || void 0,
-    hotelCity: d.city || d.hotelCity || void 0,
-    hotelNights: d.nights || void 0
-  };
-}
-router22.get("/admin/bookings", requireAdmin, async (req, res) => {
-  try {
-    const search = req.query.search?.trim() ?? "";
-    const status = req.query.status?.trim() ?? "";
-    const type = req.query.type?.trim() ?? "";
-    const paymentFilter = req.query.paymentStatus?.trim() ?? "";
-    const bookingFilter = req.query.bookingStatus?.trim() ?? "";
-    const limit = Math.min(Number(req.query.limit ?? 200), 500);
-    const offset = Math.max(Number(req.query.offset ?? 0), 0);
-    const where = [];
-    if (status && status !== "all" && isAllowedStatus(status)) {
-      where.push(eq(bookingsTable.status, status));
-    }
-    if (paymentFilter && paymentFilter !== "all" && ALLOWED_PAYMENT_STATUSES.includes(paymentFilter)) {
-      where.push(eq(bookingsTable.paymentStatus, paymentFilter));
-    }
-    if (bookingFilter && bookingFilter !== "all" && ALLOWED_BOOKING_STATUSES.includes(bookingFilter)) {
-      where.push(eq(bookingsTable.bookingStatus, bookingFilter));
-    }
-    if (type && type !== "all") {
-      where.push(eq(bookingsTable.bookingType, type));
-    }
-    if (search) {
-      const pattern = `%${search}%`;
-      const searchPredicate = or(
-        ilike(bookingsTable.bookingRef, pattern),
-        ilike(bookingsTable.passengerEmail, pattern),
-        ilike(bookingsTable.passengerName, pattern),
-        ilike(bookingsTable.passengerPhone, pattern),
-        ilike(bookingsTable.paymentId, pattern),
-        ilike(bookingsTable.razorpayOrderId, pattern)
-      );
-      if (searchPredicate) where.push(searchPredicate);
-    }
-    const baseQuery = db.select().from(bookingsTable).orderBy(desc(bookingsTable.id)).limit(limit).offset(offset);
-    const rows = where.length > 0 ? await baseQuery.where(where.length === 1 ? where[0] : and(...where)) : await baseQuery;
-    const refundMap = await loadRefundsForBookings(rows.map((r) => r.id));
-    const shaped = rows.map((b) => shapeBooking(b, refundMap.get(b.id)));
-    return res.json({
-      success: true,
-      bookings: shaped,
-      count: shaped.length
-    });
-  } catch (err) {
-    logger.error({ err }, "[admin-bookings] list failed");
-    return res.status(500).json({ success: false, error: "Failed to load bookings" });
-  }
-});
-router22.get("/admin/bookings/:id", requireAdmin, async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    if (!Number.isFinite(id)) {
-      return res.status(400).json({ success: false, error: "Invalid booking id" });
-    }
-    const rows = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
-    if (rows.length === 0) {
-      return res.status(404).json({ success: false, error: "Booking not found" });
-    }
-    const refundMap = await loadRefundsForBookings([id]);
-    return res.json({ success: true, booking: shapeBooking(rows[0], refundMap.get(id)) });
-  } catch (err) {
-    logger.error({ err }, "[admin-bookings] get failed");
-    return res.status(500).json({ success: false, error: "Failed to load booking" });
-  }
-});
-router22.put("/admin/bookings/:id/status", requireAdmin, async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    if (!Number.isFinite(id)) {
-      return res.status(400).json({ success: false, error: "Invalid booking id" });
-    }
-    const newStatus = req.body?.status ?? "";
-    if (!isAllowedStatus(newStatus)) {
-      return res.status(400).json({
-        success: false,
-        error: `status must be one of: ${ALLOWED_STATUSES.join(", ")}`
-      });
-    }
-    const rows = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
-    if (rows.length === 0) {
-      return res.status(404).json({ success: false, error: "Booking not found" });
-    }
-    await db.update(bookingsTable).set({ status: newStatus }).where(eq(bookingsTable.id, id));
-    const updated = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
-    const refundMap = await loadRefundsForBookings([id]);
-    return res.json({
-      success: true,
-      booking: shapeBooking(updated[0], refundMap.get(id))
-    });
-  } catch (err) {
-    logger.error({ err }, "[admin-bookings] update status failed");
-    return res.status(500).json({ success: false, error: "Failed to update status" });
-  }
-});
-router22.put("/admin/bookings/:id/convert-lead", requireAdmin, async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    if (!Number.isFinite(id)) {
-      return res.status(400).json({ success: false, error: "Invalid booking id" });
-    }
-    const rows = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
-    if (rows.length === 0) {
-      return res.status(404).json({ success: false, error: "Booking not found" });
-    }
-    const booking = rows[0];
-    if (booking.paymentStatus === "paid" && booking.status === "confirmed") {
-      return res.status(409).json({ success: false, error: "Booking is already confirmed" });
-    }
-    const paymentMethod = String(req.body?.paymentMethod || "manual").trim();
-    const note = String(req.body?.note || "").trim();
-    const adminUser = String(req.adminUser?.email || "admin");
-    const existingDetails = typeof booking.details === "object" && booking.details !== null ? booking.details : {};
-    const conversionLog = {
-      convertedAt: (/* @__PURE__ */ new Date()).toISOString(),
-      convertedBy: adminUser,
-      paymentMethod,
-      note: note || "Manually converted by admin"
-    };
-    const updatedDetails = {
-      ...existingDetails,
-      conversionLog,
-      adminNotes: [
-        ...existingDetails.adminNotes || [],
-        { note: `Lead converted \u2014 ${paymentMethod}${note ? `: ${note}` : ""}`, addedAt: (/* @__PURE__ */ new Date()).toISOString(), addedBy: adminUser }
-      ]
-    };
-    await db.update(bookingsTable).set({
-      paymentStatus: "paid",
-      status: "confirmed",
-      bookingStatus: "confirmed",
-      paymentMethod,
-      details: updatedDetails,
-      // Clear failure markers so the booking is treated as clean
-      failureReason: null,
-      failureCode: null
-    }).where(eq(bookingsTable.id, id));
-    const updated = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
-    const refundMap = await loadRefundsForBookings([id]);
-    logger.info({ id, paymentMethod, adminUser }, "[admin-bookings] lead converted to confirmed booking");
-    return res.json({
-      success: true,
-      booking: shapeBooking(updated[0], refundMap.get(id))
-    });
-  } catch (err) {
-    logger.error({ err }, "[admin-bookings] convert-lead failed");
-    return res.status(500).json({ success: false, error: "Failed to convert lead" });
-  }
-});
-async function loadRazorpayCreds() {
-  let dbKey = "";
-  let dbSecret = "";
-  try {
-    const rows = await db.select().from(apiKeysTable).limit(1);
-    if (rows.length > 0) {
-      dbKey = rows[0].paymentApiKey ?? "";
-      dbSecret = rows[0].paymentApiSecret ?? "";
-    }
-  } catch {
-  }
-  const envKey = process.env["RAZORPAY_KEY_ID"] ?? "";
-  const envSecret = process.env["RAZORPAY_KEY_SECRET"] ?? "";
-  const keyId = dbKey || envKey;
-  const keySecret = dbSecret || envSecret;
-  let source = "none";
-  if (keyId && keySecret) {
-    if (dbKey && dbSecret) source = "db";
-    else if (envKey && envSecret) source = "env";
-    else source = "mixed";
-  }
-  return { keyId, keySecret, source };
-}
-router22.post("/admin/refund", requireAdmin, async (req, res) => {
-  const adminEmail = req.admin?.email ?? "admin";
-  try {
-    const paymentId = String(req.body?.paymentId ?? "").trim();
-    const amountRaw = req.body?.amount;
-    const bookingIdRaw = req.body?.bookingId;
-    if (!paymentId) {
-      return res.status(400).json({ success: false, error: "paymentId is required" });
-    }
-    const amount = Number(amountRaw);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      return res.status(400).json({ success: false, error: "amount must be a positive number (in INR)" });
-    }
-    let booking = null;
-    if (bookingIdRaw !== void 0) {
-      const id = Number(bookingIdRaw);
-      if (Number.isFinite(id)) {
-        const rows = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
-        if (rows.length > 0) booking = rows[0];
-      }
-    }
-    if (!booking) {
-      const rows = await db.select().from(bookingsTable).where(eq(bookingsTable.paymentId, paymentId)).limit(1);
-      if (rows.length > 0) booking = rows[0];
-    }
-    const inserted = await db.insert(bookingRefundsTable).values({
-      bookingId: booking?.id ?? 0,
-      paymentId,
-      amount: amount.toFixed(2),
-      currency: "INR",
-      status: "processing",
-      initiatedBy: adminEmail
-    }).returning();
-    const refundRow = inserted[0];
-    const { keyId, keySecret, source } = await loadRazorpayCreds();
-    const isDemo = !keyId || !keySecret || paymentId.startsWith("demo_");
-    let finalStatus = "completed";
-    let providerRefundId = null;
-    let errorMessage = null;
-    if (isDemo) {
-      providerRefundId = `rfnd_demo_${Date.now()}`;
-      logger.info({ paymentId, amount, source }, "[admin-bookings] demo refund");
-    } else {
-      try {
-        const auth = Buffer.from(`${keyId}:${keySecret}`).toString("base64");
-        const response = await fetch(
-          `https://api.razorpay.com/v1/payments/${encodeURIComponent(paymentId)}/refund`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Basic ${auth}`,
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-              amount: Math.round(amount * 100),
-              // paise
-              speed: "normal",
-              notes: {
-                booking_id: String(booking?.id ?? ""),
-                booking_ref: booking?.bookingRef ?? "",
-                initiated_by: adminEmail
-              }
-            })
-          }
-        );
-        const json3 = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          const errObj = json3?.error ?? {};
-          errorMessage = errObj?.description || errObj?.reason || `Razorpay error ${response.status}`;
-          finalStatus = "failed";
-          logger.error({ status: response.status, json: json3 }, "[admin-bookings] razorpay refund failed");
-        } else {
-          providerRefundId = json3?.id ?? null;
-          const status = json3?.status ?? "processed";
-          finalStatus = status === "failed" ? "failed" : "completed";
-        }
-      } catch (err) {
-        errorMessage = err instanceof Error ? err.message : "Refund request failed";
-        finalStatus = "failed";
-        logger.error({ err }, "[admin-bookings] razorpay request threw");
-      }
-    }
-    await db.update(bookingRefundsTable).set({
-      status: finalStatus,
-      refundId: providerRefundId,
-      errorMessage,
-      updatedAt: /* @__PURE__ */ new Date()
-    }).where(eq(bookingRefundsTable.id, refundRow.id));
-    if (finalStatus === "completed" && booking) {
-      await db.update(bookingsTable).set({ status: "refunded" }).where(eq(bookingsTable.id, booking.id));
-    }
-    return res.json({
-      success: finalStatus === "completed",
-      refund: {
-        id: refundRow.id,
-        bookingId: booking?.id ?? null,
-        paymentId,
-        amount,
-        currency: "INR",
-        status: finalStatus,
-        refundId: providerRefundId,
-        errorMessage,
-        demo: isDemo,
-        source
-      }
-    });
-  } catch (err) {
-    logger.error({ err }, "[admin-bookings] refund failed");
-    return res.status(500).json({ success: false, error: "Refund failed" });
-  }
-});
-router22.post("/admin/bookings/:id/resend", requireAdmin, async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    if (!Number.isFinite(id)) {
-      return res.status(400).json({ success: false, error: "Invalid booking id" });
-    }
-    const channel = String(req.body?.channel ?? "all").trim().toLowerCase();
-    if (!["email", "sms", "whatsapp", "all"].includes(channel)) {
-      return res.status(400).json({ success: false, error: "channel must be email | sms | whatsapp | all" });
-    }
-    const rows = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
-    if (rows.length === 0) {
-      return res.status(404).json({ success: false, error: "Booking not found" });
-    }
-    const booking = rows[0];
-    const data = buildNotificationData(booking);
-    let results = {};
-    if (channel === "all") {
-      results = await sendAllBookingNotifications(data);
-    } else if (channel === "email") {
-      results.email = await sendBookingEmail(data);
-    } else if (channel === "sms") {
-      results.sms = await sendBookingSMS(data);
-    } else if (channel === "whatsapp") {
-      results.whatsapp = await sendBookingWhatsApp(data);
-    }
-    logger.info({ id, channel, results }, "[admin-bookings] resend notifications");
-    return res.json({ success: true, channel, results });
-  } catch (err) {
-    logger.error({ err }, "[admin-bookings] resend failed");
-    return res.status(500).json({ success: false, error: "Resend failed" });
-  }
-});
-router22.post("/admin/bookings/:id/mark-failed", requireAdmin, async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    if (!Number.isFinite(id)) return res.status(400).json({ success: false, error: "Invalid booking id" });
-    const reason = String(req.body?.reason ?? "Booking failed").trim();
-    const code = String(req.body?.code ?? "api_error").trim();
-    const doRefund = req.body?.initiateRefund !== false;
-    const rows = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
-    if (rows.length === 0) return res.status(404).json({ success: false, error: "Booking not found" });
-    const booking = rows[0];
-    await db.update(bookingsTable).set({
-      status: "booking_failed",
-      bookingStatus: "failed",
-      failureReason: reason,
-      failureCode: code
-    }).where(eq(bookingsTable.id, id));
-    let refundResult = { initiated: false };
-    if (doRefund && booking.paymentStatus === "paid" && booking.paymentId) {
-      const totalPrice = Number(booking.totalPrice);
-      const [refundRow] = await db.insert(bookingRefundsTable).values({
-        bookingId: id,
-        paymentId: booking.paymentId,
-        amount: totalPrice.toFixed(2),
-        currency: "INR",
-        status: "processing",
-        initiatedBy: "admin_mark_failed"
-      }).returning();
-      const { keyId, keySecret } = await loadRazorpayCreds();
-      const isDemo = !keyId || !keySecret || booking.paymentId.startsWith("demo_");
-      let finalStatus = "completed";
-      let providerRefundId = null;
-      let errorMessage = null;
-      if (isDemo) {
-        providerRefundId = `rfnd_demo_${Date.now()}`;
-      } else {
-        try {
-          const auth = Buffer.from(`${keyId}:${keySecret}`).toString("base64");
-          const resp = await fetch(
-            `https://api.razorpay.com/v1/payments/${encodeURIComponent(booking.paymentId)}/refund`,
-            {
-              method: "POST",
-              headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/json" },
-              body: JSON.stringify({
-                amount: Math.round(totalPrice * 100),
-                speed: "normal",
-                notes: { booking_id: String(id), reason, initiated_by: "admin_mark_failed" }
-              })
-            }
-          );
-          const json3 = await resp.json().catch(() => ({}));
-          if (!resp.ok) {
-            const e = json3?.error ?? {};
-            errorMessage = e?.description || `Razorpay error ${resp.status}`;
-            finalStatus = "failed";
-          } else {
-            providerRefundId = json3?.id ?? null;
-            finalStatus = json3?.status === "failed" ? "failed" : "completed";
-          }
-        } catch (err) {
-          errorMessage = err instanceof Error ? err.message : "Refund failed";
-          finalStatus = "failed";
-        }
-      }
-      await db.update(bookingRefundsTable).set({ status: finalStatus, refundId: providerRefundId, errorMessage, updatedAt: /* @__PURE__ */ new Date() }).where(eq(bookingRefundsTable.id, refundRow.id));
-      if (finalStatus === "completed") {
-        await db.update(bookingsTable).set({ status: "refunded" }).where(eq(bookingsTable.id, id));
-      }
-      refundResult = { initiated: finalStatus === "completed", refundId: providerRefundId ?? void 0, error: errorMessage ?? void 0 };
-      const notifData = buildNotificationData(booking);
-      sendBookingFailureNotifications(notifData, reason).catch(() => {
-      });
-      if (finalStatus === "completed") {
-        sendRefundNotifications(notifData, "initiated", providerRefundId ?? void 0).catch(() => {
-        });
-      }
-    }
-    const updated = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
-    const refundMap = await loadRefundsForBookings([id]);
-    logger.info({ id, reason, refundResult }, "[admin-bookings] mark-failed done");
-    return res.json({
-      success: true,
-      booking: shapeBooking(updated[0], refundMap.get(id)),
-      refund: refundResult
-    });
-  } catch (err) {
-    logger.error({ err }, "[admin-bookings] mark-failed failed");
-    return res.status(500).json({ success: false, error: "Failed to mark booking as failed" });
-  }
-});
-router22.get("/admin/refund-logs", requireAdmin, async (req, res) => {
-  try {
-    const limit = Math.min(Number(req.query.limit ?? 200), 500);
-    const offset = Math.max(Number(req.query.offset ?? 0), 0);
-    const statusFilter = req.query.status?.trim() ?? "";
-    let query = db.select().from(bookingRefundsTable).orderBy(desc(bookingRefundsTable.id)).limit(limit).offset(offset);
-    const rows = await (statusFilter && statusFilter !== "all" ? query.where(eq(bookingRefundsTable.status, statusFilter)) : query);
-    const bookingIds = [...new Set(rows.map((r) => r.bookingId).filter((x) => x > 0))];
-    const bookingMap = /* @__PURE__ */ new Map();
-    if (bookingIds.length > 0) {
-      const bRows = await db.select().from(bookingsTable).where(inArray(bookingsTable.id, bookingIds));
-      for (const b of bRows) bookingMap.set(b.id, b);
-    }
-    const shaped = rows.map((r) => {
-      const b = bookingMap.get(r.bookingId);
-      return {
-        id: r.id,
-        bookingId: r.bookingId,
-        bookingRef: b?.bookingRef ?? null,
-        paymentId: r.paymentId,
-        refundId: r.refundId,
-        amount: Number(r.amount),
-        currency: r.currency,
-        status: r.status,
-        errorMessage: r.errorMessage,
-        initiatedBy: r.initiatedBy,
-        createdAt: r.createdAt.toISOString(),
-        updatedAt: r.updatedAt.toISOString(),
-        // booking context
-        passengerName: b?.passengerName ?? null,
-        passengerEmail: b?.passengerEmail ?? null,
-        passengerPhone: b?.passengerPhone ?? null,
-        bookingType: b?.bookingType ?? null,
-        bookingAmount: b ? Number(b.totalPrice) : null,
-        paymentStatus: b?.paymentStatus ?? null
-      };
-    });
-    return res.json({ success: true, refundLogs: shaped, count: shaped.length });
-  } catch (err) {
-    logger.error({ err }, "[admin-bookings] refund-logs failed");
-    return res.status(500).json({ success: false, error: "Failed to load refund logs" });
-  }
-});
-router22.post("/admin/bookings/:id/notes", requireAdmin, async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    if (!Number.isFinite(id)) {
-      return res.status(400).json({ success: false, error: "Invalid booking id" });
-    }
-    const note = String(req.body?.note ?? "").trim();
-    if (!note) {
-      return res.status(400).json({ success: false, error: "note is required" });
-    }
-    const adminEmail = req.admin?.email ?? "admin";
-    const rows = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
-    if (rows.length === 0) {
-      return res.status(404).json({ success: false, error: "Booking not found" });
-    }
-    const booking = rows[0];
-    const existingDetails = booking.details ?? {};
-    const adminNotes = Array.isArray(existingDetails.adminNotes) ? existingDetails.adminNotes : [];
-    const newNote = { note, addedAt: (/* @__PURE__ */ new Date()).toISOString(), addedBy: adminEmail };
-    adminNotes.push(newNote);
-    await db.update(bookingsTable).set({ details: { ...existingDetails, adminNotes } }).where(eq(bookingsTable.id, id));
-    logger.info({ id, addedBy: adminEmail }, "[admin-bookings] note added");
-    return res.json({ success: true, note: newNote, adminNotes });
-  } catch (err) {
-    logger.error({ err }, "[admin-bookings] add note failed");
-    return res.status(500).json({ success: false, error: "Failed to add note" });
-  }
-});
-var admin_bookings_default = router22;
-
-// src/routes/book-flight.ts
-var import_express24 = __toESM(require_express2(), 1);
-init_drizzle_orm();
-
 // ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/helpers/bind.js
 function bind(fn, thisArg) {
   return function wrap() {
@@ -94781,7 +89353,7 @@ var transitional_default = {
 };
 
 // ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/platform/node/index.js
-import crypto3 from "crypto";
+import crypto2 from "crypto";
 
 // ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/platform/node/classes/URLSearchParams.js
 import url2 from "url";
@@ -94799,7 +89371,7 @@ var generateString = (size = 16, alphabet = ALPHABET.ALPHA_DIGIT) => {
   let str = "";
   const { length } = alphabet;
   const randomValues = new Uint32Array(size);
-  crypto3.randomFillSync(randomValues);
+  crypto2.randomFillSync(randomValues);
   for (let i = 0; i < size; i++) {
     str += alphabet[randomValues[i] % length];
   }
@@ -98139,8 +92711,42 @@ var {
   mergeConfig: mergeConfig2
 } = axios_default;
 
+// src/lib/provider-config.ts
+var cache = null;
+var CACHE_TTL_MS = 3e4;
+async function loadFromDb() {
+  try {
+    const rows = await db.select().from(apiKeysTable).limit(1);
+    const row = rows[0];
+    const rawProvider = (row?.flightProvider ?? "tripjack").toLowerCase();
+    const flightProvider = rawProvider === "tbo" ? "tbo" : "tripjack";
+    return {
+      flightProvider,
+      flightApiKey: row?.flightApiKey || process.env["TRIPJACK_API_KEY"] || "",
+      tboApiKey: row?.tboApiKey || process.env["TBO_API_KEY"] || "",
+      paymentKeyId: row?.paymentApiKey || process.env["RAZORPAY_KEY_ID"] || "",
+      paymentKeySecret: row?.paymentApiSecret || process.env["RAZORPAY_KEY_SECRET"] || "",
+      cachedAt: Date.now()
+    };
+  } catch {
+    return {
+      flightProvider: "tripjack",
+      flightApiKey: process.env["TRIPJACK_API_KEY"] || "",
+      tboApiKey: process.env["TBO_API_KEY"] || "",
+      paymentKeyId: process.env["RAZORPAY_KEY_ID"] || "",
+      paymentKeySecret: process.env["RAZORPAY_KEY_SECRET"] || "",
+      cachedAt: Date.now()
+    };
+  }
+}
+async function getProviderConfig() {
+  if (cache && Date.now() - cache.cachedAt < CACHE_TTL_MS) return cache;
+  cache = await loadFromDb();
+  return cache;
+}
+
 // src/lib/tripjack-auth.ts
-var TRIPJACK_BASE2 = process.env["TRIPJACK_BASE_URL"] ?? "https://apitest.tripjack.com";
+var TRIPJACK_BASE = process.env["TRIPJACK_BASE_URL"] ?? "https://apitest.tripjack.com";
 async function getTripJackApiKey() {
   const cfg = await getProviderConfig();
   return cfg.flightApiKey || process.env["TRIPJACK_API_KEY"] || "";
@@ -98158,7 +92764,7 @@ function bustTripJackToken() {
   }
 }
 async function fetchFreshToken(apiKey) {
-  const url3 = `${TRIPJACK_BASE2}/auth/v1/token`;
+  const url3 = `${TRIPJACK_BASE}/auth/v1/token`;
   logger.info("[tripjack-auth] Fetching fresh token from:", url3);
   try {
     const resp = await axios_default.post(
@@ -98215,7 +92821,7 @@ async function getTripJackHeaders() {
   }
   const token = await getTripjackToken();
   if (token) {
-    logger.info("[tripjack-auth] Using Bearer token | Base URL:", TRIPJACK_BASE2);
+    logger.info("[tripjack-auth] Using Bearer token | Base URL:", TRIPJACK_BASE);
     return {
       "Authorization": `Bearer ${token}`,
       "Content-Type": "application/json"
@@ -98223,7 +92829,7 @@ async function getTripJackHeaders() {
   }
   logger.info(
     "[tripjack-auth] Using direct apikey header (token exchange unavailable) | Base URL:",
-    TRIPJACK_BASE2
+    TRIPJACK_BASE
   );
   return {
     "apikey": apiKey,
@@ -98238,6 +92844,5400 @@ function extractTripJackErrorDetails(data, fallbackMessage) {
   const code = data?.errors?.[0]?.code ?? data?.status?.messages?.[0]?.code ?? data?.status?.httpStatus ?? data?.code ?? void 0;
   return { message, code, raw: data ?? null };
 }
+
+// src/routes/flights.ts
+var router5 = (0, import_express5.Router)();
+var CITY_TO_IATA = {
+  delhi: "DEL",
+  "new delhi": "DEL",
+  mumbai: "BOM",
+  bombay: "BOM",
+  bangalore: "BLR",
+  bengaluru: "BLR",
+  chennai: "MAA",
+  madras: "MAA",
+  kolkata: "CCU",
+  calcutta: "CCU",
+  hyderabad: "HYD",
+  goa: "GOI",
+  kochi: "COK",
+  cochin: "COK",
+  jaipur: "JAI",
+  pune: "PNQ",
+  ahmedabad: "AMD",
+  lucknow: "LKO",
+  varanasi: "VNS",
+  amritsar: "ATQ",
+  nagpur: "NAG",
+  indore: "IDR",
+  bhopal: "BHO",
+  srinagar: "SXR",
+  leh: "IXL",
+  patna: "PAT",
+  ranchi: "IXR",
+  bhubaneswar: "BBI",
+  visakhapatnam: "VTZ",
+  vizag: "VTZ",
+  dubai: "DXB",
+  singapore: "SIN",
+  bangkok: "BKK",
+  london: "LHR",
+  "new york": "JFK",
+  "abu dhabi": "AUH",
+  "kuala lumpur": "KUL",
+  colombo: "CMB",
+  kathmandu: "KTM",
+  coimbatore: "CJB",
+  tiruchirappalli: "TRZ",
+  trichy: "TRZ",
+  madurai: "IXM",
+  mangalore: "IXE",
+  vadodara: "BDQ",
+  surat: "STV",
+  chandigarh: "IXC",
+  vijayawada: "VGA",
+  rajkot: "RAJ",
+  jodhpur: "JDH",
+  raipur: "RPR",
+  dehradun: "DED",
+  udaipur: "UDR",
+  agra: "AGR",
+  hubli: "HBX",
+  jammu: "IXJ",
+  dibrugarh: "DIB",
+  bagdogra: "IXB",
+  port_blair: "IXZ",
+  "port blair": "IXZ",
+  tirupati: "TIR",
+  aurangabad: "IXU"
+};
+var CANONICAL = {
+  DEL: "Delhi",
+  BOM: "Mumbai",
+  BLR: "Bangalore",
+  MAA: "Chennai",
+  CCU: "Kolkata",
+  HYD: "Hyderabad",
+  GOI: "Goa",
+  COK: "Kochi",
+  JAI: "Jaipur",
+  PNQ: "Pune",
+  AMD: "Ahmedabad",
+  LKO: "Lucknow",
+  VNS: "Varanasi",
+  ATQ: "Amritsar",
+  NAG: "Nagpur",
+  IDR: "Indore",
+  BHO: "Bhopal",
+  SXR: "Srinagar",
+  IXL: "Leh",
+  PAT: "Patna",
+  IXR: "Ranchi",
+  BBI: "Bhubaneswar",
+  VTZ: "Visakhapatnam",
+  CJB: "Coimbatore",
+  TRZ: "Tiruchirappalli",
+  IXM: "Madurai",
+  IXE: "Mangalore",
+  BDQ: "Vadodara",
+  STV: "Surat",
+  IXC: "Chandigarh",
+  VGA: "Vijayawada",
+  RAJ: "Rajkot",
+  JDH: "Jodhpur",
+  RPR: "Raipur",
+  DED: "Dehradun",
+  UDR: "Udaipur",
+  AGR: "Agra",
+  HBX: "Hubli",
+  IXJ: "Jammu",
+  DIB: "Dibrugarh",
+  IXB: "Bagdogra",
+  IXZ: "Port Blair",
+  TIR: "Tirupati",
+  IXU: "Aurangabad",
+  DXB: "Dubai",
+  SIN: "Singapore",
+  BKK: "Bangkok",
+  LHR: "London",
+  JFK: "New York",
+  AUH: "Abu Dhabi",
+  KUL: "Kuala Lumpur",
+  CMB: "Colombo",
+  KTM: "Kathmandu"
+};
+var KNOWN_IATA_CODES = new Set(Object.values(CITY_TO_IATA));
+function resolveIata(raw) {
+  const clean = raw.trim();
+  if (!clean) return void 0;
+  const codeMatch = clean.match(/\(([A-Z]{3})\)\s*(?:-.*)?$/);
+  if (codeMatch) return codeMatch[1];
+  if (/^[A-Z]{3}$/.test(clean)) return clean;
+  const cityOnly = clean.replace(/\s*\(.*\)\s*$/, "").toLowerCase().trim();
+  if (CITY_TO_IATA[cityOnly]) return CITY_TO_IATA[cityOnly];
+  if (CITY_TO_IATA[clean.toLowerCase()]) return CITY_TO_IATA[clean.toLowerCase()];
+  for (const word of clean.toLowerCase().split(/[\s,;()\-/]+/)) {
+    if (word.length >= 3 && CITY_TO_IATA[word]) return CITY_TO_IATA[word];
+  }
+  return void 0;
+}
+function mapTripJackFlight(item, idx, fromIata, toIata, traceId = "") {
+  const firstSeg = item.sI?.[0];
+  const lastSeg = item.sI?.[item.sI.length - 1];
+  const airlineCode = firstSeg?.fD?.aI?.code || "";
+  const airline = firstSeg?.fD?.aI?.name || "Unknown Airline";
+  const flightNum = firstSeg?.fD?.fN ? `${airlineCode}${firstSeg.fD.fN}` : `FL${idx + 1}`;
+  const depIso = firstSeg?.dt;
+  const arrIso = lastSeg?.at;
+  const depTime = depIso ? depIso.slice(11, 16) || "N/A" : "N/A";
+  const arrTime = arrIso ? arrIso.slice(11, 16) || "N/A" : "N/A";
+  let duration3 = "N/A";
+  if (depIso && arrIso) {
+    const depMs = new Date(depIso).getTime();
+    const arrMs = new Date(arrIso).getTime();
+    const diffMs = arrMs - depMs;
+    if (diffMs > 0) {
+      const durH = Math.floor(diffMs / 36e5);
+      const durM = Math.floor(diffMs % 36e5 / 6e4);
+      duration3 = `${durH}h ${durM.toString().padStart(2, "0")}m`;
+    }
+  } else {
+    const durMinsRaw = firstSeg?.duration;
+    if (durMinsRaw && durMinsRaw > 0) {
+      const durH = Math.floor(durMinsRaw / 60);
+      const durM = durMinsRaw % 60;
+      duration3 = `${durH}h ${durM.toString().padStart(2, "0")}m`;
+    }
+  }
+  const CABIN_LABEL = {
+    ECONOMY: "Economy",
+    BUSINESS: "Business",
+    FIRST: "First",
+    PREMIUM_ECONOMY: "Premium Economy"
+  };
+  const flightResultIndex = String(item.totalPriceList?.[0]?.id ?? "") || String(item.resultIndex ?? "") || String(item.sI?.[0]?.id ?? "") || String(item.sI?.[0]?.rI ?? "") || String(idx);
+  const fareOptions = (item.totalPriceList || []).map((pl) => {
+    const adultFd = pl?.fd?.ADULT;
+    if (!adultFd) return null;
+    const rawFare = adultFd?.fC?.TF || adultFd?.fC?.BF || 0;
+    if (!rawFare) return null;
+    const cc = String(adultFd?.cc || "ECONOMY").toUpperCase();
+    const fareResultIndex = String(pl.id ?? "") || String(pl.resultIndex ?? "") || String(pl.rI ?? "") || flightResultIndex;
+    const rawMeal = adultFd?.mI ?? adultFd?.meal ?? null;
+    const meal = rawMeal === "F" || rawMeal === "FREE" ? "FREE" : rawMeal === "P" || rawMeal === "PAID" ? "PAID" : null;
+    const rTRaw = adultFd?.rT;
+    const rTStr = typeof rTRaw === "string" ? rTRaw.toUpperCase() : "";
+    const rTNum = typeof rTRaw === "number" ? rTRaw : rTStr !== "" && !Number.isNaN(Number(rTStr)) ? Number(rTStr) : null;
+    const nRF = adultFd?.nRF === true || adultFd?.nRF === 1;
+    const refundable = rTNum === 1 || rTNum === 2 || rTStr === "FULL_REFUNDABLE" || rTStr === "PARTIAL_REFUNDABLE" || rTStr === "REFUNDABLE" ? true : rTNum === 0 || rTStr === "NON_REFUNDABLE" ? false : !nRF;
+    const apiLabel = (pl.fareIdentifier || pl.fn || adultFd.fareIdentifier || "").trim();
+    const fareLabel = apiLabel || (cc === "BUSINESS" || cc === "FIRST" ? refundable ? "Business Flex" : "Business Saver" : cc === "PREMIUM_ECONOMY" ? "Premium Economy" : refundable ? "Flex" : "Saver");
+    const bI = adultFd?.bI ?? {};
+    const checkedBaggage = bI.iB ? String(bI.iB) : bI.checkIn ? String(bI.checkIn) : cc === "BUSINESS" || cc === "FIRST" ? "30 kg" : cc === "PREMIUM_ECONOMY" ? "20 kg" : "15 kg";
+    const cabinBaggage = bI.cB ? String(bI.cB) : bI.cabin ? String(bI.cabin) : cc === "BUSINESS" || cc === "FIRST" ? "10 kg" : "7 kg";
+    return {
+      fareId: pl.id || pl.fareIdentifier || `${cc}_${rawFare}`,
+      cabinClass: cc,
+      cabinLabel: CABIN_LABEL[cc] || cc,
+      fareLabel,
+      totalFare: rawFare,
+      seatsLeft: adultFd?.sR ?? 9,
+      resultIndex: fareResultIndex,
+      meal,
+      refundable,
+      checkedBaggage,
+      cabinBaggage
+    };
+  }).filter(Boolean);
+  fareOptions.sort((a, b) => a.totalFare - b.totalFare);
+  const priceInfo = item.totalPriceList?.[0]?.fd?.ADULT;
+  const price = fareOptions.length > 0 ? Math.min(...fareOptions.map((f) => f.totalFare)) : priceInfo?.fC?.TF || priceInfo?.fC?.BF || 0;
+  const seatsLeft = priceInfo?.sR ?? 9;
+  const cabinClass = CABIN_LABEL[String(priceInfo?.cc || "ECONOMY").toUpperCase()] ?? "Economy";
+  const segCount = item.sI?.length ?? 1;
+  const stops = Math.max(0, segCount - 1);
+  const stopsLabel = segCount === 1 ? "Non-stop" : segCount === 2 ? "1 Stop" : "Multi-stop";
+  const resultIndex = flightResultIndex;
+  const segments = (item.sI || []).map((seg) => {
+    const depDt = seg.dt || "";
+    const arrDt = seg.at || "";
+    const fromCode = seg.da?.code || seg.da?.cityCode || "";
+    const toCode = seg.aa?.code || seg.aa?.cityCode || "";
+    return {
+      from: fromCode,
+      fromCity: seg.da?.cityName || seg.da?.name || CANONICAL[fromCode] || fromCode,
+      fromTerminal: seg.da?.terminal || "",
+      to: toCode,
+      toCity: seg.aa?.cityName || seg.aa?.name || CANONICAL[toCode] || toCode,
+      toTerminal: seg.aa?.terminal || "",
+      departure: depDt,
+      arrival: arrDt,
+      departureTime: depDt ? depDt.slice(11, 16) : "",
+      arrivalTime: arrDt ? arrDt.slice(11, 16) : "",
+      airline: seg.fD?.aI?.name || airline,
+      flightNumber: seg.fD?.aI?.code && seg.fD?.fN ? `${seg.fD.aI.code}${seg.fD.fN}` : flightNum
+    };
+  });
+  return {
+    id: idx + 1,
+    airline,
+    airlineCode,
+    flightNumber: flightNum,
+    origin: CANONICAL[fromIata] || fromIata,
+    destination: CANONICAL[toIata] || toIata,
+    departureTime: depTime,
+    arrivalTime: arrTime,
+    departureDatetime: depIso || "",
+    // full ISO — for client-side calculations
+    arrivalDatetime: arrIso || "",
+    // full ISO — for client-side calculations
+    duration: duration3,
+    price,
+    class: cabinClass,
+    seatsAvailable: seatsLeft,
+    stops,
+    stopsLabel,
+    status: "scheduled",
+    segments,
+    // ← per-segment details for stop/layover display
+    fareOptions,
+    // ← all cabin classes with their prices
+    resultIndex,
+    // ← required by TripJack fareQuote/SSR/book
+    traceId
+    // ← search session ID — embedded per-flight for reliable access
+  };
+}
+var TRIPJACK_BASE2 = process.env.TRIPJACK_BASE_URL || "https://apitest.tripjack.com";
+function resolveCabinClass(raw) {
+  const v = (raw || "ECONOMY").toUpperCase().replace(/[\s-]/g, "_");
+  if (v === "BUSINESS") return "BUSINESS";
+  if (v === "FIRST") return "FIRST";
+  if (v.includes("PREMIUM")) return "PREMIUM_ECONOMY";
+  return "ECONOMY";
+}
+router5.post("/flights", async (req, res) => {
+  const {
+    // Legacy single-route params (kept for backward compat)
+    from,
+    to,
+    date: date6,
+    passengers = 1,
+    class: requestedClass,
+    // Extended params
+    tripType = "ONEWAY",
+    routeInfos: incomingRoutes,
+    paxInfo: incomingPax,
+    cabinClass: incomingCabinClass,
+    returnDate
+  } = req.body;
+  const apiKey = await getTripJackApiKey();
+  if (!apiKey) {
+    res.status(503).json({ error: "TripJack API key is not configured. Please set it in Admin Settings \u2192 API Keys." });
+    return;
+  }
+  const cabinClass = resolveCabinClass(incomingCabinClass || requestedClass);
+  const adultCount = incomingPax?.ADULT ?? Math.max(1, Number(passengers) || 1);
+  const childCount = incomingPax?.CHILD ?? 0;
+  const infantCount = incomingPax?.INFANT ?? 0;
+  const paxInfo = { ADULT: adultCount, CHILD: childCount, INFANT: infantCount };
+  let resolvedRoutes;
+  if (Array.isArray(incomingRoutes) && incomingRoutes.length > 0) {
+    const mapped = incomingRoutes.map((r) => ({
+      fromIata: resolveIata(r.from || "") || "",
+      toIata: resolveIata(r.to || "") || "",
+      travelDate: r.date || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10)
+    }));
+    const bad = mapped.find((r) => !r.fromIata || !r.toIata);
+    if (bad) {
+      res.status(400).json({ error: `Could not resolve airport code for one of the routes.` });
+      return;
+    }
+    resolvedRoutes = mapped;
+  } else {
+    const fromIata = resolveIata(from || "");
+    const toIata = resolveIata(to || "");
+    if (!fromIata || !toIata) {
+      res.status(400).json({
+        error: `Could not find airport for "${!fromIata ? from : to}". Please use a valid city or IATA code.`
+      });
+      return;
+    }
+    const travelDate = date6 || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+    resolvedRoutes = [{ fromIata, toIata, travelDate }];
+    if (String(tripType).toUpperCase() === "ROUNDTRIP" && returnDate) {
+      resolvedRoutes.push({ fromIata: toIata, toIata: fromIata, travelDate: returnDate });
+    }
+  }
+  const searchRouteInfos = resolvedRoutes.map((r) => ({
+    fromCityOrAirport: { code: r.fromIata },
+    toCityOrAirport: { code: r.toIata },
+    travelDate: r.travelDate
+  }));
+  const searchBody = {
+    searchQuery: {
+      cabinClass,
+      paxInfo,
+      routeInfos: searchRouteInfos,
+      searchModifiers: { isDirectFlight: false, isConnectingFlight: false }
+    }
+  };
+  const logLabel = resolvedRoutes.map((r) => `${r.fromIata}\u2192${r.toIata} on ${r.travelDate}`).join(" | ");
+  try {
+    const searchHeaders = await getTripJackHeaders();
+    const apiRes = await fetch(`${TRIPJACK_BASE2}/fms/v1/air-search-all`, {
+      method: "POST",
+      headers: searchHeaders,
+      body: JSON.stringify(searchBody),
+      signal: AbortSignal.timeout(2e4)
+    });
+    const data = await apiRes.json().catch(() => ({}));
+    if (!apiRes.ok || data?.errors?.length) {
+      const reason = data?.errors?.[0]?.message || `HTTP ${apiRes.status}`;
+      logger.error(`[flights/tripjack] Search error: ${reason}`);
+      res.status(apiRes.ok ? 400 : apiRes.status).json({ error: reason });
+      return;
+    }
+    const { fromIata: f0, toIata: t0 } = resolvedRoutes[0];
+    const onward = data?.searchResult?.tripInfos?.ONWARD || data?.tripInfos?.ONWARD || [];
+    const traceId = data?.searchResult?.traceId || data?.traceId || data?.data?.traceId || onward?.[0]?.traceId || "";
+    const rawFlights = onward.map((item, idx) => mapTripJackFlight(item, idx, f0, t0, traceId));
+    const groupMap = /* @__PURE__ */ new Map();
+    for (const flight of rawFlights) {
+      const normFlight = (flight.flightNumber || "").replace(/\s+/g, "").toUpperCase();
+      const key = `${(flight.airlineCode || "").toUpperCase()}|${normFlight}|${flight.departureTime}|${flight.arrivalTime}`;
+      const existing = groupMap.get(key);
+      if (!existing) {
+        groupMap.set(key, { ...flight });
+      } else {
+        const seenFareIds = new Set(existing.fareOptions?.map((f) => f.fareId) ?? []);
+        for (const fo of flight.fareOptions ?? []) {
+          if (!seenFareIds.has(fo.fareId)) {
+            existing.fareOptions = [...existing.fareOptions ?? [], fo];
+            seenFareIds.add(fo.fareId);
+          }
+        }
+        existing.fareOptions?.sort((a, b) => a.totalFare - b.totalFare);
+        const cheapest = existing.fareOptions?.[0];
+        if (cheapest && cheapest.totalFare < existing.price) {
+          existing.price = cheapest.totalFare;
+        }
+        existing.resultIndex = existing.fareOptions?.[0]?.resultIndex || existing.resultIndex;
+      }
+    }
+    const flights = Array.from(groupMap.values()).map((f, idx) => ({ ...f, id: idx + 1 }));
+    if (!traceId) {
+      const topKeys = Object.keys(data || {}).join(", ");
+      const srKeys = Object.keys(data?.searchResult || {}).join(", ");
+      logger.warn(
+        `[flights/tripjack] traceId not found \u2014 top-level keys: [${topKeys}] | searchResult keys: [${srKeys}]`
+      );
+    }
+    logger.info(
+      `[flights/tripjack] ${logLabel}: ${rawFlights.length} raw \u2192 ${flights.length} unique flights (${cabinClass}, A${adultCount}C${childCount}I${infantCount}) | traceId: ${traceId || "(none)"}`
+    );
+    res.json({ flights, total: flights.length, source: "tripjack", traceId });
+  } catch (err) {
+    logger.error("[flights/tripjack] Request failed:", err.message);
+    res.status(502).json({ error: `TripJack request failed: ${err.message}` });
+  }
+});
+router5.get("/airports/search", async (req, res) => {
+  const q = (req.query.q || "").trim();
+  if (!q || q.length < 2) {
+    res.json({ airports: [] });
+    return;
+  }
+  const rapidApiKey = process.env.RAPIDAPI_KEY;
+  if (rapidApiKey) {
+    try {
+      const apiRes = await fetch(
+        `https://booking-com15.p.rapidapi.com/api/v1/flights/searchDestination?query=${encodeURIComponent(q)}`,
+        {
+          headers: {
+            "X-RapidAPI-Key": rapidApiKey,
+            "X-RapidAPI-Host": "booking-com15.p.rapidapi.com"
+          },
+          signal: AbortSignal.timeout(6e3)
+        }
+      );
+      if (apiRes.ok) {
+        const body = await apiRes.json();
+        const items = Array.isArray(body?.data) ? body.data : [];
+        const airports = items.slice(0, 8).map((item) => ({
+          id: item.id || item.code,
+          name: item.name || item.cityName,
+          iata: item.code,
+          city: item.cityName || item.name,
+          country: item.countryName || "",
+          type: item.type || "AIRPORT"
+        }));
+        res.json({ airports, source: "rapidapi" });
+        return;
+      }
+    } catch (err) {
+      logger.warn(`[airports/search] RapidAPI error: ${err?.message}`);
+    }
+  }
+  const lower = q.toLowerCase();
+  const matches = Object.entries(CITY_TO_IATA).filter(([city]) => city.includes(lower)).slice(0, 8).map(([city, iata]) => ({
+    id: iata,
+    name: CANONICAL[iata] || city,
+    iata,
+    city: CANONICAL[iata] || city,
+    country: "India",
+    type: "AIRPORT"
+  }));
+  res.json({ airports: matches, source: "local" });
+});
+router5.get("/flights/search", async (req, res) => {
+  const parsed = SearchFlightsQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const { origin: origin2, destination, class: flightClass } = parsed.data;
+  let query = db.select().from(flightsTable).$dynamic();
+  const conditions = [];
+  if (origin2) conditions.push(ilike(flightsTable.origin, `%${origin2}%`));
+  if (destination) conditions.push(ilike(flightsTable.destination, `%${destination}%`));
+  if (flightClass) conditions.push(eq(flightsTable.class, flightClass));
+  if (conditions.length > 0) {
+    const { and: and3 } = await Promise.resolve().then(() => (init_drizzle_orm(), drizzle_orm_exports));
+    query = query.where(and3(...conditions));
+  }
+  const flights = await query;
+  const mapped = flights.map((f) => ({ ...f, price: Number(f.price), airlineLogoUrl: f.airlineLogoUrl ?? void 0 }));
+  res.json(SearchFlightsResponse.parse(mapped));
+});
+router5.get("/flights", async (_req, res) => {
+  const flights = await db.select().from(flightsTable).orderBy(flightsTable.id);
+  const mapped = flights.map((f) => ({ ...f, price: Number(f.price), airlineLogoUrl: f.airlineLogoUrl ?? void 0 }));
+  res.json(ListFlightsResponse.parse(mapped));
+});
+router5.get("/flights/:id", async (req, res) => {
+  const params = GetFlightParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const [flight] = await db.select().from(flightsTable).where(eq(flightsTable.id, params.data.id));
+  if (!flight) {
+    res.status(404).json({ error: "Flight not found" });
+    return;
+  }
+  res.json(GetFlightResponse.parse({ ...flight, price: Number(flight.price), airlineLogoUrl: flight.airlineLogoUrl ?? void 0 }));
+});
+var flights_default = router5;
+
+// src/routes/buses.ts
+var import_express6 = __toESM(require_express2(), 1);
+init_drizzle_orm();
+var router6 = (0, import_express6.Router)();
+var CITY_BUS_DATA = {
+  hyderabad: { boarding: ["MGBS (Imlibun)", "Ameerpet", "Kukatpally", "LB Nagar", "Uppal", "Secunderabad", "Dilsukhnagar"], dropping: ["MGBS (Imlibun)", "Koti", "LB Nagar", "Dilsukhnagar", "Secunderabad", "Uppal X Roads"] },
+  mumbai: { boarding: ["Dadar", "Borivali", "Thane", "Kurla", "Sion", "Panvel", "Vashi"], dropping: ["Dadar", "Borivali", "Thane", "Kurla", "Panvel"] },
+  delhi: { boarding: ["Kashmere Gate ISBT", "Sarai Kale Khan", "Anand Vihar", "Dhaula Kuan", "Nehru Place"], dropping: ["Kashmere Gate ISBT", "Sarai Kale Khan", "Anand Vihar", "Nehru Place"] },
+  bangalore: { boarding: ["Majestic (KBS)", "Silk Board", "Marathahalli", "Electronic City", "Hebbal", "Kalasipalya"], dropping: ["Majestic (KBS)", "Silk Board", "Koramangala", "Whitefield", "Hebbal"] },
+  bengaluru: { boarding: ["Majestic (KBS)", "Silk Board", "Marathahalli", "Electronic City", "Hebbal", "Kalasipalya"], dropping: ["Majestic (KBS)", "Silk Board", "Koramangala", "Whitefield", "Hebbal"] },
+  chennai: { boarding: ["Koyambedu", "Chennai Central", "Tambaram", "Guindy", "Broadway", "Perungudi"], dropping: ["Koyambedu", "Broadway", "Chennai Central", "Tambaram", "Guindy"] },
+  pune: { boarding: ["Shivajinagar", "Swargate", "Katraj", "Hadapsar", "Kothrud", "Deccan"], dropping: ["Shivajinagar", "Swargate", "Katraj", "Hadapsar", "Deccan"] },
+  kolkata: { boarding: ["Esplanade", "Howrah", "Salt Lake", "Park Street", "Babughat"], dropping: ["Esplanade", "Howrah", "Salt Lake", "Park Street"] },
+  ahmedabad: { boarding: ["Geeta Mandir", "Paldi", "Naroda", "Isanpur", "Vastral"], dropping: ["Geeta Mandir", "Paldi", "Naroda", "Kankaria"] },
+  jaipur: { boarding: ["Sindhi Camp", "Narayan Singh Circle", "Vidyadhar Nagar", "Ajmer Road"], dropping: ["Sindhi Camp", "Narayan Singh Circle", "Ajmer Road"] },
+  kochi: { boarding: ["KSRTC Bus Stand", "Aluva", "Edapally", "MG Road", "Vyttila"], dropping: ["KSRTC Bus Stand", "Aluva", "Edapally", "MG Road"] },
+  goa: { boarding: ["Panaji Bus Stand", "Mapusa", "Margao", "Vasco da Gama", "Calangute"], dropping: ["Panaji Bus Stand", "Mapusa", "Margao", "Vasco da Gama"] },
+  vijayawada: { boarding: ["Pandit Nehru Bus Station", "Benz Circle", "One Town", "Gunadala", "Auto Nagar"], dropping: ["Pandit Nehru Bus Station", "Benz Circle", "Auto Nagar", "One Town"] },
+  visakhapatnam: { boarding: ["RTC Complex", "Dwaraka Nagar", "MVP Colony", "Steel Plant"], dropping: ["RTC Complex", "Dwaraka Nagar", "MVP Colony"] },
+  tirupati: { boarding: ["Tirupati Bus Stand", "Renigunta", "Alipiri"], dropping: ["Tirupati Bus Stand", "Renigunta"] },
+  coimbatore: { boarding: ["Gandhipuram", "Ukkadam", "Singanallur", "Peelamedu"], dropping: ["Gandhipuram", "Ukkadam", "Singanallur"] },
+  madurai: { boarding: ["Madurai Bus Stand", "Anna Nagar", "Kalavasal"], dropping: ["Madurai Bus Stand", "Anna Nagar"] },
+  mangalore: { boarding: ["KSRTC Bus Stand", "Lalbagh", "Hampankatta"], dropping: ["KSRTC Bus Stand", "Lalbagh"] },
+  nagpur: { boarding: ["Nagpur Central Bus Stand", "Ganeshpeth", "Sitabuldi"], dropping: ["Nagpur Central Bus Stand", "Ganeshpeth"] },
+  indore: { boarding: ["Sarwate Bus Stand", "Rajwada", "Vijay Nagar", "Palasia"], dropping: ["Sarwate Bus Stand", "Rajwada", "Vijay Nagar"] },
+  bhopal: { boarding: ["Hamidia Road Bus Stand", "MP Nagar", "New Market"], dropping: ["Hamidia Road Bus Stand", "MP Nagar"] },
+  lucknow: { boarding: ["Alambagh Bus Stand", "Charbagh", "Hazratganj", "Gomti Nagar"], dropping: ["Alambagh Bus Stand", "Charbagh", "Gomti Nagar"] },
+  surat: { boarding: ["Surat Central Bus Stand", "Adajan", "Vesu", "Athwa Gate"], dropping: ["Surat Central Bus Stand", "Adajan", "Athwa Gate"] },
+  vadodara: { boarding: ["Sayajigunj Bus Stand", "Alkapuri", "Nizampura"], dropping: ["Sayajigunj Bus Stand", "Alkapuri"] },
+  nashik: { boarding: ["Nashik Central Bus Stand", "CBS", "Mahamarg Nagar"], dropping: ["Nashik Central Bus Stand", "CBS"] },
+  aurangabad: { boarding: ["Central Bus Stand", "Cidco", "Jalna Road"], dropping: ["Central Bus Stand", "Cidco"] },
+  chandigarh: { boarding: ["ISBT Sector 17", "Sector 22", "Sector 43"], dropping: ["ISBT Sector 17", "Sector 22"] },
+  amritsar: { boarding: ["ISBT Amritsar", "Hall Gate", "Golden Temple Road"], dropping: ["ISBT Amritsar", "Hall Gate"] },
+  jalandhar: { boarding: ["Jalandhar Bus Stand", "Nakodar Chowk"], dropping: ["Jalandhar Bus Stand"] },
+  ludhiana: { boarding: ["Ludhiana Bus Stand", "Ferozepur Road"], dropping: ["Ludhiana Bus Stand"] },
+  dehradun: { boarding: ["ISBT Dehradun", "Clock Tower", "Rajpur Road"], dropping: ["ISBT Dehradun", "Clock Tower"] },
+  haridwar: { boarding: ["Haridwar Bus Stand", "Har ki Pauri"], dropping: ["Haridwar Bus Stand"] },
+  varanasi: { boarding: ["Varanasi Bus Stand", "Godowlia", "Lanka"], dropping: ["Varanasi Bus Stand", "Godowlia"] },
+  agra: { boarding: ["Agra Fort Bus Stand", "Idgah Bus Stand", "Raja Mandi"], dropping: ["Agra Fort Bus Stand", "Idgah Bus Stand"] },
+  patna: { boarding: ["Patna Bus Stand", "Gandhi Maidan", "Boring Road"], dropping: ["Patna Bus Stand", "Gandhi Maidan"] },
+  ranchi: { boarding: ["Ranchi Bus Stand", "Kantatoli"], dropping: ["Ranchi Bus Stand"] },
+  bhubaneswar: { boarding: ["Baramunda Bus Stand", "Master Canteen", "Rasulgarh"], dropping: ["Baramunda Bus Stand", "Master Canteen"] },
+  thiruvananthapuram: { boarding: ["KSRTC Bus Stand", "Thampanoor", "Palayam"], dropping: ["KSRTC Bus Stand", "Thampanoor"] },
+  kozhikode: { boarding: ["Kozhikode Bus Stand", "Mananchira", "KSRTC Bus Stand"], dropping: ["Kozhikode Bus Stand", "Mananchira"] },
+  thrissur: { boarding: ["Thrissur Bus Stand", "Round North"], dropping: ["Thrissur Bus Stand"] }
+};
+var APPROX_DISTANCE_KM = {
+  "hyderabad-vijayawada": 270,
+  "hyderabad-visakhapatnam": 620,
+  "hyderabad-bangalore": 570,
+  "hyderabad-chennai": 620,
+  "hyderabad-pune": 560,
+  "hyderabad-mumbai": 710,
+  "hyderabad-goa": 680,
+  "hyderabad-tirupati": 550,
+  "hyderabad-nagpur": 500,
+  "mumbai-pune": 150,
+  "mumbai-goa": 600,
+  "mumbai-nashik": 170,
+  "mumbai-ahmedabad": 530,
+  "mumbai-surat": 290,
+  "mumbai-indore": 590,
+  "mumbai-bangalore": 990,
+  "mumbai-hyderabad": 710,
+  "delhi-jaipur": 280,
+  "delhi-agra": 200,
+  "delhi-chandigarh": 250,
+  "delhi-lucknow": 550,
+  "delhi-varanasi": 820,
+  "delhi-amritsar": 450,
+  "delhi-dehradun": 330,
+  "bangalore-chennai": 350,
+  "bangalore-coimbatore": 360,
+  "bangalore-goa": 560,
+  "bangalore-hyderabad": 570,
+  "bangalore-mangalore": 360,
+  "bangalore-kochi": 600,
+  "bangalore-pune": 840,
+  "bangalore-madurai": 490,
+  "chennai-coimbatore": 500,
+  "chennai-madurai": 460,
+  "chennai-kochi": 680,
+  "chennai-bangalore": 350,
+  "chennai-vijayawada": 430,
+  "pune-goa": 460,
+  "pune-nashik": 210,
+  "pune-ahmedabad": 470,
+  "pune-indore": 580,
+  "ahmedabad-surat": 260,
+  "ahmedabad-vadodara": 110,
+  "ahmedabad-indore": 400,
+  "kolkata-bhubaneswar": 440,
+  "kolkata-patna": 580,
+  "kolkata-ranchi": 380
+};
+function getDistance(a, b) {
+  const k1 = `${a}-${b}`, k2 = `${b}-${a}`;
+  return APPROX_DISTANCE_KM[k1] || APPROX_DISTANCE_KM[k2] || 400;
+}
+function getCityData(city) {
+  const key = city.toLowerCase().split(",")[0].trim().split(" ")[0];
+  return CITY_BUS_DATA[key] || CITY_BUS_DATA[city.toLowerCase().split(",")[0].trim()] || { boarding: [`${city} Bus Stand`, `${city} Central`], dropping: [`${city} Bus Stand`] };
+}
+router6.get("/buses/live-search", (req, res) => {
+  const rawFrom = req.query.from || "";
+  const rawTo = req.query.to || "";
+  const from = rawFrom.split(",")[0].trim();
+  const to = rawTo.split(",")[0].trim();
+  if (!from || !to) {
+    res.status(400).json({ error: "Both 'from' and 'to' are required." });
+    return;
+  }
+  const distKm = getDistance(from.toLowerCase(), to.toLowerCase());
+  const avgSpeedKmh = 60;
+  const totalMins = Math.round(distKm / avgSpeedKmh * 60);
+  const durH = Math.floor(totalMins / 60);
+  const durM = totalMins % 60;
+  const durationStr = `${durH}h${durM > 0 ? ` ${durM}m` : ""}`;
+  const fromData = getCityData(from);
+  const toData = getCityData(to);
+  const seed = from.toLowerCase().split("").reduce((a, c) => a + c.charCodeAt(0), 0) + to.toLowerCase().split("").reduce((a, c) => a + c.charCodeAt(0), 0);
+  const OPERATORS = [
+    { name: "APSRTC", types: ["AC Seater", "Non-AC Seater", "Volvo Multi-Axle"] },
+    { name: "VRL Travels", types: ["AC Sleeper", "AC Semi-Sleeper", "Non-AC Seater"] },
+    { name: "Orange Travels", types: ["AC Sleeper", "AC Semi-Sleeper"] },
+    { name: "SRS Travels", types: ["Non-AC Seater", "AC Seater"] },
+    { name: "Patel Travels", types: ["AC Sleeper", "AC Semi-Sleeper", "AC Seater"] },
+    { name: "Neeta Tours", types: ["AC Sleeper", "Volvo Multi-Axle"] },
+    { name: "Paulo Travels", types: ["AC Sleeper", "Scania Multi-Axle"] },
+    { name: "KPN Travels", types: ["AC Semi-Sleeper", "AC Seater"] },
+    { name: "Chartered Bus", types: ["AC Sleeper", "Volvo Multi-Axle"] },
+    { name: "Raj National", types: ["Non-AC Seater", "AC Seater"] },
+    { name: "MSRTC Shivshahi", types: ["AC Seater", "Volvo Multi-Axle"] },
+    { name: "KSRTC Airavata", types: ["Volvo Multi-Axle", "AC Sleeper"] }
+  ];
+  const BASE_PRICES = {
+    "Non-AC Seater": Math.round(distKm * 1.2 / 50) * 50,
+    "AC Seater": Math.round(distKm * 1.8 / 50) * 50,
+    "AC Semi-Sleeper": Math.round(distKm * 2.2 / 50) * 50,
+    "AC Sleeper": Math.round(distKm * 2.8 / 50) * 50,
+    "Volvo Multi-Axle": Math.round(distKm * 3.2 / 50) * 50,
+    "Scania Multi-Axle": Math.round(distKm * 3.5 / 50) * 50
+  };
+  const DEP_TIMES = ["4:00 PM", "5:30 PM", "6:00 PM", "7:00 PM", "8:00 PM", "9:00 PM", "10:00 PM", "11:00 PM", "11:59 PM"];
+  function addTime(hhmm12, addMins) {
+    const m = hhmm12.match(/(\d+):(\d+)\s*(AM|PM)/i);
+    if (!m) return hhmm12;
+    let h = parseInt(m[1]), min2 = parseInt(m[2]);
+    const pm = m[3].toUpperCase() === "PM";
+    if (pm && h !== 12) h += 12;
+    if (!pm && h === 12) h = 0;
+    const totalM = h * 60 + min2 + addMins;
+    const nextDay = totalM >= 1440;
+    const rh = Math.floor(totalM % 1440 / 60);
+    const rm = totalM % 60;
+    const period = rh >= 12 ? "PM" : "AM";
+    const displayH = rh > 12 ? rh - 12 : rh === 0 ? 12 : rh;
+    return `${displayH}:${rm.toString().padStart(2, "0")} ${period}${nextDay ? " (+1)" : ""}`;
+  }
+  const pickedCount = 6 + seed % 3;
+  const shuffled = [...OPERATORS].sort((a, b) => {
+    const ha = a.name.charCodeAt(0) * seed % 100;
+    const hb = b.name.charCodeAt(0) * seed % 100;
+    return ha - hb;
+  });
+  const picked = shuffled.slice(0, pickedCount);
+  const buses = picked.map((op, idx) => {
+    const busType = op.types[(seed + idx) % op.types.length];
+    const basePrice = BASE_PRICES[busType] || 500;
+    const price = basePrice + seed * (idx + 1) % 5 * 50;
+    const depTime = DEP_TIMES[(idx + seed % 3) % DEP_TIMES.length];
+    const arrTime = addTime(depTime, totalMins);
+    const totalSeats = busType.includes("Sleeper") ? 36 : busType.includes("Semi") ? 40 : 45;
+    const seatsAvailable = 3 + (seed * idx + 7) % (totalSeats - 5);
+    const amenities = [];
+    if (!busType.includes("Non-AC")) amenities.push("AC");
+    if (busType.includes("Volvo") || busType.includes("Scania") || busType.includes("Sleeper")) amenities.push("Wifi");
+    if (busType.includes("Sleeper") || busType.includes("Volvo")) amenities.push("Charging");
+    if (basePrice >= 600) amenities.push("Water Bottle");
+    if (busType.includes("Sleeper")) amenities.push("Blanket");
+    if (busType.includes("Volvo") || busType.includes("Scania")) amenities.push("Entertainment");
+    const bPoints = fromData.boarding.slice(0, 4);
+    const dPoints = toData.dropping.slice(0, 4);
+    return {
+      id: idx + 1,
+      name: op.name,
+      operator: op.name,
+      from,
+      to,
+      departure: depTime,
+      arrival: arrTime,
+      duration: durationStr,
+      price,
+      busType,
+      totalSeats,
+      seatsAvailable,
+      amenities,
+      rating: parseFloat((3.5 + (seed + idx * 7) % 15 / 10).toFixed(1)),
+      boardingPoints: bPoints,
+      droppingPoints: dPoints
+    };
+  });
+  res.json({ buses, total: buses.length, source: "generated", from, to, distanceKm: distKm });
+});
+router6.get("/buses/search", async (req, res) => {
+  const parsed = SearchBusesQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const { origin: origin2, destination } = parsed.data;
+  let query = db.select().from(busesTable).$dynamic();
+  const conditions = [];
+  if (origin2) {
+    conditions.push(ilike(busesTable.origin, `%${origin2}%`));
+  }
+  if (destination) {
+    conditions.push(ilike(busesTable.destination, `%${destination}%`));
+  }
+  if (conditions.length > 0) {
+    const { and: and3 } = await Promise.resolve().then(() => (init_drizzle_orm(), drizzle_orm_exports));
+    query = query.where(and3(...conditions));
+  }
+  const buses = await query;
+  const mapped = buses.map((b) => ({
+    ...b,
+    price: Number(b.price)
+  }));
+  res.json(SearchBusesResponse.parse(mapped));
+});
+router6.get("/buses", async (_req, res) => {
+  const buses = await db.select().from(busesTable).orderBy(busesTable.id);
+  const mapped = buses.map((b) => ({
+    ...b,
+    price: Number(b.price)
+  }));
+  res.json(ListBusesResponse.parse(mapped));
+});
+router6.get("/buses/:id", async (req, res) => {
+  const params = GetBusParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const [bus] = await db.select().from(busesTable).where(eq(busesTable.id, params.data.id));
+  if (!bus) {
+    res.status(404).json({ error: "Bus not found" });
+    return;
+  }
+  res.json(GetBusResponse.parse({ ...bus, price: Number(bus.price) }));
+});
+var buses_default = router6;
+
+// src/routes/hotels.ts
+var import_express7 = __toESM(require_express2(), 1);
+init_drizzle_orm();
+import { createHash } from "crypto";
+var router7 = (0, import_express7.Router)();
+var HOTELBEDS_API_BASE = (process.env["HOTELBEDS_API_BASE"] ?? "https://api.test.hotelbeds.com").replace(/\/$/, "");
+var HOTELBEDS_DEST_CODES = {
+  hyderabad: "HYD",
+  mumbai: "BOM",
+  bombay: "BOM",
+  delhi: "DEL",
+  "new delhi": "DEL",
+  bangalore: "BLR",
+  bengaluru: "BLR",
+  goa: "GOA",
+  chennai: "MAA",
+  madras: "MAA",
+  kolkata: "CCU",
+  calcutta: "CCU",
+  jaipur: "JAI",
+  kochi: "COK",
+  cochin: "COK",
+  pune: "PNQ",
+  ahmedabad: "AMD",
+  agra: "AGR",
+  varanasi: "VNS",
+  udaipur: "UDR",
+  amritsar: "ATQ"
+};
+function hotelbedsDestCode(city) {
+  return HOTELBEDS_DEST_CODES[city.toLowerCase().trim()] ?? null;
+}
+function hotelbedsSignature(apiKey, secret) {
+  const ts = Math.floor(Date.now() / 1e3).toString();
+  return createHash("sha256").update(apiKey + secret + ts).digest("hex");
+}
+router7.get("/hotels/live-search", async (req, res) => {
+  const city = req.query.city || "";
+  const checkin = req.query.checkin || "";
+  const checkout = req.query.checkout || "";
+  if (!city.trim()) {
+    res.status(400).json({ error: "City is required for hotel search." });
+    return;
+  }
+  const keysRows = await db.select().from(apiKeysTable).limit(1);
+  const keysRow = keysRows[0] ?? {};
+  const hbApiKey = keysRow.hotelApiKey || process.env.HOTELBEDS_API_KEY || "";
+  const hbSecret = keysRow.hotelApiSecret || process.env.HOTELBEDS_SECRET || "";
+  logger.info("API KEY:", hbApiKey ? `${hbApiKey.slice(0, 6)}...${hbApiKey.slice(-4)} (length ${hbApiKey.length})` : "NOT SET");
+  logger.info(`[hotels/live-search] city="${city}" checkin="${checkin}" checkout="${checkout}" hotelbeds=${hbApiKey ? "set" : "not set"}`);
+  if (hbApiKey && hbSecret) {
+    const destCode = hotelbedsDestCode(city);
+    const checkIn = checkin || new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10);
+    const checkOut = checkout || new Date(Date.now() + 9 * 864e5).toISOString().slice(0, 10);
+    if (!destCode) {
+      logger.info(`HotelBeds Error: No destination code mapped for city "${city}". Add it to HOTELBEDS_DEST_CODES.`);
+      res.json({ hotels: [], total: 0, source: "hotelbeds", city, message: `No HotelBeds destination code for "${city}".` });
+      return;
+    }
+    const requestBody = {
+      stay: { checkIn, checkOut },
+      occupancies: [{ rooms: 1, adults: 2, children: 0 }],
+      destination: { code: destCode }
+    };
+    logger.info("Calling HotelBeds API...", { city, destCode, checkIn, checkOut, endpoint: `${HOTELBEDS_API_BASE}/hotel-api/1.0/hotels` });
+    try {
+      const hbRes = await fetch(`${HOTELBEDS_API_BASE}/hotel-api/1.0/hotels`, {
+        method: "POST",
+        headers: {
+          "Api-key": hbApiKey,
+          "X-Signature": hotelbedsSignature(hbApiKey, hbSecret),
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        body: JSON.stringify(requestBody),
+        signal: AbortSignal.timeout(15e3)
+      });
+      const hbBody = await hbRes.json().catch(() => null);
+      logger.info("HotelBeds Response:", JSON.stringify(hbBody).slice(0, 1200));
+      if (!hbRes.ok) {
+        logger.error({ status: hbRes.status, body: hbBody });
+        res.json({ hotels: [], total: 0, source: "hotelbeds", city, message: `HotelBeds API error ${hbRes.status}` });
+        return;
+      }
+      const rawHotels = hbBody?.hotels?.hotels ?? [];
+      logger.info(`HotelBeds: ${rawHotels.length} hotels returned for ${city} (${destCode})`);
+      if (rawHotels.length === 0) {
+        res.json({ hotels: [], total: 0, source: "hotelbeds", city, message: `HotelBeds has no inventory for "${city}" (${destCode}) in the test environment for ${checkIn}\u2192${checkOut}.` });
+        return;
+      }
+      const FALLBACK_IMAGES = [
+        "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&q=80",
+        "https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=800&q=80",
+        "https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?w=800&q=80",
+        "https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?w=800&q=80",
+        "https://images.unsplash.com/photo-1571003123894-1f0594d2b5d9?w=800&q=80",
+        "https://images.unsplash.com/photo-1444201983204-c43cbd584d93?w=800&q=80",
+        "https://images.unsplash.com/photo-1455587734955-081b22074882?w=800&q=80"
+      ];
+      const mapped = rawHotels.slice(0, 20).map((h, idx) => {
+        const stars = parseInt(h.categoryCode) || 3;
+        const firstRate = h.rooms?.[0]?.rates?.[0];
+        const netPrice = parseFloat(firstRate?.net || "0");
+        const pricePerNight = netPrice > 0 ? Math.round(netPrice * 84) : 3500 + idx * 500;
+        const rateKey = firstRate?.rateKey ?? null;
+        const boardName = (firstRate?.boardName || "").toUpperCase();
+        const amenities = ["WiFi", "AC"];
+        if (boardName.includes("BREAKFAST") || boardName.includes("BB")) amenities.push("Breakfast");
+        if (boardName.includes("HALF") || boardName.includes("HB")) amenities.push("Half Board");
+        if (boardName.includes("FULL") || boardName.includes("FB")) amenities.push("Full Board");
+        if (stars >= 4) amenities.push("Restaurant", "Room Service");
+        if (stars >= 5) amenities.push("Spa", "Concierge");
+        if (stars >= 3) amenities.push("Parking");
+        const imageUrl = FALLBACK_IMAGES[idx % FALLBACK_IMAGES.length];
+        const baseRating = Math.min(5, (stars - 1) * 0.5 + 2.5);
+        const rating = parseFloat((baseRating + idx % 5 * 0.1).toFixed(1));
+        const ratingLabel = rating >= 4.5 ? "Exceptional" : rating >= 4 ? "Excellent" : rating >= 3.5 ? "Very Good" : "Good";
+        return {
+          id: h.code || 1e4 + idx,
+          name: h.name || `Hotel ${idx + 1}`,
+          city,
+          location: h.zoneName || h.destinationName || city,
+          stars,
+          rating,
+          ratingCount: 150 + idx * 45,
+          ratingLabel,
+          pricePerNight,
+          amenities,
+          imageUrl,
+          photos: [imageUrl],
+          description: `${h.name} \u2014 a ${h.categoryName || `${stars}-star`} property in ${h.zoneName || city}.`,
+          rateKey
+        };
+      });
+      logger.info(`[hotels/live-search] HotelBeds OK: ${mapped.length} hotels for ${city}`);
+      res.json({ hotels: mapped, total: mapped.length, source: "hotelbeds", city });
+      return;
+    } catch (err) {
+      logger.error(err?.message ?? err);
+      res.json({ hotels: [], total: 0, source: "hotelbeds", city, message: `HotelBeds request failed: ${err?.message}` });
+      return;
+    }
+  }
+  logger.warn("HotelBeds: HOTELBEDS_API_KEY and HOTELBEDS_SECRET are not configured.");
+  res.json({ hotels: [], total: 0, source: "hotelbeds", city, message: "HotelBeds credentials not configured." });
+});
+router7.get("/hotels/search", async (req, res) => {
+  const parsed = SearchHotelsQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const { location, stars } = parsed.data;
+  let query = db.select().from(hotelsTable).$dynamic();
+  const conditions = [];
+  if (location) {
+    conditions.push(ilike(hotelsTable.location, `%${location}%`));
+  }
+  if (stars) {
+    conditions.push(eq(hotelsTable.stars, stars));
+  }
+  if (conditions.length > 0) {
+    const { and: and3 } = await Promise.resolve().then(() => (init_drizzle_orm(), drizzle_orm_exports));
+    query = query.where(and3(...conditions));
+  }
+  const hotels = await query;
+  const mapped = hotels.map((h) => ({
+    ...h,
+    rating: Number(h.rating),
+    pricePerNight: Number(h.pricePerNight),
+    imageUrl: h.imageUrl ?? void 0,
+    address: h.address ?? void 0,
+    description: h.description ?? void 0
+  }));
+  res.json(SearchHotelsResponse.parse(mapped));
+});
+router7.get("/hotels", async (_req, res) => {
+  const hotels = await db.select().from(hotelsTable).orderBy(hotelsTable.id);
+  const mapped = hotels.map((h) => ({
+    ...h,
+    rating: Number(h.rating),
+    pricePerNight: Number(h.pricePerNight),
+    imageUrl: h.imageUrl ?? void 0,
+    address: h.address ?? void 0,
+    description: h.description ?? void 0
+  }));
+  res.json(ListHotelsResponse.parse(mapped));
+});
+function toTitleCase(str) {
+  return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+}
+router7.get("/hotels/rooms", async (req, res) => {
+  const hotelCode = parseInt(req.query.hotelCode || "0");
+  const checkin = req.query.checkin || "";
+  const checkout = req.query.checkout || "";
+  const adults = parseInt(req.query.adults || "2") || 2;
+  if (!hotelCode || !checkin || !checkout) {
+    res.status(400).json({ error: "hotelCode, checkin and checkout are required." });
+    return;
+  }
+  const keysRows = await db.select().from(apiKeysTable).limit(1);
+  const keysRow = keysRows[0] ?? {};
+  const hbApiKey = keysRow.hotelApiKey || process.env.HOTELBEDS_API_KEY || "";
+  const hbSecret = keysRow.hotelApiSecret || process.env.HOTELBEDS_SECRET || "";
+  if (!hbApiKey || !hbSecret) {
+    res.json({ rooms: [], message: "HotelBeds credentials not configured." });
+    return;
+  }
+  const requestBody = {
+    stay: { checkIn: checkin, checkOut: checkout },
+    occupancies: [{ rooms: 1, adults, children: 0 }],
+    hotels: { hotel: [hotelCode] }
+  };
+  logger.info(`[hotels/rooms] hotel=${hotelCode} ${checkin}\u2192${checkout} adults=${adults}`);
+  try {
+    const hbRes = await fetch(`${HOTELBEDS_API_BASE}/hotel-api/1.0/hotels`, {
+      method: "POST",
+      headers: {
+        "Api-key": hbApiKey,
+        "X-Signature": hotelbedsSignature(hbApiKey, hbSecret),
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify(requestBody),
+      signal: AbortSignal.timeout(15e3)
+    });
+    const data = await hbRes.json().catch(() => null);
+    if (!hbRes.ok) {
+      logger.error(hbRes.status, JSON.stringify(data).slice(0, 400));
+      res.json({ rooms: [], message: `HotelBeds error ${hbRes.status}` });
+      return;
+    }
+    const rawHotel = data?.hotels?.hotels?.[0];
+    if (!rawHotel) {
+      logger.info(`[hotels/rooms] No availability for hotel ${hotelCode}`);
+      res.json({ rooms: [], message: "Hotel not available for the selected dates." });
+      return;
+    }
+    const rooms = [];
+    for (const room of rawHotel.rooms ?? []) {
+      for (const rate of room.rates ?? []) {
+        const netUSD = parseFloat(rate.net || "0");
+        const priceINR = netUSD > 0 ? Math.round(netUSD * 84) : 0;
+        const hasFreeCancellation = rate.rateType !== "NRF" && (rate.cancellationPolicies?.length ?? 0) > 0;
+        const cancellationDeadline = [...rate.cancellationPolicies ?? []].sort((a, b) => new Date(a.from).getTime() - new Date(b.from).getTime())[0]?.from ?? "";
+        rooms.push({
+          code: room.code,
+          name: toTitleCase(room.name || room.code),
+          rateKey: rate.rateKey,
+          boardName: toTitleCase(rate.boardName || rate.boardCode || "Room Only"),
+          priceINR,
+          refundable: hasFreeCancellation,
+          cancellationDeadline
+        });
+      }
+    }
+    rooms.sort((a, b) => a.priceINR - b.priceINR);
+    logger.info(`[hotels/rooms] ${rooms.length} room options for hotel ${hotelCode}`);
+    res.json({ rooms, hotelName: rawHotel.name });
+  } catch (err) {
+    logger.error(err?.message ?? err);
+    res.json({ rooms: [], message: `Failed to fetch rooms: ${err?.message}` });
+  }
+});
+router7.get("/hotels/:id", async (req, res) => {
+  const params = GetHotelParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const [hotel] = await db.select().from(hotelsTable).where(eq(hotelsTable.id, params.data.id));
+  if (!hotel) {
+    res.status(404).json({ error: "Hotel not found" });
+    return;
+  }
+  res.json(
+    GetHotelResponse.parse({
+      ...hotel,
+      rating: Number(hotel.rating),
+      pricePerNight: Number(hotel.pricePerNight),
+      imageUrl: hotel.imageUrl ?? void 0,
+      address: hotel.address ?? void 0,
+      description: hotel.description ?? void 0
+    })
+  );
+});
+router7.post("/hotels/book", async (req, res) => {
+  const { rateKey, hotelId, hotelName, holder, paxes } = req.body ?? {};
+  if (!rateKey) {
+    res.status(400).json({ error: "rateKey is required to book a hotel." });
+    return;
+  }
+  const keysRows = await db.select().from(apiKeysTable).limit(1);
+  const keysRow = keysRows[0] ?? {};
+  const hbApiKey = keysRow.hotelApiKey || process.env.HOTELBEDS_API_KEY || "";
+  const hbSecret = keysRow.hotelApiSecret || process.env.HOTELBEDS_SECRET || "";
+  if (!hbApiKey || !hbSecret) {
+    res.status(503).json({ error: "HotelBeds credentials not configured." });
+    return;
+  }
+  const resolvedHolder = holder ?? { name: "Test", surname: "User" };
+  const resolvedPaxes = paxes ?? [{ roomId: 1, type: "AD", name: resolvedHolder.name, surname: resolvedHolder.surname }];
+  const bookingPayload = {
+    holder: resolvedHolder,
+    rooms: [{ rateKey, paxes: resolvedPaxes }],
+    clientReference: `DFG-${Date.now()}`,
+    remark: "Dream Fly Global booking",
+    tolerance: 2
+  };
+  logger.info(`[hotels/book] Booking hotel ${hotelId ?? "?"} ("${hotelName ?? "?"}") with rateKey: ${rateKey.slice(0, 60)}...`);
+  try {
+    const hbRes = await fetch(`${HOTELBEDS_API_BASE}/hotel-api/1.0/bookings`, {
+      method: "POST",
+      headers: {
+        "Api-key": hbApiKey,
+        "X-Signature": hotelbedsSignature(hbApiKey, hbSecret),
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify(bookingPayload),
+      signal: AbortSignal.timeout(2e4)
+    });
+    const data = await hbRes.json().catch(() => null);
+    logger.info("Booking Response:", JSON.stringify(data));
+    if (!hbRes.ok) {
+      logger.error(hbRes.status, JSON.stringify(data));
+      res.status(hbRes.status).json({
+        error: data?.error?.message || `HotelBeds booking failed (${hbRes.status})`,
+        details: data
+      });
+      return;
+    }
+    res.json({ success: true, booking: data?.booking ?? data });
+  } catch (err) {
+    logger.error(err?.message ?? err);
+    res.status(500).json({ error: `Booking request failed: ${err?.message}` });
+  }
+});
+var hotels_default = router7;
+
+// src/routes/packages.ts
+var import_express8 = __toESM(require_express2(), 1);
+init_drizzle_orm();
+var router8 = (0, import_express8.Router)();
+router8.get("/packages", async (req, res) => {
+  const parsed = ListPackagesQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const { destination, type } = parsed.data;
+  let query = db.select().from(packagesTable).$dynamic();
+  const conditions = [];
+  if (destination) {
+    conditions.push(ilike(packagesTable.destination, `%${destination}%`));
+  }
+  if (type) {
+    conditions.push(eq(packagesTable.type, type));
+  }
+  if (conditions.length > 0) {
+    const { and: and3 } = await Promise.resolve().then(() => (init_drizzle_orm(), drizzle_orm_exports));
+    query = query.where(and3(...conditions));
+  }
+  const packages = await query.orderBy(packagesTable.id);
+  const mapped = packages.map((p) => ({
+    ...p,
+    price: Number(p.price),
+    originalPrice: p.originalPrice ? Number(p.originalPrice) : void 0,
+    rating: Number(p.rating),
+    imageUrl: p.imageUrl ?? void 0,
+    description: p.description ?? void 0
+  }));
+  res.json(ListPackagesResponse.parse(mapped));
+});
+router8.get("/packages/:id", async (req, res) => {
+  const params = GetPackageParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const [pkg] = await db.select().from(packagesTable).where(eq(packagesTable.id, params.data.id));
+  if (!pkg) {
+    res.status(404).json({ error: "Package not found" });
+    return;
+  }
+  res.json(
+    GetPackageResponse.parse({
+      ...pkg,
+      price: Number(pkg.price),
+      originalPrice: pkg.originalPrice ? Number(pkg.originalPrice) : void 0,
+      rating: Number(pkg.rating),
+      imageUrl: pkg.imageUrl ?? void 0,
+      description: pkg.description ?? void 0
+    })
+  );
+});
+router8.get("/destinations/popular", async (_req, res) => {
+  const destinations = await db.select().from(destinationsTable).orderBy(destinationsTable.id).limit(8);
+  const mapped = destinations.map((d) => ({
+    ...d,
+    startingPrice: Number(d.startingPrice),
+    rating: Number(d.rating),
+    imageUrl: d.imageUrl ?? void 0
+  }));
+  res.json(GetPopularDestinationsResponse.parse(mapped));
+});
+router8.get("/deals/featured", async (_req, res) => {
+  const packages = await db.select().from(packagesTable).where(eq(packagesTable.featured, true)).orderBy(packagesTable.id).limit(6);
+  const deals = packages.map((p) => {
+    const original = p.originalPrice ? Number(p.originalPrice) : Number(p.price) * 1.2;
+    const discounted = Number(p.price);
+    const discountPercent = Math.round((original - discounted) / original * 100);
+    return {
+      id: p.id,
+      title: p.name,
+      description: p.description ?? `${p.duration} days in ${p.destination}`,
+      type: "package",
+      originalPrice: original,
+      discountedPrice: discounted,
+      discountPercent,
+      imageUrl: p.imageUrl ?? void 0,
+      validUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1e3).toISOString(),
+      referenceId: p.id
+    };
+  });
+  res.json(GetFeaturedDealsResponse.parse(deals));
+});
+var packages_default = router8;
+
+// src/routes/bookings.ts
+var import_express9 = __toESM(require_express2(), 1);
+init_drizzle_orm();
+
+// src/lib/booking-id.ts
+init_drizzle_orm();
+var TYPE_PREFIX = {
+  flight: "FLT",
+  bus: "BUS",
+  hotel: "HTL",
+  package: "HLD",
+  holiday: "HLD",
+  activity: "ACT",
+  activities: "ACT",
+  visa: "VISA",
+  insurance: "INS",
+  car: "CAR",
+  cars: "CAR"
+};
+async function nextBookingRef(bookingType) {
+  const prefix = TYPE_PREFIX[bookingType.toLowerCase()] ?? "BKG";
+  const result = await db.execute(sql`
+    INSERT INTO booking_counters (type, counter)
+    VALUES (${prefix}, 1)
+    ON CONFLICT (type) DO UPDATE
+    SET counter = booking_counters.counter + 1
+    RETURNING counter
+  `);
+  const counter = Number(result.rows[0].counter);
+  const padded = String(counter).padStart(6, "0");
+  return `${prefix}-BK-${padded}`;
+}
+
+// src/lib/location-utils.ts
+function sanitizeLocation(raw) {
+  if (!raw) return "";
+  let s = String(raw).trim();
+  s = s.replace(/[\x00-\x1F\x7F\u00AD\u200B\u200C\u200D\u2028\u2029\uFEFF]/g, "");
+  s = s.replace(/!['\u2019\u0060\u0027;]/g, " ");
+  s = s.replace(/[\u2018\u2019\u201c\u201d\uFFFD\u00e2\u0086\u0092]/g, "");
+  s = s.replace(/\u2192/g, " ");
+  s = s.replace(/&rarr;|&#8594;|&#x2192;/gi, " ");
+  s = s.replace(/\s*\([A-Z]{3,4}\)\s*/g, " ");
+  s = s.replace(/\s+[A-Z]{3}$/, "");
+  s = s.replace(/\s+/g, " ").trim();
+  const tokens = s.split(" ").filter(Boolean);
+  if (tokens.length >= 4 && tokens.every((t) => /^[A-Za-z]$/.test(t))) {
+    s = tokens.join("");
+  }
+  const isAllCaps = s === s.toUpperCase() && /[A-Z]/.test(s);
+  const isAllLower = s === s.toLowerCase() && /[a-z]/.test(s);
+  if (isAllCaps || isAllLower) {
+    s = s.split(" ").map((w) => w.length > 0 ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : "").join(" ");
+  }
+  return s;
+}
+function formatRoute(from, to, separator = " \u2192 ") {
+  const f = sanitizeLocation(from);
+  const t = sanitizeLocation(to);
+  if (!f && !t) return "";
+  if (!f) return t;
+  if (!t) return f;
+  return `${f}${separator}${t}`;
+}
+
+// src/routes/bookings.ts
+var router9 = (0, import_express9.Router)();
+function sanitizeTitle(raw) {
+  if (!raw) return null;
+  const s = String(raw).trim();
+  const parts = s.split(/\s*(?:\u2192|!['`'\u2019\u0060;])\s*/);
+  if (parts.length === 2 && parts[0].trim() && parts[1].trim()) {
+    return formatRoute(parts[0], parts[1]);
+  }
+  return s.replace(/!['\u2019\u0060\u0027;]/g, " ").replace(/\u2192/g, "").replace(/[\u200B\u200C\u200D\uFEFF]/g, "").replace(/\s+/g, " ").trim() || null;
+}
+async function findOrCreateUser(phone, email3, name2) {
+  const cleanPhone = phone?.trim() || null;
+  const cleanEmail = email3?.trim().toLowerCase() || null;
+  if (cleanPhone) {
+    const [byPhone] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.phone, cleanPhone)).limit(1);
+    if (byPhone) return { id: byPhone.id, created: false };
+  }
+  if (cleanEmail) {
+    const [byEmail] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, cleanEmail)).limit(1);
+    if (byEmail) return { id: byEmail.id, created: false };
+  }
+  const [created] = await db.insert(usersTable).values({
+    name: name2 || "Guest",
+    phone: cleanPhone,
+    email: cleanEmail,
+    role: "user",
+    isApproved: false,
+    otpUser: !!cleanPhone
+  }).returning({ id: usersTable.id });
+  return { id: created.id, created: true };
+}
+var REVENUE_STATUSES = /* @__PURE__ */ new Set(["confirmed", "ticketed", "completed"]);
+var LEAD_STATUSES = /* @__PURE__ */ new Set(["pending", "payment_failed", "failed", "cancelled", "refunded"]);
+var isSuccessful = (b) => REVENUE_STATUSES.has((b.status ?? "").toLowerCase());
+var isLead = (b) => {
+  const s = (b.status ?? "").toLowerCase();
+  const ps = (b.paymentStatus ?? "").toLowerCase();
+  return LEAD_STATUSES.has(s) || ps === "pending" || ps === "payment_failed" || ps === "failed";
+};
+router9.get("/stats/summary", async (_req, res) => {
+  const allBookings = await db.select().from(bookingsTable);
+  const confirmedBookings = allBookings.filter(isSuccessful);
+  const confirmedRevenue = confirmedBookings.reduce((sum2, b) => sum2 + Number(b.totalPrice), 0);
+  const totalRevenue = confirmedRevenue;
+  const successfulBookings = confirmedBookings.length;
+  const pendingBookings = allBookings.filter(
+    (b) => (b.status ?? "").toLowerCase() === "pending" || (b.paymentStatus ?? "").toLowerCase() === "pending"
+  ).length;
+  const failedBookings = allBookings.filter(
+    (b) => (b.status ?? "").toLowerCase() === "failed" || (b.status ?? "").toLowerCase() === "payment_failed" || (b.paymentStatus ?? "").toLowerCase() === "failed" || (b.paymentStatus ?? "").toLowerCase() === "payment_failed"
+  ).length;
+  const cancelledBookings = allBookings.filter(
+    (b) => {
+      const s = (b.status ?? "").toLowerCase();
+      return s === "cancelled" || s === "refunded";
+    }
+  ).length;
+  const pendingLeads = pendingBookings;
+  const failedPayments = failedBookings;
+  const totalLeads = allBookings.filter(isLead).length;
+  res.json(
+    GetStatsSummaryResponse.parse({
+      totalBookings: successfulBookings,
+      flightBookings: confirmedBookings.filter((b) => b.bookingType === "flight").length,
+      busBookings: confirmedBookings.filter((b) => b.bookingType === "bus").length,
+      hotelBookings: confirmedBookings.filter((b) => b.bookingType === "hotel").length,
+      packageBookings: confirmedBookings.filter((b) => b.bookingType === "package").length,
+      totalRevenue,
+      confirmedRevenue,
+      successfulBookings,
+      pendingLeads,
+      failedPayments,
+      cancelledBookings,
+      totalLeads,
+      pendingBookings,
+      failedBookings
+    })
+  );
+});
+router9.get("/bookings", async (req, res) => {
+  try {
+    const { userId, phone, email: email3 } = req.query;
+    const phoneParam = phone && typeof phone === "string" ? phone.trim() : null;
+    const emailParam = email3 && typeof email3 === "string" ? email3.trim().toLowerCase() : null;
+    let resolvedUserId = null;
+    if (userId && typeof userId === "string" && /^\d+$/.test(userId)) {
+      resolvedUserId = userId;
+    } else if (phoneParam) {
+      const [user] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.phone, phoneParam)).limit(1);
+      if (user) resolvedUserId = String(user.id);
+    } else if (emailParam) {
+      const [user] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, emailParam)).limit(1);
+      if (user) resolvedUserId = String(user.id);
+    }
+    let query = db.select().from(bookingsTable).$dynamic();
+    if (resolvedUserId) {
+      const conditions = [
+        eq(bookingsTable.userId, resolvedUserId)
+      ];
+      if (phoneParam) conditions.push(eq(bookingsTable.passengerPhone, phoneParam));
+      if (emailParam) conditions.push(eq(bookingsTable.passengerEmail, emailParam));
+      query = query.where(or(...conditions));
+    }
+    const bookings = await query.orderBy(desc(bookingsTable.createdAt));
+    const mapped = bookings.map((b) => {
+      const d = b.details ?? {};
+      const baseFare = b.baseFare != null ? Number(b.baseFare) : Number(d.rawBaseAmount ?? d.base_price ?? 0) || null;
+      const markupAmount = b.markupAmount != null ? Number(b.markupAmount) : Number(d.markupAmount ?? d.markup ?? 0) || null;
+      const convenienceFee = b.convenienceFee != null ? Number(b.convenienceFee) : Number(d.convenienceFee ?? d.convenience_fee ?? 0) || null;
+      return {
+        ...b,
+        totalPrice: Number(b.totalPrice),
+        commissionEarned: b.commissionEarned ? Number(b.commissionEarned) : null,
+        createdAt: b.createdAt.toISOString(),
+        passengerPhone: b.passengerPhone ?? void 0,
+        details: b.details ?? void 0,
+        baseFare,
+        markupAmount,
+        convenienceFee
+      };
+    });
+    res.json(mapped);
+  } catch (error40) {
+    logger.error("\u274C Error fetching bookings:", error40);
+    res.status(500).json({ error: "Failed to fetch bookings" });
+  }
+});
+router9.post("/bookings", async (req, res) => {
+  try {
+    const body = req.body;
+    const bookingData = body.data || body;
+    const details = bookingData.details || {};
+    const passengerName = bookingData.passengerName || details.customerName || "";
+    const passengerEmail = bookingData.passengerEmail || details.customerEmail || null;
+    const passengerPhone = bookingData.passengerPhone || details.customerPhone || null;
+    let userId;
+    const incomingUserId = details.userId || bookingData.userId || "";
+    if (incomingUserId && incomingUserId !== "guest" && incomingUserId !== "") {
+      userId = incomingUserId;
+      logger.info("\u{1F464} Booking: authenticated user", userId);
+    } else {
+      const { id, created } = await findOrCreateUser(passengerPhone, passengerEmail, passengerName);
+      userId = String(id);
+      logger.info(
+        created ? `\u{1F195} Booking: auto-created user ${userId} for phone=${passengerPhone} email=${passengerEmail}` : `\u2705 Booking: found existing user ${userId} for phone=${passengerPhone} email=${passengerEmail}`
+      );
+    }
+    const incomingRef = details.bookingRef || bookingData.bookingRef || null;
+    const bookingType_str = bookingData.bookingType || "flight";
+    const bookingRef = incomingRef && incomingRef.trim() !== "" ? incomingRef.trim() : await nextBookingRef(bookingType_str);
+    const title = sanitizeTitle(bookingData.title || details.title || null);
+    const referenceId = parseInt(String(bookingData.referenceId || 0), 10) || 0;
+    const totalPrice = String(details.amount || bookingData.totalPrice || 0);
+    const paymentId = details.paymentId || bookingData.paymentId || null;
+    const paymentMethod = details.paymentMethod || bookingData.paymentMethod || null;
+    const agentId = bookingData.agentId || details.agentId || null;
+    const agentCode = bookingData.agentCode || details.agentCode || null;
+    const agentEmail = bookingData.agentEmail || details.agentEmail || null;
+    const commissionEarned = details.commissionEarned || bookingData.commissionEarned ? String(details.commissionEarned || bookingData.commissionEarned) : null;
+    const rawBaseFareNum = Number(
+      bookingData.baseFare ?? details.rawBaseAmount ?? details.base_price ?? 0
+    );
+    const rawMarkupNum = Number(
+      bookingData.markupAmount ?? details.markupAmount ?? details.markup ?? 0
+    );
+    const rawConvFeeNum = Number(
+      bookingData.convenienceFee ?? details.convenienceFee ?? details.convenience_fee ?? 0
+    );
+    const baseFareVal = rawBaseFareNum > 0 ? String(rawBaseFareNum) : null;
+    const markupVal = rawMarkupNum > 0 ? String(rawMarkupNum) : null;
+    const convFeeVal = rawConvFeeNum > 0 ? String(rawConvFeeNum) : null;
+    const [inserted] = await db.insert(bookingsTable).values({
+      bookingRef,
+      userId,
+      bookingType: bookingData.bookingType || "flight",
+      title,
+      referenceId,
+      status: details.status || "confirmed",
+      passengerName,
+      passengerEmail: passengerEmail || "",
+      passengerPhone: passengerPhone || null,
+      totalPrice,
+      passengers: Number(bookingData.passengers || 1),
+      travelDate: bookingData.travelDate || (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
+      details,
+      agentId,
+      agentCode,
+      agentEmail,
+      commissionEarned,
+      paymentMethod,
+      paymentStatus: "paid",
+      paymentId,
+      baseFare: baseFareVal,
+      markupAmount: markupVal,
+      convenienceFee: convFeeVal
+    }).returning();
+    logger.info("\u2705 Booking saved to PostgreSQL:", inserted.id, "| ref:", bookingRef, "| user:", userId);
+    res.status(201).json({
+      ...inserted,
+      userId,
+      // echo back the resolved userId so frontend can update
+      totalPrice: Number(inserted.totalPrice),
+      commissionEarned: inserted.commissionEarned ? Number(inserted.commissionEarned) : null,
+      createdAt: inserted.createdAt.toISOString()
+    });
+  } catch (error40) {
+    logger.error("\u274C Error saving booking to DB:", error40);
+    res.status(500).json({ error: "Failed to save booking" });
+  }
+});
+router9.get("/invoice/:bookingRef", async (req, res) => {
+  const ref = req.params.bookingRef?.trim().toUpperCase();
+  if (!ref) {
+    res.status(400).json({ error: "bookingRef is required" });
+    return;
+  }
+  const [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.bookingRef, ref)).limit(1);
+  if (!booking) {
+    res.status(404).json({ error: "Invoice not found" });
+    return;
+  }
+  const d = booking.details || {};
+  const fi = d.flightInfo || {};
+  const bi = d.busInfo || {};
+  const hi = d.hotelInfo || {};
+  res.json({
+    bookingId: booking.bookingRef || String(booking.id),
+    bookingType: booking.bookingType,
+    passengerName: booking.passengerName,
+    passengerEmail: booking.passengerEmail,
+    passengerPhone: booking.passengerPhone ?? void 0,
+    passengers: booking.passengers,
+    travelDate: booking.travelDate,
+    checkoutDate: hi.checkout ?? void 0,
+    totalAmount: Number(booking.totalPrice),
+    paymentId: booking.paymentId || "\u2014",
+    paymentStatus: booking.paymentStatus,
+    timestamp: booking.createdAt.toISOString(),
+    title: booking.title || "",
+    selectedSeats: d.selectedSeats || bi.seats || void 0,
+    discount: d.discountAmount || void 0,
+    roomType: hi.room_type || void 0,
+    pnr: d.pnr || d.pnrNumber || fi.pnr || void 0,
+    // Flight
+    flightAirline: fi.airline || void 0,
+    flightNumber: fi.flightNum || void 0,
+    flightFrom: fi.from || void 0,
+    flightTo: fi.to || void 0,
+    flightDeparture: fi.departure || void 0,
+    flightArrival: fi.arrival || void 0,
+    flightDuration: fi.duration || void 0,
+    flightBaseFare: d.baseAmount || void 0,
+    flightConvFee: d.convenienceFee || void 0,
+    flightBaggageKg: d.extraBaggageKg || void 0,
+    flightBaggageCost: d.extraBaggageCost || void 0,
+    // Bus
+    busOperator: bi.operator || void 0,
+    busType: bi.busType || void 0,
+    busFrom: bi.from || void 0,
+    busTo: bi.to || void 0,
+    busDeparture: bi.departure || void 0,
+    busArrival: bi.arrival || void 0,
+    busBoardingPoint: bi.boarding_point || void 0,
+    busDroppingPoint: bi.dropping_point || void 0,
+    busBaseFare: d.baseAmount || void 0,
+    busConvFee: d.convenience_fee || void 0,
+    // Hotel
+    hotelName: hi.hotel_name || void 0,
+    hotelCity: hi.city || void 0,
+    hotelNights: hi.nights || void 0,
+    hotelRooms: hi.rooms || void 0,
+    hotelAdults: hi.guests || void 0
+  });
+});
+router9.get("/bookings/:id", async (req, res) => {
+  const rawId = req.params.id?.trim();
+  if (!rawId) {
+    res.status(400).json({ error: "Booking id is required" });
+    return;
+  }
+  let booking;
+  const numId = parseInt(rawId, 10);
+  if (!isNaN(numId) && String(numId) === rawId) {
+    [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, numId)).limit(1);
+  }
+  if (!booking) {
+    [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.bookingRef, rawId.toUpperCase())).limit(1);
+  }
+  if (!booking) {
+    res.status(404).json({ error: "Booking not found" });
+    return;
+  }
+  const d = booking.details ?? {};
+  const fi = d.flightInfo ?? {};
+  const bi = d.busInfo ?? {};
+  const hi = d.hotelInfo ?? {};
+  res.json({
+    id: booking.id,
+    bookingRef: booking.bookingRef || void 0,
+    bookingType: booking.bookingType,
+    referenceId: booking.referenceId,
+    status: booking.status,
+    paymentStatus: booking.paymentStatus || void 0,
+    paymentId: booking.paymentId || void 0,
+    paymentMethod: booking.paymentMethod || void 0,
+    title: booking.title || d.title || void 0,
+    passengerName: booking.passengerName,
+    passengerEmail: booking.passengerEmail,
+    passengerPhone: booking.passengerPhone ?? void 0,
+    passengers: booking.passengers,
+    travelDate: booking.travelDate,
+    createdAt: booking.createdAt.toISOString(),
+    totalPrice: Number(booking.totalPrice),
+    agentId: booking.agentId || void 0,
+    agentCode: booking.agentCode || void 0,
+    // Nested details (kept for backward compat)
+    details: booking.details ?? void 0,
+    // ── Flattened flight fields ────────────────────────────────────────────
+    flightAirline: fi.airline || void 0,
+    flightNumber: fi.flightNum || fi.flightNumber || void 0,
+    flightFrom: fi.from || fi.fromCity || void 0,
+    flightTo: fi.to || fi.toCity || void 0,
+    flightDeparture: fi.departure || void 0,
+    flightArrival: fi.arrival || void 0,
+    flightDuration: fi.duration || void 0,
+    // ── Flattened bus fields ───────────────────────────────────────────────
+    busOperator: bi.operator || void 0,
+    busType: bi.busType || void 0,
+    busFrom: bi.from || void 0,
+    busTo: bi.to || void 0,
+    busDeparture: bi.departure || void 0,
+    busArrival: bi.arrival || void 0,
+    busBoardingPoint: bi.boarding_point || bi.boardingPoint || void 0,
+    busDroppingPoint: bi.dropping_point || bi.droppingPoint || void 0,
+    // ── Flattened hotel fields ─────────────────────────────────────────────
+    hotelName: hi.hotel_name || hi.name || void 0,
+    hotelCity: hi.city || void 0,
+    hotelNights: hi.nights || void 0,
+    hotelRooms: hi.rooms || void 0,
+    hotelAdults: hi.guests || hi.adults || void 0,
+    checkoutDate: hi.checkout || void 0,
+    roomType: hi.room_type || void 0,
+    // ── Seat / misc ────────────────────────────────────────────────────────
+    selectedSeats: d.selectedSeats || bi.seats || void 0
+  });
+});
+router9.delete("/bookings/:id", async (req, res) => {
+  const params = CancelBookingParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, params.data.id));
+  if (!booking) {
+    res.status(404).json({ error: "Booking not found" });
+    return;
+  }
+  const [updated] = await db.update(bookingsTable).set({ status: "cancelled" }).where(eq(bookingsTable.id, params.data.id)).returning();
+  res.json(
+    CancelBookingResponse.parse({
+      ...updated,
+      totalPrice: Number(updated.totalPrice),
+      createdAt: updated.createdAt.toISOString(),
+      passengerPhone: updated.passengerPhone ?? void 0,
+      details: updated.details ?? void 0
+    })
+  );
+});
+router9.post("/bookings/record-failed", async (req, res) => {
+  try {
+    const body = req.body?.data || req.body;
+    const passengerName = String(body.passengerName || "Unknown");
+    const passengerEmail = String(body.passengerEmail || "") || null;
+    const passengerPhone = String(body.passengerPhone || "") || null;
+    const bookingRef = String(body.bookingRef || `FAIL-${Date.now().toString(36).toUpperCase()}`);
+    const bookingType = String(body.bookingType || "flight");
+    const totalPrice = String(Number(body.totalPrice ?? body.amount ?? 0));
+    const paymentId = String(body.paymentId || "") || null;
+    const failureReason = String(body.failureReason || body.error || "Payment failed");
+    const failureCode = String(body.failureCode || "payment_failed");
+    const details = typeof body.details === "object" && body.details !== null ? body.details : {};
+    const travelDate = String(body.travelDate || (/* @__PURE__ */ new Date()).toISOString().split("T")[0]);
+    let userId = "guest";
+    try {
+      const { id } = await findOrCreateUser(passengerPhone, passengerEmail, passengerName);
+      userId = String(id);
+    } catch {
+    }
+    const [inserted] = await db.insert(bookingsTable).values({
+      bookingRef,
+      userId,
+      bookingType,
+      passengerName,
+      passengerEmail: passengerEmail || "",
+      passengerPhone: passengerPhone || null,
+      totalPrice,
+      passengers: Number(body.passengers ?? 1),
+      travelDate,
+      status: "booking_failed",
+      paymentStatus: "failed",
+      bookingStatus: "failed",
+      paymentId,
+      failureReason,
+      failureCode,
+      details: { ...details, failureReason, failureCode, paymentId }
+    }).returning();
+    logger.info({ bookingRef, paymentId, failureReason }, "[bookings] failed payment record saved \u2014 id:", inserted.id);
+    res.status(201).json({ success: true, id: inserted.id, bookingRef });
+  } catch (err) {
+    logger.error({ err: err?.message }, "[bookings] failed to save failed payment record");
+    res.status(500).json({ success: false, error: err?.message || "Failed to save record" });
+  }
+});
+var bookings_default = router9;
+
+// src/routes/payments.ts
+var import_express10 = __toESM(require_express2(), 1);
+var import_razorpay = __toESM(require_razorpay(), 1);
+import crypto3 from "crypto";
+
+// src/lib/notification-service.ts
+import twilio4 from "twilio";
+
+// src/lib/email-service.ts
+import nodemailer2 from "nodemailer";
+function createTransport() {
+  const user = (process.env.SMTP_USER || "").trim();
+  const pass = (process.env.SMTP_PASS || "").trim();
+  const host = (process.env.SMTP_HOST || "").trim();
+  const port2 = Number(process.env.SMTP_PORT || 465);
+  if (!user || !pass || !host) {
+    console.info("[email] SMTP_USER, SMTP_PASS, or SMTP_HOST not set \u2014 email disabled");
+    return null;
+  }
+  console.info(`[email] Using SMTP: ${host}:${port2} (secure=true)`);
+  return nodemailer2.createTransport({
+    host,
+    port: port2,
+    secure: true,
+    auth: { user, pass }
+  });
+}
+function bookingEmailHTML(ticket) {
+  const fromCity = sanitizeLocation(ticket.from) || ticket.from;
+  const toCity = sanitizeLocation(ticket.to) || ticket.to;
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Booking Confirmation \u2014 ${APP_NAME}</title>
+  <style>
+    body { margin: 0; padding: 0; background: #f1f5f9; font-family: 'Helvetica Neue', Arial, sans-serif; color: #1e293b; }
+    .wrapper { max-width: 620px; margin: 32px auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,.08); }
+    .header  { background: #1e40af; padding: 32px 40px; }
+    .header h1 { color: #fff; margin: 0 0 4px; font-size: 22px; }
+    .header p  { color: #93c5fd; margin: 0; font-size: 13px; }
+    .hero { background: #eff6ff; padding: 28px 40px; border-bottom: 3px solid #f97316; }
+    .route { display: flex; align-items: center; gap: 0; }
+    .city { font-size: 38px; font-weight: 800; color: #1e40af; }
+    .arrow { flex: 1; text-align: center; color: #94a3b8; font-size: 22px; }
+    .arrow span { display: block; font-size: 10px; color: #94a3b8; }
+    .section { padding: 24px 40px; border-bottom: 1px solid #e2e8f0; }
+    .section h3 { margin: 0 0 16px; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .item label { display: block; font-size: 11px; color: #94a3b8; margin-bottom: 2px; text-transform: uppercase; }
+    .item p { margin: 0; font-size: 14px; font-weight: 600; color: #1e293b; }
+    .amount { color: #f97316 !important; font-size: 20px !important; }
+    .badge { display: inline-block; background: #dcfce7; color: #166534; border-radius: 6px; padding: 4px 12px; font-size: 12px; font-weight: 700; }
+    .footer { background: #1e40af; padding: 20px 40px; text-align: center; color: #93c5fd; font-size: 11px; }
+    .footer p { margin: 4px 0; }
+    .cta { text-align: center; padding: 28px 40px; }
+    .btn { display: inline-block; background: #1e40af; color: #fff; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 14px; }
+  </style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="header">
+    <h1>\u2708 ${APP_NAME}</h1>
+    <p>Your flight ticket is confirmed!</p>
+  </div>
+  <div class="hero">
+    <p style="margin:0 0 8px;font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.05em">Booking ID: ${ticket.bookingId}</p>
+    <div class="route">
+      <div class="city">${fromCity}</div>
+      <div class="arrow">
+        <span>${ticket.duration}</span>
+        &#8594;
+        <span>Non-stop</span>
+      </div>
+      <div class="city">${toCity}</div>
+    </div>
+    <div style="margin-top:12px;">
+      <span class="badge">\u2713 Confirmed</span>
+      &nbsp;
+      <span style="font-size:13px;color:#64748b;margin-left:8px;">${ticket.airline} \xB7 ${ticket.flightNum}</span>
+    </div>
+  </div>
+  <div class="section">
+    <h3>Flight Details</h3>
+    <div class="grid">
+      <div class="item"><label>Date</label><p>${ticket.date}</p></div>
+      <div class="item"><label>Duration</label><p>${ticket.duration}</p></div>
+      <div class="item"><label>Departure</label><p>${ticket.departure}</p></div>
+      <div class="item"><label>Arrival</label><p>${ticket.arrival}</p></div>
+      <div class="item"><label>Flight</label><p>${ticket.flightNum}</p></div>
+      <div class="item"><label>Class</label><p>${ticket.class || "Economy"}</p></div>
+    </div>
+  </div>
+  <div class="section">
+    <h3>Passenger & Payment</h3>
+    <div class="grid">
+      <div class="item"><label>Passenger</label><p>${ticket.passengerName}</p></div>
+      <div class="item"><label>Passengers</label><p>${ticket.passengers}</p></div>
+      <div class="item"><label>Total Amount</label><p class="amount">\u20B9${ticket.amount.toLocaleString("en-IN")}</p></div>
+      ${ticket.paymentId ? `<div class="item"><label>Payment Ref</label><p style="font-size:11px;color:#64748b;">${ticket.paymentId}</p></div>` : ""}
+    </div>
+  </div>
+  <div class="cta">
+    <p style="margin:0 0 16px;color:#64748b;font-size:13px;">Your e-ticket PDF is attached to this email. Please carry a valid photo ID at the airport.</p>
+  </div>
+  <div class="footer">
+    <p>${APP_NAME} \u2014 ${APP_TAGLINE_LONG}</p>
+    <p>This is an automated message. For support, reply to this email.</p>
+  </div>
+</div>
+</body>
+</html>`;
+}
+async function sendBookingConfirmationEmail(ticket, pdfBuffer) {
+  const transport = createTransport();
+  if (!transport) {
+    console.info("[email] SMTP not configured \u2014 skipping email delivery");
+    return { sent: false, reason: "SMTP not configured" };
+  }
+  const from = (process.env.SMTP_FROM || "bookings@dreamflyglobal.com").trim();
+  try {
+    await transport.sendMail({
+      from: `"${APP_NAME} Tickets" <${from}>`,
+      to: ticket.passengerEmail,
+      subject: `\u2708 Booking Confirmed: ${sanitizeLocation(ticket.from) || ticket.from} to ${sanitizeLocation(ticket.to) || ticket.to} \xB7 ${ticket.bookingId}`,
+      html: bookingEmailHTML(ticket),
+      attachments: [
+        {
+          filename: `${APP_NAME}-Ticket-${ticket.bookingId}.pdf`,
+          content: pdfBuffer,
+          contentType: "application/pdf"
+        }
+      ]
+    });
+    logger.info(`[email] Email sent successfully to ${ticket.passengerEmail} (Booking: ${ticket.bookingId})`);
+    return { sent: true };
+  } catch (err) {
+    logger.error(`[email] Failed to send booking confirmation email: ${err.message}`);
+    return { sent: false, reason: err.message };
+  }
+}
+var SERVICE_EMOJI = {
+  flight: "\u2708\uFE0F",
+  bus: "\u{1F68C}",
+  hotel: "\u{1F3E8}",
+  package: "\u{1F334}"
+};
+function generalBookingEmailHTML(data) {
+  const emoji3 = SERVICE_EMOJI[data.bookingType] ?? "\u{1F4CB}";
+  const dateStr = new Date(data.travelDate).toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric"
+  });
+  const amount = `\u20B9${data.totalAmount.toLocaleString("en-IN")}`;
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Booking Confirmation \u2014 ${APP_NAME}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 0; background: #f1f5f9; font-family: 'Helvetica Neue', Arial, sans-serif; color: #1e293b; }
+    .wrapper { max-width: 600px; margin: 32px auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,.10); }
+    .header { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 32px 40px; display: flex; align-items: center; gap: 16px; }
+    .logo-circle { width: 52px; height: 52px; background: #f97316; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .logo-text { color: #fff; font-weight: 900; font-size: 16px; }
+    .header-info h1 { color: #fff; margin: 0 0 2px; font-size: 20px; font-weight: 800; }
+    .header-info p  { color: #94a3b8; margin: 0; font-size: 12px; }
+    .hero { background: #fff7ed; border-bottom: 3px solid #f97316; padding: 28px 40px; }
+    .confirmed-badge { display: inline-flex; align-items: center; gap: 6px; background: #dcfce7; color: #166534; padding: 5px 14px; border-radius: 20px; font-size: 12px; font-weight: 700; margin-bottom: 12px; }
+    .service-title { font-size: 22px; font-weight: 800; color: #1e293b; margin: 0 0 4px; }
+    .booking-id { font-size: 12px; color: #64748b; font-family: monospace; }
+    .section { padding: 24px 40px; border-bottom: 1px solid #e2e8f0; }
+    .row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f1f5f9; }
+    .row:last-child { border-bottom: none; }
+    .row label { font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.04em; }
+    .row span { font-size: 13px; font-weight: 600; color: #1e293b; text-align: right; }
+    .amount-highlight { font-size: 18px !important; color: #f97316 !important; }
+    .cta { text-align: center; padding: 32px 40px; background: #f8fafc; }
+    .cta p { color: #64748b; font-size: 13px; margin: 0 0 20px; line-height: 1.6; }
+    .btn { display: inline-block; background: #f97316; color: #fff; padding: 14px 36px; border-radius: 10px; text-decoration: none; font-weight: 800; font-size: 15px; letter-spacing: 0.02em; }
+    .payment-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 14px 18px; margin-top: 12px; }
+    .payment-box p { margin: 0; font-size: 11px; color: #166534; font-family: monospace; }
+    .footer { background: #0f172a; padding: 24px 40px; text-align: center; }
+    .footer p { margin: 4px 0; color: #64748b; font-size: 11px; }
+    .footer .brand { color: #94a3b8; font-weight: 600; font-size: 13px; }
+  </style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="header">
+    <div class="logo-circle">
+      <span class="logo-text">${APP_INITIALS}</span>
+    </div>
+    <div class="header-info">
+      <h1>${APP_NAME}</h1>
+      <p>Your Ultimate Travel Companion</p>
+    </div>
+  </div>
+
+  <div class="hero">
+    <div class="confirmed-badge">\u2713 Booking Confirmed</div>
+    <p class="service-title">${emoji3} ${data.title}</p>
+    <p class="booking-id">Booking ID: ${data.bookingId}</p>
+  </div>
+
+  <div class="section">
+    <div class="row">
+      <label>Passenger</label>
+      <span>${data.passengerName}</span>
+    </div>
+    <div class="row">
+      <label>Service</label>
+      <span style="text-transform:capitalize">${data.bookingType}</span>
+    </div>
+    <div class="row">
+      <label>Travel Date</label>
+      <span>${dateStr}</span>
+    </div>
+    <div class="row">
+      <label>${data.bookingType === "hotel" ? "Rooms" : "Passengers"}</label>
+      <span>${data.passengers}</span>
+    </div>
+    <div class="row">
+      <label>Total Paid</label>
+      <span class="amount-highlight">${amount}</span>
+    </div>
+    <div class="payment-box">
+      <p>\u2713 Payment ID: ${data.paymentId}</p>
+    </div>
+  </div>
+
+  <div class="cta">
+    <p>
+      Hi ${data.passengerName.split(" ")[0]}, your booking is confirmed!<br />
+      Click below to view or download your invoice.
+    </p>
+    <a href="${data.invoiceUrl}" class="btn">\u{1F4C4} View Invoice &amp; Ticket</a>
+    <p style="margin-top:16px;font-size:11px;color:#94a3b8;">
+      Or copy this link: <a href="${data.invoiceUrl}" style="color:#f97316;text-decoration:none;">${data.invoiceUrl}</a>
+    </p>
+  </div>
+
+  <div class="footer">
+    <p class="brand">${APP_NAME} \u2014 ${APP_TAGLINE_LONG}</p>
+    <p>${APP_SUPPORT_PHONE} \xB7 ${APP_SUPPORT_EMAIL}</p>
+    <p>This is an automated confirmation. Do not reply to this email.</p>
+  </div>
+</div>
+</body>
+</html>`;
+}
+async function sendGeneralBookingEmail(data) {
+  const transport = createTransport();
+  if (!transport) {
+    console.info("[email] SMTP not configured \u2014 skipping general booking email. Set SMTP_USER and SMTP_PASS secrets.");
+    return { sent: false, reason: "SMTP not configured" };
+  }
+  const from = (process.env.SMTP_FROM || "bookings@dreamflyglobal.com").trim();
+  const emoji3 = SERVICE_EMOJI[data.bookingType] ?? "\u{1F4CB}";
+  const subject = `${emoji3} Booking Confirmed \u2013 ${APP_NAME} | ${data.bookingId}`;
+  try {
+    await transport.sendMail({
+      from: `"${APP_NAME}" <${from}>`,
+      to: data.passengerEmail,
+      subject,
+      html: generalBookingEmailHTML(data)
+    });
+    logger.info(`[email] General booking email sent to ${data.passengerEmail} (${data.bookingId})`);
+    return { sent: true };
+  } catch (err) {
+    logger.error(`[email] Failed to send general booking email: ${err.message}`);
+    return { sent: false, reason: err.message };
+  }
+}
+
+// src/lib/whatsapp-service.ts
+import twilio3 from "twilio";
+function formatPhone2(raw) {
+  const digits = raw.replace(/\D/g, "");
+  if (digits.startsWith("91") && digits.length === 12) return `+${digits}`;
+  if (digits.length === 10) return `+91${digits}`;
+  return `+${digits}`;
+}
+function toWhatsApp(phone) {
+  const e1644 = formatPhone2(phone);
+  return `whatsapp:${e1644}`;
+}
+function buildMessage(data) {
+  const amount = data.amount.toLocaleString("en-IN");
+  const firstName = data.passengerName.split(" ")[0];
+  const pdfLink = data.invoiceUrl || "";
+  const fromCity = sanitizeLocation(data.from) || data.from || "";
+  const toCity = sanitizeLocation(data.to) || data.to || "";
+  let serviceBlock = "";
+  const type = data.bookingType;
+  if (type === "flight") {
+    const airline = data.airline ? `\u2708\uFE0F *Airline:* ${data.airline}${data.flightNum ? ` (${data.flightNum})` : ""}
+` : "";
+    const route = fromCity && toCity ? `\u{1F4CD} *Route:* ${fromCity} \u2192 ${toCity}
+` : "";
+    const dep = data.flightDeparture ? `\u{1F550} *Departure:* ${data.flightDeparture}
+` : "";
+    const arr = data.flightArrival ? `\u{1F551} *Arrival:* ${data.flightArrival}
+` : "";
+    serviceBlock = airline + route + dep + arr;
+  } else if (type === "bus") {
+    const operator = data.busOperator ? `\u{1F68C} *Operator:* ${data.busOperator}${data.busType ? ` (${data.busType})` : ""}
+` : "";
+    const route = fromCity && toCity ? `\u{1F4CD} *Route:* ${fromCity} \u2192 ${toCity}
+` : "";
+    const boarding = data.boardingPoint ? `\u{1F7E2} *Boarding:* ${data.boardingPoint}${data.busDeparture ? ` at ${data.busDeparture}` : ""}
+` : "";
+    const dropping = data.droppingPoint ? `\u{1F534} *Dropping:* ${data.droppingPoint}${data.busArrival ? ` at ${data.busArrival}` : ""}
+` : "";
+    serviceBlock = operator + route + boarding + dropping;
+  } else if (type === "hotel") {
+    const hotel = data.hotelName ? `\u{1F3E8} *Hotel:* ${data.hotelName}
+` : "";
+    const city = data.hotelCity ? `\u{1F4CD} *City:* ${sanitizeLocation(data.hotelCity) || data.hotelCity}
+` : "";
+    const nights = data.hotelNights ? `\u{1F319} *Nights:* ${data.hotelNights}
+` : "";
+    serviceBlock = hotel + city + nights;
+  } else {
+    serviceBlock = fromCity && toCity ? `\u{1F4CD} *Route:* ${fromCity} \u2192 ${toCity}
+` : "";
+  }
+  const downloadLine = pdfLink ? `
+\u{1F4E5} *Download Ticket:*
+${pdfLink}` : "";
+  return `\u{1F389} *Booking Confirmed!*
+
+Hi ${firstName}! \u{1F44B}
+
+\u{1F194} *Booking ID:* ${data.bookingId}
+` + serviceBlock + `\u{1F4C5} *Travel Date:* ${data.date}
+\u{1F4B0} *Amount Paid:* \u20B9${amount}
+` + downloadLine + `
+
+Thank you for booking with *${APP_NAME}* \u2708\uFE0F
+Support: ${APP_SUPPORT_PHONE}`;
+}
+async function sendWhatsAppNotification(data) {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID || "";
+  const authToken = process.env.TWILIO_AUTH_TOKEN || "";
+  const rawFrom = process.env.TWILIO_WHATSAPP_FROM || "";
+  const overrideTo = process.env.TWILIO_WHATSAPP_TO || "";
+  if (!accountSid || !authToken) {
+    logger.warn("[whatsapp] TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN not set \u2014 skipping");
+    return { sent: false, reason: "Twilio credentials not configured" };
+  }
+  if (!rawFrom) {
+    logger.warn("[whatsapp] TWILIO_WHATSAPP_FROM not set \u2014 skipping (use +14155238886 for sandbox)");
+    return { sent: false, reason: "TWILIO_WHATSAPP_FROM not configured" };
+  }
+  const fromE164 = rawFrom.replace(/\D/g, "");
+  const fromNumber = `whatsapp:+${fromE164}`;
+  const rawTo = overrideTo || data.phone || "";
+  if (!rawTo) {
+    logger.warn("[whatsapp] No destination phone number \u2014 skipping");
+    return { sent: false, reason: "No phone number" };
+  }
+  if (overrideTo) {
+    logger.info(`[whatsapp] Using TWILIO_WHATSAPP_TO override: ${overrideTo}`);
+  }
+  const toNumber = toWhatsApp(rawTo);
+  const body = buildMessage(data);
+  logger.info(`[whatsapp] Sending \u2014 From: ${fromNumber}  To: ${toNumber}  Booking: ${data.bookingId}`);
+  try {
+    const client = twilio3(accountSid, authToken);
+    const res = await client.messages.create({ from: fromNumber, to: toNumber, body });
+    logger.info("WhatsApp response:", { sid: res.sid, status: res.status, to: res.to, from: res.from });
+    logger.info("WhatsApp sent");
+    return { sent: true };
+  } catch (e) {
+    const hint = e.code === 63007 ? " \u2014 FROM not WhatsApp-enabled (use Twilio sandbox +14155238886)" : e.code === 21211 ? " \u2014 TO number invalid, check phone format" : e.code === 63016 ? " \u2014 recipient has not opted in to Twilio sandbox (send 'join <keyword>' to +1 415 523 8886)" : "";
+    logger.error("WhatsApp error:", e);
+    logger.error(`[whatsapp] Failed \u2014 Code: ${e.code ?? "N/A"} | ${e.message}${hint}`);
+    return { sent: false, reason: `${e.message}${hint}` };
+  }
+}
+function buildHolidayMessage(data, pdfUrl) {
+  const name2 = data.customerName;
+  const dest = data.destination;
+  const dur = data.duration ? ` | ${data.duration}` : "";
+  const people = data.people ? ` | ${data.people} traveller${data.people > 1 ? "s" : ""}` : "";
+  const price = data.totalPrice ? `
+\u{1F4B0} *Package Price:* \u20B9${data.totalPrice.toLocaleString("en-IN")}` : "";
+  if (data.trigger === "booking") {
+    return `\u{1F389} *Booking Confirmed!*
+
+Hi *${name2}*,
+
+Your *${dest}* holiday package is booked! \u{1F334}
+\u{1F4C5} *Trip:* ${dest}${dur}${people}` + price + `
+
+\u{1F4E5} *Download Your Itinerary:*
+${pdfUrl}
+
+Our travel expert will call you within 24 hours.
+
+_${APP_NAME} \u2708\uFE0F \u2014 ${APP_TAGLINE_LONG}_`;
+  }
+  return `\u{1F44B} Hi *${name2}*,
+
+Thanks for your interest in *${dest}*! \u{1F334}
+
+We've prepared a personalised itinerary for you:
+\u{1F5D3}\uFE0F *Destination:* ${dest}${dur}${people}
+
+\u{1F4E5} *Download Your Itinerary PDF:*
+${pdfUrl}
+
+Our travel expert will call you within *24 hours* with the best package options.
+
+_${APP_NAME} \u2708\uFE0F \u2014 ${APP_TAGLINE_LONG}_`;
+}
+function buildLeadAdminAlertMessage(lead) {
+  const typeLabel = lead.type.charAt(0).toUpperCase() + lead.type.slice(1);
+  const time4 = (/* @__PURE__ */ new Date()).toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "2-digit",
+    month: "short",
+    year: "numeric"
+  });
+  return `\u{1F514} *New Lead Alert \u2014 ${APP_NAME}*
+
+\u{1F464} *Name:* ${lead.name}
+\u{1F4F1} *Phone:* ${lead.phone}
+\u{1F50D} *Looking for:* ${typeLabel}
+` + (lead.email ? `\u{1F4E7} *Email:* ${lead.email}
+` : "") + `\u{1F194} *Lead ID:* ${lead.leadId}
+\u23F1\uFE0F *Received:* ${time4} IST
+
+Reply quickly to increase conversion! \u{1F680}
+_CRM: dreamflyglobal.com/crm_`;
+}
+function buildLeadCustomerConfirmationMessage(lead) {
+  const typeLabel = lead.type.charAt(0).toUpperCase() + lead.type.slice(1);
+  const firstName = lead.name.split(" ")[0];
+  return `\u{1F44B} Hi *${firstName}*!
+
+\u2705 We've received your enquiry for a *${typeLabel}* booking.
+
+Our travel expert will contact you within *30 minutes*.
+
+\u{1F4DE} Support: ${APP_SUPPORT_PHONE}
+\u{1F4E7} ${APP_SUPPORT_EMAIL}
+
+_${APP_NAME} \u2708\uFE0F \u2014 ${APP_TAGLINE_LONG}_`;
+}
+function buildAbandonedLeadMessage(lead) {
+  const typeLabel = lead.type === "flight" ? "flights" : lead.type === "hotel" ? "hotels" : lead.type + "s";
+  const firstName = lead.name.split(" ")[0];
+  return `\u{1F44B} Hi *${firstName}*!
+
+\u{1F50D} You were searching for *${typeLabel}* on ${APP_NAME}.
+
+Did you find what you were looking for? Our experts can help you find the *best deals* tailored to your needs!
+
+\u{1F4DE} Call us: *+91 9000978856*
+\u{1F4AC} Or reply to this message
+
+_${APP_NAME} \u2708\uFE0F \u2014 Don't miss out on great deals!_`;
+}
+function buildStaffFollowUpMessage(lead) {
+  const typeLabel = lead.type.charAt(0).toUpperCase() + lead.type.slice(1);
+  return `\u23F0 *30-Min Follow-Up Reminder*
+
+Lead *${lead.name}* (\u{1F4F1} ${lead.phone}) has *NOT been contacted* in 30 minutes!
+
+\u{1F50D} *Service:* ${typeLabel}
+\u{1F194} *Lead ID:* ${lead.leadId}
+
+Please reach out now to increase conversion! \u{1F3AF}
+_${APP_NAME} CRM_`;
+}
+async function sendRawWhatsApp(toPhone, body, logTag) {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID || "";
+  const authToken = process.env.TWILIO_AUTH_TOKEN || "";
+  const rawFrom = process.env.TWILIO_WHATSAPP_FROM || "";
+  const overrideTo = process.env.TWILIO_WHATSAPP_TO || "";
+  if (!accountSid || !authToken || !rawFrom) {
+    logger.warn(`[${logTag}] Twilio not fully configured \u2014 skipping`);
+    return { sent: false, reason: "Twilio not configured" };
+  }
+  const fromE164 = rawFrom.replace(/\D/g, "");
+  const fromNumber = `whatsapp:+${fromE164}`;
+  const resolvedTo = overrideTo || toPhone;
+  if (!resolvedTo) return { sent: false, reason: "No destination phone" };
+  const toNumber = toWhatsApp(resolvedTo);
+  logger.info(`[${logTag}] Sending \u2192 From: ${fromNumber}  To: ${toNumber}`);
+  try {
+    const client = twilio3(accountSid, authToken);
+    const res = await client.messages.create({ from: fromNumber, to: toNumber, body });
+    logger.info(`[${logTag}] Sent \u2713 SID: ${res.sid}  Status: ${res.status}`);
+    return { sent: true };
+  } catch (e) {
+    logger.error(`[${logTag}] WhatsApp error:`, e);
+    logger.error(`[${logTag}] Failed \u2014 Code: ${e.code ?? "N/A"} | ${e.message}`);
+    return { sent: false, reason: e.message };
+  }
+}
+async function sendLeadAdminAlert(lead) {
+  const adminPhone = process.env.TWILIO_WHATSAPP_TO || "";
+  if (!adminPhone) {
+    console.info("[lead-admin-alert] TWILIO_WHATSAPP_TO not set \u2014 skipping admin alert");
+    return { sent: false, reason: "Admin phone not configured" };
+  }
+  const body = buildLeadAdminAlertMessage(lead);
+  return sendRawWhatsApp(adminPhone, body, "lead-admin-alert");
+}
+async function sendLeadCustomerConfirmation(lead) {
+  if (!lead.phone) return { sent: false, reason: "No customer phone" };
+  const body = buildLeadCustomerConfirmationMessage(lead);
+  return sendRawWhatsApp(lead.phone, body, "lead-customer-confirm");
+}
+async function sendAbandonedLeadReminder(lead) {
+  if (!lead.phone) return { sent: false, reason: "No customer phone" };
+  const body = buildAbandonedLeadMessage(lead);
+  return sendRawWhatsApp(lead.phone, body, "abandoned-reminder");
+}
+async function sendStaffFollowUpReminder(lead) {
+  const adminPhone = process.env.TWILIO_WHATSAPP_TO || "";
+  if (!adminPhone) {
+    console.info("[staff-followup] TWILIO_WHATSAPP_TO not set \u2014 skipping staff reminder");
+    return { sent: false, reason: "Admin phone not configured" };
+  }
+  const body = buildStaffFollowUpMessage(lead);
+  return sendRawWhatsApp(adminPhone, body, "staff-followup");
+}
+async function sendHolidayWhatsApp(data) {
+  const domain2 = process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(",")[0] || "localhost";
+  const baseUrl = domain2 === "localhost" ? `http://localhost:${process.env.PORT || 3e3}` : `https://${domain2}`;
+  const pdfParams = new URLSearchParams({
+    name: data.customerName,
+    phone: data.phone,
+    dest: data.destination,
+    duration: data.duration || "4D/3N",
+    people: String(data.people || 2),
+    ...data.travelDate ? { date: data.travelDate } : {},
+    ...data.packageName ? { pkg: data.packageName } : {},
+    ...data.pricePerPerson ? { price: String(data.pricePerPerson) } : {},
+    ...data.totalPrice ? { total: String(data.totalPrice) } : {}
+  });
+  const pdfUrl = `${baseUrl}/api/itinerary-pdf?${pdfParams.toString()}`;
+  logger.info(`[holiday-whatsapp] PDF URL: ${pdfUrl}`);
+  const accountSid = process.env.TWILIO_ACCOUNT_SID || "";
+  const authToken = process.env.TWILIO_AUTH_TOKEN || "";
+  const rawFrom = process.env.TWILIO_WHATSAPP_FROM || "+14155238886";
+  const overrideTo = process.env.TWILIO_WHATSAPP_TO || "";
+  const fromNumber = rawFrom.startsWith("whatsapp:") ? rawFrom : `whatsapp:${rawFrom}`;
+  if (!accountSid || !authToken) {
+    console.info("[holiday-whatsapp] Twilio credentials not configured \u2014 skipping message send");
+    return { sent: false, pdfUrl, reason: "Twilio not configured" };
+  }
+  const resolvedPhone = overrideTo || data.phone;
+  if (!resolvedPhone) {
+    return { sent: false, pdfUrl, reason: "No phone number" };
+  }
+  const toNumber = toWhatsApp(resolvedPhone);
+  const body = buildHolidayMessage(data, pdfUrl);
+  logger.info(`[holiday-whatsapp] Sending to: ${toNumber}`);
+  try {
+    const client = twilio3(accountSid, authToken);
+    const message = await client.messages.create({ from: fromNumber, to: toNumber, body });
+    logger.info(`[holiday-whatsapp] Sent \u2014 SID: ${message.sid}`);
+    return { sent: true, pdfUrl };
+  } catch (err) {
+    logger.error(`[holiday-whatsapp] Failed: ${err.message}`);
+    return { sent: false, pdfUrl, reason: err.message };
+  }
+}
+
+// src/lib/notification-service.ts
+function formatPhone3(raw) {
+  const digits = raw.replace(/\D/g, "");
+  if (digits.startsWith("91") && digits.length === 12) return `+${digits}`;
+  if (digits.length === 10) return `+91${digits}`;
+  return `+${digits}`;
+}
+function buildSmsBody(data) {
+  const typeLabel = data.bookingType.charAt(0).toUpperCase() + data.bookingType.slice(1);
+  const dateStr = (() => {
+    try {
+      return new Date(data.travelDate).toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric"
+      });
+    } catch {
+      return data.travelDate;
+    }
+  })();
+  const amount = `Rs.${data.totalAmount.toLocaleString("en-IN")}`;
+  let detail = "";
+  if ((data.bookingType === "flight" || data.bookingType === "bus") && data.from && data.to) {
+    const fromCity = sanitizeLocation(data.from) || data.from;
+    const toCity = sanitizeLocation(data.to) || data.to;
+    detail = ` | ${fromCity} to ${toCity}`;
+  } else if (data.bookingType === "hotel" && data.hotelName) {
+    detail = ` | ${data.hotelName}`;
+  }
+  return `Your ${typeLabel} booking with ${APP_NAME} is confirmed${detail}. Booking ID: ${data.bookingId} | Date: ${dateStr} | Amount: ${amount}. Support: ${APP_SUPPORT_PHONE}`;
+}
+async function sendBookingEmail(data) {
+  if (!data.passengerEmail) {
+    logger.warn(`[notification/email] No email address \u2014 skipping (booking: ${data.bookingId})`);
+    return { sent: false, reason: "No passenger email address" };
+  }
+  const emailData = {
+    bookingId: data.bookingId,
+    bookingType: data.bookingType,
+    passengerName: data.passengerName,
+    passengerEmail: data.passengerEmail,
+    title: data.title || data.bookingId,
+    travelDate: data.travelDate,
+    passengers: data.passengers ?? 1,
+    totalAmount: data.totalAmount,
+    paymentId: data.paymentId,
+    invoiceUrl: data.invoiceUrl || ""
+  };
+  try {
+    const result = await sendGeneralBookingEmail(emailData);
+    if (result.sent) {
+      logger.info(`[notification/email] Sent \u2713 \u2014 booking: ${data.bookingId}  to: ${data.passengerEmail}`);
+    } else {
+      logger.warn(`[notification/email] Not sent \u2014 booking: ${data.bookingId}  reason: ${result.reason}`);
+    }
+    return result;
+  } catch (err) {
+    logger.error(`[notification/email] Error: ${err.message}  booking: ${data.bookingId}`);
+    return { sent: false, reason: err.message };
+  }
+}
+async function sendBookingSMS(data) {
+  if (!data.passengerPhone) {
+    logger.warn(`[notification/sms] No phone number \u2014 skipping (booking: ${data.bookingId})`);
+    return { sent: false, reason: "No passenger phone number" };
+  }
+  const accountSid = (process.env.TWILIO_ACCOUNT_SID || "").trim();
+  const authToken = (process.env.TWILIO_AUTH_TOKEN || "").trim();
+  const fromNumber = (process.env.TWILIO_SMS_FROM || "").trim();
+  if (!accountSid || !authToken || !fromNumber) {
+    logger.warn(`[notification/sms] Twilio SMS not fully configured \u2014 skipping (booking: ${data.bookingId})`);
+    return { sent: false, reason: "Twilio SMS credentials not configured" };
+  }
+  const toNumber = formatPhone3(data.passengerPhone);
+  const body = buildSmsBody(data);
+  logger.info(`[notification/sms] Sending \u2192 ${toNumber}  booking: ${data.bookingId}`);
+  try {
+    const client = twilio4(accountSid, authToken);
+    const message = await client.messages.create({ from: fromNumber, to: toNumber, body });
+    logger.info(`[notification/sms] Sent \u2713 SID: ${message.sid}  Status: ${message.status}  booking: ${data.bookingId}`);
+    return { sent: true };
+  } catch (err) {
+    const hint = err.code === 21211 ? " \u2014 Invalid 'to' number format" : err.code === 21214 ? " \u2014 Number cannot receive SMS" : err.code === 21608 ? " \u2014 'from' number not SMS-capable" : "";
+    logger.error(`[notification/sms] Failed \u2014 Code: ${err.code ?? "N/A"} | ${err.message}${hint}  booking: ${data.bookingId}`);
+    return { sent: false, reason: `${err.message}${hint}` };
+  }
+}
+async function sendBookingWhatsApp(data) {
+  if (!data.passengerPhone) {
+    logger.warn(`[notification/whatsapp] No phone number \u2014 skipping (booking: ${data.bookingId})`);
+    return { sent: false, reason: "No passenger phone number" };
+  }
+  const dateStr = (() => {
+    try {
+      return new Date(data.travelDate).toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric"
+      });
+    } catch {
+      return data.travelDate;
+    }
+  })();
+  const waData = {
+    bookingId: data.bookingId,
+    passengerName: data.passengerName,
+    phone: data.passengerPhone,
+    bookingType: data.bookingType,
+    from: data.from || "",
+    to: data.to || "",
+    date: dateStr,
+    amount: data.totalAmount,
+    invoiceUrl: data.invoiceUrl,
+    airline: data.airline,
+    flightNum: data.flightNumber,
+    flightDeparture: data.flightDeparture,
+    flightArrival: data.flightArrival,
+    flightDuration: data.flightDuration,
+    busOperator: data.busOperator,
+    busType: data.busType,
+    boardingPoint: data.boardingPoint,
+    droppingPoint: data.droppingPoint,
+    busDeparture: data.busDeparture,
+    busArrival: data.busArrival,
+    hotelName: data.hotelName,
+    hotelCity: data.hotelCity,
+    hotelNights: data.hotelNights
+  };
+  try {
+    const result = await sendWhatsAppNotification(waData);
+    if (result.sent) {
+      logger.info(`[notification/whatsapp] Sent \u2713 \u2014 booking: ${data.bookingId}`);
+    } else {
+      logger.warn(`[notification/whatsapp] Not sent \u2014 booking: ${data.bookingId}  reason: ${result.reason}`);
+    }
+    return result;
+  } catch (err) {
+    logger.error(`[notification/whatsapp] Error: ${err.message}  booking: ${data.bookingId}`);
+    return { sent: false, reason: err.message };
+  }
+}
+async function sendRawSMS(phone, body) {
+  const accountSid = (process.env.TWILIO_ACCOUNT_SID || "").trim();
+  const authToken = (process.env.TWILIO_AUTH_TOKEN || "").trim();
+  const fromNumber = (process.env.TWILIO_SMS_FROM || "").trim();
+  if (!accountSid || !authToken || !fromNumber) return { sent: false, reason: "Twilio SMS not configured" };
+  try {
+    const client = twilio4(accountSid, authToken);
+    await client.messages.create({ from: fromNumber, to: formatPhone3(phone), body });
+    return { sent: true };
+  } catch (err) {
+    return { sent: false, reason: err.message };
+  }
+}
+async function sendRawWhatsApp2(phone, body) {
+  const accountSid = (process.env.TWILIO_ACCOUNT_SID || "").trim();
+  const authToken = (process.env.TWILIO_AUTH_TOKEN || "").trim();
+  const fromWA = (process.env.TWILIO_WHATSAPP_FROM || "").trim();
+  if (!accountSid || !authToken || !fromWA) return { sent: false, reason: "Twilio WhatsApp not configured" };
+  try {
+    const client = twilio4(accountSid, authToken);
+    await client.messages.create({ from: fromWA, to: `whatsapp:${formatPhone3(phone)}`, body });
+    return { sent: true };
+  } catch (err) {
+    return { sent: false, reason: err.message };
+  }
+}
+async function sendBookingFailureNotifications(data, reason) {
+  logger.info(`[notification/failure] booking: ${data.bookingId}  reason: ${reason}`);
+  const amount = `Rs.${data.totalAmount.toLocaleString("en-IN")}`;
+  const msg = `Hi ${data.passengerName}, your payment of ${amount} was received for booking ${data.bookingId}, but the booking could not be confirmed. Reason: ${reason}. A full refund has been initiated and will reflect within 5-7 business days. Support: ${APP_SUPPORT_PHONE}`;
+  const [emailRes, smsRes, waRes] = await Promise.allSettled([
+    sendBookingEmail(data),
+    data.passengerPhone ? sendRawSMS(data.passengerPhone, msg) : Promise.resolve({ sent: false, reason: "No phone" }),
+    data.passengerPhone ? sendRawWhatsApp2(data.passengerPhone, msg) : Promise.resolve({ sent: false, reason: "No phone" })
+  ]);
+  return {
+    email: emailRes.status === "fulfilled" ? emailRes.value : { sent: false, reason: String(emailRes.reason) },
+    sms: smsRes.status === "fulfilled" ? smsRes.value : { sent: false, reason: String(smsRes.reason) },
+    whatsapp: waRes.status === "fulfilled" ? waRes.value : { sent: false, reason: String(waRes.reason) }
+  };
+}
+async function sendRefundNotifications(data, refundStatus, refundId) {
+  logger.info(`[notification/refund] booking: ${data.bookingId}  status: ${refundStatus}`);
+  const amount = `Rs.${data.totalAmount.toLocaleString("en-IN")}`;
+  const ref = refundId ? ` (Ref: ${refundId})` : "";
+  const msg = refundStatus === "initiated" ? `Hi ${data.passengerName}, your refund of ${amount} for booking ${data.bookingId} has been initiated${ref}. It will reflect within 5-7 business days. Support: ${APP_SUPPORT_PHONE}` : refundStatus === "completed" ? `Hi ${data.passengerName}, your refund of ${amount} for booking ${data.bookingId} has been successfully processed${ref}. The amount will appear in your account shortly. Support: ${APP_SUPPORT_PHONE}` : `Hi ${data.passengerName}, we were unable to process your refund of ${amount} for booking ${data.bookingId}. Please contact our support: ${APP_SUPPORT_PHONE}`;
+  const [emailRes, smsRes, waRes] = await Promise.allSettled([
+    sendBookingEmail(data),
+    data.passengerPhone ? sendRawSMS(data.passengerPhone, msg) : Promise.resolve({ sent: false, reason: "No phone" }),
+    data.passengerPhone ? sendRawWhatsApp2(data.passengerPhone, msg) : Promise.resolve({ sent: false, reason: "No phone" })
+  ]);
+  return {
+    email: emailRes.status === "fulfilled" ? emailRes.value : { sent: false, reason: String(emailRes.reason) },
+    sms: smsRes.status === "fulfilled" ? smsRes.value : { sent: false, reason: String(smsRes.reason) },
+    whatsapp: waRes.status === "fulfilled" ? waRes.value : { sent: false, reason: String(waRes.reason) }
+  };
+}
+async function sendAllBookingNotifications(data) {
+  logger.info(`[notification] Sending all channels \u2014 booking: ${data.bookingId}  type: ${data.bookingType}`);
+  const [emailResult, smsResult, whatsappResult] = await Promise.allSettled([
+    sendBookingEmail(data),
+    sendBookingSMS(data),
+    sendBookingWhatsApp(data)
+  ]);
+  const email3 = emailResult.status === "fulfilled" ? emailResult.value : { sent: false, reason: String(emailResult.reason) };
+  const sms = smsResult.status === "fulfilled" ? smsResult.value : { sent: false, reason: String(smsResult.reason) };
+  const whatsapp = whatsappResult.status === "fulfilled" ? whatsappResult.value : { sent: false, reason: String(whatsappResult.reason) };
+  logger.info(
+    `[notification] Done \u2014 booking: ${data.bookingId}  email:${email3.sent} sms:${sms.sent} whatsapp:${whatsapp.sent}`
+  );
+  return { email: email3, sms, whatsapp };
+}
+
+// src/routes/payments.ts
+var router10 = (0, import_express10.Router)();
+function resolveKeyMode(keyId, keySecret) {
+  if (keyId.startsWith("rzp_test_") && keySecret) return "test";
+  if (keyId.startsWith("rzp_live_") && keySecret) return "live";
+  return "demo";
+}
+function buildRazorpayClient(keyId, keySecret) {
+  const mode = resolveKeyMode(keyId, keySecret);
+  if (mode === "test" || mode === "live") {
+    return new import_razorpay.default({ key_id: keyId, key_secret: keySecret });
+  }
+  return null;
+}
+router10.post("/create-order", async (req, res) => {
+  try {
+    const { amount, currency = "INR", receipt, notes } = req.body;
+    if (!amount || Number(amount) <= 0) {
+      return res.status(400).json({ success: false, error: "Invalid amount" });
+    }
+    const cfg = await getProviderConfig();
+    const KEY_ID = cfg.paymentKeyId;
+    const KEY_SEC = cfg.paymentKeySecret;
+    const mode = resolveKeyMode(KEY_ID, KEY_SEC);
+    logger.info(
+      {
+        keyMode: mode,
+        keyIdPrefix: KEY_ID ? `${KEY_ID.slice(0, 14)}***` : "(empty)",
+        keySecLoaded: KEY_SEC ? `${KEY_SEC.slice(0, 6)}***` : "(empty)",
+        keyIdSource: KEY_ID ? KEY_ID === process.env["RAZORPAY_KEY_ID"] ? "env" : "db" : "none"
+      },
+      "[payments] create-order \u2014 key check"
+    );
+    if (mode !== "test" && mode !== "live") {
+      logger.error(
+        { keyIdPrefix: KEY_ID ? `${KEY_ID.slice(0, 14)}***` : "(empty)", keySecLoaded: !!KEY_SEC },
+        "[payments] RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET not configured or unrecognised prefix"
+      );
+      return res.status(503).json({
+        success: false,
+        error: "Payment gateway is not configured. Please contact support."
+      });
+    }
+    const amountPaise = Math.round(Number(amount) * 100);
+    logger.info(
+      {
+        url: "https://api.razorpay.com/v1/orders",
+        keyMode: mode,
+        amountINR: amount,
+        amountPaise,
+        currency
+      },
+      "[payments] calling Razorpay orders.create"
+    );
+    const rzp = buildRazorpayClient(KEY_ID, KEY_SEC);
+    const order = await rzp.orders.create({
+      amount: amountPaise,
+      currency,
+      receipt: receipt || `rcpt_${Date.now()}`,
+      notes: notes || {}
+    });
+    logger.info(
+      { keyMode: mode, orderId: order.id, amountINR: amount },
+      "[payments] Razorpay order created \u2713"
+    );
+    return res.json({ success: true, order, key: KEY_ID, keyMode: mode });
+  } catch (err) {
+    const rzpErr = err?.error ?? {};
+    const httpStatus = err?.statusCode ?? 500;
+    logger.error(
+      {
+        httpStatus,
+        url: "https://api.razorpay.com/v1/orders",
+        code: rzpErr.code,
+        description: rzpErr.description,
+        source: rzpErr.source,
+        step: rzpErr.step,
+        reason: rzpErr.reason,
+        field: rzpErr.field,
+        rawMessage: err?.message,
+        fullError: JSON.stringify(err?.error ?? err ?? null)
+      },
+      "[payments] create-order FAILED"
+    );
+    res.status(httpStatus >= 400 && httpStatus < 600 ? httpStatus : 500).json({
+      success: false,
+      error: rzpErr.description || err?.message || "Failed to create order",
+      razorpay: {
+        httpStatus,
+        code: rzpErr.code || null,
+        description: rzpErr.description || null,
+        source: rzpErr.source || null,
+        step: rzpErr.step || null,
+        reason: rzpErr.reason || null
+      }
+    });
+  }
+});
+router10.post("/verify", async (req, res) => {
+  try {
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+      bookingContext
+    } = req.body;
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      return res.status(400).json({ success: false, error: "Missing required fields" });
+    }
+    const cfg = await getProviderConfig();
+    const KEY_SEC = cfg.paymentKeySecret;
+    if (!KEY_SEC) {
+      logger.error("[payments] RAZORPAY_KEY_SECRET not configured \u2014 cannot verify");
+      return res.status(503).json({ success: false, error: "Payment gateway not configured" });
+    }
+    const sign = `${razorpay_order_id}|${razorpay_payment_id}`;
+    const expectedSign = crypto3.createHmac("sha256", KEY_SEC).update(sign).digest("hex");
+    const verified = expectedSign === razorpay_signature;
+    if (!verified) {
+      logger.warn(`[payments] Signature mismatch \u2014 order: ${razorpay_order_id}  payment: ${razorpay_payment_id}`);
+    }
+    if (!verified) {
+      return res.status(400).json({ success: false, error: "Payment verification failed. Invalid signature." });
+    }
+    logger.info(`[payments] Payment verified \u2713 \u2014 ${razorpay_payment_id}`);
+    return res.json({
+      success: true,
+      message: "Payment verified",
+      paymentId: razorpay_payment_id
+    });
+  } catch (err) {
+    logger.error("[payments] verify error:", err.message);
+    res.status(500).json({ success: false, error: err.message || "Verification failed" });
+  }
+});
+router10.post("/notify", async (req, res) => {
+  const { bookingContext, frontendBaseUrl } = req.body;
+  if (!bookingContext?.bookingId) {
+    return res.status(400).json({ success: false, error: "bookingContext.bookingId is required" });
+  }
+  const invoiceUrl = `${frontendBaseUrl || "https://dreamflyglobal.in"}/invoice/${bookingContext.bookingId}`;
+  logger.info(`[notify] Sending all channels \u2014 booking: ${bookingContext.bookingId}  invoiceUrl: ${invoiceUrl}`);
+  const notifData = {
+    bookingId: bookingContext.bookingId,
+    bookingType: bookingContext.bookingType || "flight",
+    passengerName: bookingContext.passengerName || "Traveller",
+    passengerEmail: bookingContext.passengerEmail || void 0,
+    passengerPhone: bookingContext.phone || void 0,
+    travelDate: bookingContext.travelDate || (/* @__PURE__ */ new Date()).toISOString(),
+    totalAmount: bookingContext.totalAmount || 0,
+    paymentId: bookingContext.paymentId || "",
+    passengers: bookingContext.passengers || 1,
+    invoiceUrl,
+    title: bookingContext.title || bookingContext.bookingId,
+    from: bookingContext.from || bookingContext.flightFrom || bookingContext.busFrom || bookingContext.hotelCity || "",
+    to: bookingContext.to || bookingContext.flightTo || bookingContext.busTo || "",
+    // Flight
+    airline: bookingContext.flightAirline,
+    flightNumber: bookingContext.flightNumber,
+    flightDeparture: bookingContext.flightDeparture,
+    flightArrival: bookingContext.flightArrival,
+    flightDuration: bookingContext.flightDuration,
+    // Bus
+    busOperator: bookingContext.busOperator,
+    busType: bookingContext.busType,
+    boardingPoint: bookingContext.busBoardingPoint,
+    droppingPoint: bookingContext.busDroppingPoint,
+    busDeparture: bookingContext.busDeparture,
+    busArrival: bookingContext.busArrival,
+    // Hotel
+    hotelName: bookingContext.hotelName,
+    hotelCity: bookingContext.hotelCity,
+    hotelNights: bookingContext.hotelNights
+  };
+  const { email: email3, sms, whatsapp } = await sendAllBookingNotifications(notifData);
+  if (bookingContext.phone) {
+    const userId = bookingContext.userId || `guest_${Date.now()}`;
+    scheduleBookingFollowUp({
+      userId,
+      name: bookingContext.passengerName || "Traveller",
+      phone: bookingContext.phone,
+      bookingId: bookingContext.bookingId,
+      bookingType: bookingContext.bookingType || "flight",
+      from: notifData.from || "",
+      to: notifData.to || ""
+    });
+  }
+  return res.json({
+    success: true,
+    invoiceUrl,
+    emailSent: email3.sent,
+    smsSent: sms.sent,
+    whatsappSent: whatsapp.sent,
+    ...email3.reason ? { emailReason: email3.reason } : {},
+    ...sms.reason ? { smsReason: sms.reason } : {},
+    ...whatsapp.reason ? { whatsappReason: whatsapp.reason } : {}
+  });
+});
+router10.post("/webhook", async (req, res) => {
+  try {
+    const sig = req.headers["x-razorpay-signature"];
+    const body = JSON.stringify(req.body);
+    const WEBHOOK_SECRET = process.env["RAZORPAY_WEBHOOK_SECRET"];
+    if (!WEBHOOK_SECRET) {
+      logger.warn(
+        "[payments] RAZORPAY_WEBHOOK_SECRET not configured \u2014 webhook signature is NOT being verified. Set RAZORPAY_WEBHOOK_SECRET (from Razorpay Dashboard \u2192 Settings \u2192 Webhooks) to enable verification."
+      );
+    } else {
+      if (!sig) {
+        logger.error("[payments] Webhook rejected \u2014 missing x-razorpay-signature header");
+        return res.status(400).json({ error: "Missing webhook signature" });
+      }
+      const expected = crypto3.createHmac("sha256", WEBHOOK_SECRET).update(body).digest("hex");
+      if (sig !== expected) {
+        logger.error(
+          { event: req.body?.event },
+          "[payments] Webhook rejected \u2014 signature mismatch (check RAZORPAY_WEBHOOK_SECRET matches the Dashboard value)"
+        );
+        return res.status(400).json({ error: "Invalid webhook signature" });
+      }
+    }
+    const { event, payload } = req.body;
+    logger.info(`[payments] Webhook verified: ${event}`, payload?.payment?.entity?.id ?? "");
+    res.json({ success: true });
+  } catch (err) {
+    logger.error({ err: err?.message }, "[payments] webhook error");
+    res.status(500).json({ error: err.message || "Webhook error" });
+  }
+});
+router10.get("/check-config", requireAdmin, async (_req, res) => {
+  const cfg = await getProviderConfig();
+  const KEY_ID = cfg.paymentKeyId;
+  const KEY_SEC = cfg.paymentKeySecret;
+  const mode = resolveKeyMode(KEY_ID, KEY_SEC);
+  const maskedKeyId = KEY_ID ? `${KEY_ID.slice(0, 8)}***` : "(not set)";
+  const warning = mode === "test" ? "Test key detected \u2014 switch to a live key (rzp_live_\u2026) before going to production." : mode === "demo" ? "No Razorpay keys configured. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET." : null;
+  logger.info(
+    {
+      keyMode: mode,
+      maskedKeyId,
+      keyIdSource: KEY_ID ? KEY_ID === process.env["RAZORPAY_KEY_ID"] ? "env" : "db" : "none",
+      keySecLoaded: KEY_SEC ? `${KEY_SEC.slice(0, 6)}***` : "(empty)"
+    },
+    "[payments/check-config] key check"
+  );
+  if (mode === "demo") {
+    return res.json({
+      keyMode: "demo",
+      maskedKeyId,
+      connected: false,
+      httpStatus: null,
+      razorpay: null,
+      warning,
+      error: "RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET are not set or have an unrecognised prefix."
+    });
+  }
+  try {
+    const auth = Buffer.from(`${KEY_ID}:${KEY_SEC}`).toString("base64");
+    const resp = await fetch(
+      "https://api.razorpay.com/v1/payments?count=1&skip=0",
+      { headers: { Authorization: `Basic ${auth}` } }
+    );
+    const body = await resp.json().catch(() => ({}));
+    const rzpErr = body?.error ?? null;
+    logger.info(
+      {
+        keyMode: mode,
+        maskedKeyId,
+        httpStatus: resp.status,
+        connected: resp.ok,
+        code: rzpErr?.code ?? null,
+        description: rzpErr?.description ?? null,
+        source: rzpErr?.source ?? null,
+        step: rzpErr?.step ?? null,
+        reason: rzpErr?.reason ?? null
+      },
+      resp.ok ? "[payments/check-config] Razorpay connection verified \u2713" : "[payments/check-config] Razorpay connection FAILED"
+    );
+    return res.json({
+      keyMode: mode,
+      maskedKeyId,
+      connected: resp.ok,
+      httpStatus: resp.status,
+      razorpay: rzpErr ? {
+        code: rzpErr.code ?? null,
+        description: rzpErr.description ?? null,
+        source: rzpErr.source ?? null,
+        step: rzpErr.step ?? null,
+        reason: rzpErr.reason ?? null
+      } : null,
+      warning,
+      error: resp.ok ? null : rzpErr?.description ?? `HTTP ${resp.status}`
+    });
+  } catch (err) {
+    logger.error(
+      { keyMode: mode, maskedKeyId, err: err?.message },
+      "[payments/check-config] network error reaching Razorpay"
+    );
+    return res.status(502).json({
+      keyMode: mode,
+      maskedKeyId,
+      connected: false,
+      httpStatus: null,
+      razorpay: null,
+      warning,
+      error: `Network error: ${err?.message ?? "could not reach Razorpay API"}`
+    });
+  }
+});
+var payments_default = router10;
+
+// src/routes/tickets.ts
+var import_express11 = __toESM(require_express2(), 1);
+
+// src/lib/ticket-pdf.ts
+import PDFDocument from "pdfkit";
+var BLUE = "#1E40AF";
+var LIGHT = "#EFF6FF";
+var ACCENT = "#F97316";
+var GRAY = "#64748B";
+var BORDER = "#CBD5E1";
+var WHITE = "#FFFFFF";
+function hr(doc, y) {
+  doc.moveTo(50, y).lineTo(545, y).strokeColor(BORDER).lineWidth(0.5).stroke();
+}
+function labelValue(doc, x, y, label, value, accentValue = false) {
+  doc.font("Helvetica").fontSize(8).fillColor(GRAY).text(label.toUpperCase(), x, y);
+  doc.font("Helvetica-Bold").fontSize(11).fillColor(accentValue ? ACCENT : "#1E293B").text(value, x, y + 13);
+}
+function cityFontSize(city) {
+  const len = city.length;
+  if (len <= 6) return 34;
+  if (len <= 8) return 30;
+  if (len <= 11) return 24;
+  if (len <= 14) return 20;
+  return 16;
+}
+function generateFlightTicketPDF(ticket) {
+  return new Promise((resolve2, reject) => {
+    const doc = new PDFDocument({ size: "A4", margin: 0 });
+    const chunks = [];
+    doc.on("data", (c) => chunks.push(c));
+    doc.on("end", () => resolve2(Buffer.concat(chunks)));
+    doc.on("error", reject);
+    const fromCity = sanitizeLocation(ticket.from) || ticket.from;
+    const toCity = sanitizeLocation(ticket.to) || ticket.to;
+    const W = 595;
+    const margin = 50;
+    doc.rect(0, 0, W, 90).fill(BLUE);
+    doc.font("Helvetica-Bold").fontSize(22).fillColor(WHITE).text(APP_NAME, margin, 24);
+    doc.font("Helvetica").fontSize(10).fillColor("#93C5FD").text("Explore the world", margin, 50);
+    doc.font("Helvetica-Bold").fontSize(12).fillColor(WHITE).text("FLIGHT TICKET", W - 160, 24, { width: 110, align: "right" });
+    doc.font("Helvetica").fontSize(9).fillColor("#93C5FD").text(`Booking ID: ${ticket.bookingId}`, W - 180, 44, { width: 130, align: "right" });
+    doc.rect(0, 90, W, 110).fill(LIGHT);
+    const routeY = 108;
+    const col1 = margin;
+    const col3 = W - margin - 165;
+    const fromFs = cityFontSize(fromCity);
+    const toFs = cityFontSize(toCity);
+    const fromY = routeY + Math.max(0, Math.round((34 - fromFs) * 0.4));
+    const toY = routeY + Math.max(0, Math.round((34 - toFs) * 0.4));
+    doc.font("Helvetica-Bold").fontSize(fromFs).fillColor(BLUE).text(fromCity, col1, fromY, { width: 165, lineBreak: false });
+    doc.font("Helvetica").fontSize(9).fillColor(GRAY).text("ORIGIN", col1, routeY + 46);
+    doc.font("Helvetica-Bold").fontSize(13).fillColor("#1E293B").text(ticket.departure, col1, routeY + 59);
+    const midX = W / 2 - 50;
+    doc.font("Helvetica").fontSize(9).fillColor(GRAY).text(ticket.duration, midX, routeY + 16, { width: 100, align: "center" });
+    doc.moveTo(midX, routeY + 32).lineTo(midX + 100, routeY + 32).strokeColor(BLUE).lineWidth(1.5).stroke();
+    doc.moveTo(midX + 90, routeY + 27).lineTo(midX + 100, routeY + 32).lineTo(midX + 90, routeY + 37).strokeColor(BLUE).lineWidth(1.5).stroke();
+    doc.font("Helvetica").fontSize(9).fillColor(GRAY).text("NON-STOP", midX, routeY + 40, { width: 100, align: "center" });
+    doc.font("Helvetica-Bold").fontSize(toFs).fillColor(BLUE).text(toCity, col3, toY, { width: 165, align: "right", lineBreak: false });
+    doc.font("Helvetica").fontSize(9).fillColor(GRAY).text("DESTINATION", col3, routeY + 46, { width: 165, align: "right" });
+    doc.font("Helvetica-Bold").fontSize(13).fillColor("#1E293B").text(ticket.arrival, col3, routeY + 59, { width: 165, align: "right" });
+    let y = 222;
+    doc.rect(0, 200, W, 2).fill(ACCENT);
+    y = 220;
+    hr(doc, y + 60);
+    const cols = [margin, 200, 360, 460];
+    labelValue(doc, cols[0], y + 8, "Passenger", ticket.passengerName);
+    labelValue(doc, cols[1], y + 8, "Date", ticket.date);
+    labelValue(doc, cols[2], y + 8, "Class", ticket.class || "Economy");
+    labelValue(doc, cols[3], y + 8, "Pax", String(ticket.passengers));
+    y += 68;
+    hr(doc, y + 60);
+    labelValue(doc, cols[0], y + 8, "Airline", ticket.airline);
+    labelValue(doc, cols[1], y + 8, "Flight No.", ticket.flightNum);
+    labelValue(doc, cols[2], y + 8, "Duration", ticket.duration);
+    labelValue(doc, cols[3], y + 8, "Amount", `\u20B9${ticket.amount.toLocaleString("en-IN")}`, true);
+    y += 68;
+    hr(doc, y + 60);
+    labelValue(doc, cols[0], y + 8, "Passenger Email", ticket.passengerEmail);
+    if (ticket.paymentId) {
+      labelValue(doc, cols[2], y + 8, "Payment Ref", ticket.paymentId);
+    }
+    y += 90;
+    const barcodeY = y;
+    doc.moveTo(margin, barcodeY).lineTo(W - margin, barcodeY).dash(4, { space: 4 }).strokeColor(BORDER).lineWidth(0.8).stroke().undash();
+    const stripeX = W - 180;
+    for (let i = 0; i < 40; i++) {
+      const w = i % 3 === 0 ? 4 : 2;
+      doc.rect(stripeX + i * 3.5, barcodeY + 16, w, 50).fill(i % 5 === 0 ? "#1E293B" : GRAY);
+    }
+    doc.font("Courier").fontSize(8).fillColor("#1E293B").text(ticket.bookingId, stripeX, barcodeY + 72, { width: 140, align: "center" });
+    doc.font("Helvetica-Bold").fontSize(14).fillColor(BLUE).text("BOARDING PASS", margin, barcodeY + 20);
+    doc.font("Helvetica").fontSize(9).fillColor(GRAY).text(`${fromCity}  to  ${toCity}   |   ${ticket.departure}`, margin, barcodeY + 40);
+    doc.font("Helvetica-Bold").fontSize(11).fillColor("#1E293B").text(ticket.passengerName, margin, barcodeY + 58);
+    const footerY = 760;
+    doc.rect(0, footerY, W, 82).fill(BLUE);
+    doc.font("Helvetica").fontSize(8).fillColor("#93C5FD").text(
+      `This is an electronically generated ticket. Please carry a valid photo ID at the airport. Check-in closes 45 minutes before departure for domestic flights. For assistance contact ${APP_NAME} Support.`,
+      margin,
+      footerY + 16,
+      { width: W - margin * 2, align: "center" }
+    );
+    doc.font("Helvetica-Bold").fontSize(9).fillColor(WHITE).text(`${APP_NAME} \u2014 ${APP_TAGLINE}`, margin, footerY + 52, { width: W - margin * 2, align: "center" });
+    doc.end();
+  });
+}
+
+// src/routes/tickets.ts
+var router11 = (0, import_express11.Router)();
+router11.post("/generate", async (req, res) => {
+  try {
+    const ticket = req.body;
+    if (!ticket.bookingId || !ticket.from || !ticket.to) {
+      return res.status(400).json({ error: "Missing required ticket fields" });
+    }
+    const pdfBuffer = await generateFlightTicketPDF(ticket);
+    res.set({
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${APP_NAME}-Ticket-${ticket.bookingId}.pdf"`,
+      "Content-Length": pdfBuffer.length
+    });
+    res.send(pdfBuffer);
+  } catch (err) {
+    console.error("ticket/generate error:", err);
+    res.status(500).json({ error: err.message || "Failed to generate ticket" });
+  }
+});
+router11.post("/send-email", async (req, res) => {
+  try {
+    const ticket = req.body;
+    if (!ticket.bookingId || !ticket.passengerEmail) {
+      return res.status(400).json({ error: "Missing bookingId or passengerEmail" });
+    }
+    const pdfBuffer = await generateFlightTicketPDF(ticket);
+    const { sent, reason } = await sendBookingConfirmationEmail(ticket, pdfBuffer);
+    res.json({ success: true, emailSent: sent, reason });
+  } catch (err) {
+    console.error("ticket/send-email error:", err);
+    res.status(500).json({ error: err.message || "Failed to send email" });
+  }
+});
+var tickets_default = router11;
+
+// src/routes/whatsapp.ts
+var import_express12 = __toESM(require_express2(), 1);
+var router12 = (0, import_express12.Router)();
+router12.post("/", async (req, res) => {
+  try {
+    const data = req.body;
+    if (!data.bookingId || !data.phone) {
+      return res.status(400).json({ error: "Missing required fields: bookingId, phone" });
+    }
+    const result = await sendWhatsAppNotification(data);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error("send-whatsapp error:", err);
+    res.status(500).json({ error: err.message || "Failed to send WhatsApp message" });
+  }
+});
+var whatsapp_default = router12;
+
+// src/routes/itinerary-pdf.ts
+var import_express13 = __toESM(require_express2(), 1);
+
+// src/lib/holiday-pdf.ts
+import PDFDocument2 from "pdfkit";
+var ITINERARIES = {
+  Goa: [
+    { day: 1, title: "Arrival & North Goa Beach Evening", activities: ["Airport pickup", "Check-in at resort", "Calangute & Baga Beach", "Sunset at Fort Aguada", "Beachside seafood dinner"], meals: "Dinner" },
+    { day: 2, title: "North Goa Sightseeing", activities: ["Basilica of Bom Jesus", "Old Goa churches tour", "Anjuna flea market", "Vagator Beach", "Nightlife at Tito's Lane"], meals: "Breakfast, Dinner" },
+    { day: 3, title: "South Goa & Water Sports", activities: ["Colva & Benaulim Beach", "Dolphin watching cruise", "Dudhsagar Waterfall", "Parasailing & jet ski", "Panjim market shopping"], meals: "Breakfast, Lunch" },
+    { day: 4, title: "Checkout & Departure", activities: ["Morning beach walk", "Breakfast and checkout", "Souvenir shopping", "Airport drop"], meals: "Breakfast" }
+  ],
+  Kashmir: [
+    { day: 1, title: "Arrival & Dal Lake", activities: ["Airport pickup in Srinagar", "Houseboat check-in on Dal Lake", "Shikara ride at sunset", "Dal Lake floating market"], meals: "Dinner" },
+    { day: 2, title: "Mughal Gardens Tour", activities: ["Shalimar Bagh", "Nishat Bagh", "Chashme Shahi", "Shankaracharya Temple", "Local handicraft shopping"], meals: "Breakfast, Dinner" },
+    { day: 3, title: "Gulmarg Day Trip", activities: ["Drive to Gulmarg", "Gondola cable car ride", "Snow activities", "Meadow walk", "Return to Srinagar"], meals: "Breakfast, Lunch" },
+    { day: 4, title: "Pahalgam Excursion", activities: ["Drive to Pahalgam", "Betaab Valley", "Aru Valley nature walk", "Lidder River rafting"], meals: "Breakfast, Dinner" },
+    { day: 5, title: "Sonamarg & Departure", activities: ["Sonamarg Glacier pony ride", "Sindh River photography", "Return to Srinagar", "Airport drop"], meals: "Breakfast" }
+  ],
+  Kerala: [
+    { day: 1, title: "Arrival in Kochi", activities: ["Cochin airport pickup", "Chinese fishing nets", "Fort Kochi heritage walk", "Kathakali dance show"], meals: "Dinner" },
+    { day: 2, title: "Munnar Tea Country", activities: ["Drive to Munnar", "Mattupetty Dam", "Tea Garden factory tour", "Spice plantation walk"], meals: "Breakfast, Lunch, Dinner" },
+    { day: 3, title: "Thekkady Wildlife", activities: ["Periyar boat cruise", "Elephant interaction", "Spice garden tour", "Bamboo rafting"], meals: "Breakfast, Dinner" },
+    { day: 4, title: "Alleppey Houseboat", activities: ["Board Kerala houseboat", "Village walk along canals", "Village fishing", "Sunset cruise"], meals: "All meals on houseboat" },
+    { day: 5, title: "Kovalam & Departure", activities: ["Morning backwater cruise", "Kovalam Beach", "Ayurvedic spa session", "Airport drop"], meals: "Breakfast, Lunch" }
+  ],
+  Rajasthan: [
+    { day: 1, title: "Jaipur \u2013 Pink City", activities: ["Airport pickup", "City Palace", "Jantar Mantar", "Hawa Mahal", "Johri Bazaar shopping"], meals: "Dinner" },
+    { day: 2, title: "Amber Fort & Forts", activities: ["Amber Fort elephant ride", "Sheesh Mahal mirror palace", "Nahargarh Fort sunset", "Jal Mahal photos"], meals: "Breakfast, Dinner" },
+    { day: 3, title: "Jaisalmer \u2013 Golden City", activities: ["Drive to Jaisalmer", "Jaisalmer Fort", "Patwon ki Haveli", "Gadi Sagar Lake"], meals: "Breakfast, Dinner" },
+    { day: 4, title: "Sam Sand Dunes Desert Safari", activities: ["Camel safari at Sam Dunes", "Jeep safari", "Folk dance & bonfire", "Stargazing in the desert"], meals: "Breakfast, Dinner at camp" },
+    { day: 5, title: "Jodhpur & Departure", activities: ["Drive to Jodhpur", "Mehrangarh Fort", "Blue City walk", "Sardar Market & departure"], meals: "Breakfast, Lunch" }
+  ],
+  Manali: [
+    { day: 1, title: "Arrival in Manali", activities: ["Airport pickup", "Old Manali walk", "Hadimba Devi Temple", "Vashisht hot springs"], meals: "Dinner" },
+    { day: 2, title: "Solang Valley Adventure", activities: ["Solang Valley", "Gondola ride", "Zorbing & paragliding", "River rafting", "Bonfire camp"], meals: "Breakfast, Lunch, Dinner" },
+    { day: 3, title: "Rohtang Pass", activities: ["Early drive to Rohtang Pass", "Snow play & photography", "Gulaba Valley meadows", "Glacier views"], meals: "Breakfast, Lunch" },
+    { day: 4, title: "Kullu & Manikaran", activities: ["Kullu shawl weaving tour", "Manikaran hot springs", "Raghunath Temple", "Parvati River drive"], meals: "Breakfast, Dinner" },
+    { day: 5, title: "Departure", activities: ["Morning Himalayan walk", "Breakfast & checkout", "Tibetan market shopping", "Airport drop"], meals: "Breakfast" }
+  ],
+  Andaman: [
+    { day: 1, title: "Port Blair Arrival", activities: ["Airport pickup", "Cellular Jail visit", "Sound & Light Show", "Seafood dinner"], meals: "Dinner" },
+    { day: 2, title: "Ross & North Bay Islands", activities: ["Ross Island British HQ ruins", "North Bay snorkeling", "Glass-bottom boat ride", "Market shopping"], meals: "Breakfast, Lunch" },
+    { day: 3, title: "Havelock Island", activities: ["Ferry to Havelock", "Radhanagar Beach", "Elephant Beach snorkeling", "Sunset viewing"], meals: "Breakfast, Dinner" },
+    { day: 4, title: "Neil Island", activities: ["Ferry to Neil Island", "Natural Bridge Rock", "Bharatpur Beach sports", "Sitapur Beach sunrise"], meals: "Breakfast, Lunch" },
+    { day: 5, title: "Departure", activities: ["Ferry back to Port Blair", "Naval Marine Museum", "Souvenir shopping", "Airport drop"], meals: "Breakfast" }
+  ]
+};
+function getItinerary(destination) {
+  const key = Object.keys(ITINERARIES).find(
+    (k) => destination.toLowerCase().includes(k.toLowerCase()) || k.toLowerCase().includes(destination.toLowerCase())
+  );
+  return ITINERARIES[key ?? "Goa"] ?? ITINERARIES["Goa"];
+}
+var PURPLE = "#6D28D9";
+var LIGHT_P = "#EDE9FE";
+var WHITE2 = "#FFFFFF";
+var DARK = "#1E293B";
+var GRAY2 = "#64748B";
+var GREEN = "#059669";
+var ACCENT2 = "#F59E0B";
+var BORDER2 = "#E2E8F0";
+function hr2(doc, y, color = BORDER2) {
+  doc.moveTo(50, y).lineTo(545, y).strokeColor(color).lineWidth(0.5).stroke();
+}
+function badge(doc, x, y, text2, bg, fg, w = 80) {
+  doc.rect(x, y, w, 16).fill(bg);
+  doc.font("Helvetica-Bold").fontSize(8).fillColor(fg).text(text2, x, y + 4, { width: w, align: "center" });
+}
+function generateHolidayItineraryPDF(data) {
+  return new Promise((resolve2, reject) => {
+    const doc = new PDFDocument2({ size: "A4", margin: 0, bufferPages: true });
+    const chunks = [];
+    doc.on("data", (c) => chunks.push(c));
+    doc.on("end", () => resolve2(Buffer.concat(chunks)));
+    doc.on("error", reject);
+    const W = 595;
+    const margin = 50;
+    const itin = getItinerary(data.destination);
+    doc.rect(0, 0, W, 110).fill(PURPLE);
+    doc.font("Helvetica-Bold").fontSize(24).fillColor(WHITE2).text(APP_NAME, margin, 22);
+    doc.font("Helvetica").fontSize(9).fillColor("#C4B5FD").text("Explore the world", margin, 50);
+    doc.font("Helvetica-Bold").fontSize(11).fillColor(WHITE2).text("HOLIDAY ITINERARY", W - 190, 22, { width: 140, align: "right" });
+    doc.font("Helvetica").fontSize(9).fillColor("#C4B5FD").text(`Prepared for: ${data.customerName}`, W - 190, 42, { width: 140, align: "right" });
+    doc.font("Helvetica").fontSize(9).fillColor("#C4B5FD").text((/* @__PURE__ */ new Date()).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }), W - 190, 58, { width: 140, align: "right" });
+    doc.rect(0, 110, W, 72).fill(LIGHT_P);
+    doc.font("Helvetica-Bold").fontSize(32).fillColor(PURPLE).text(data.destination, margin, 120);
+    doc.font("Helvetica").fontSize(11).fillColor(GRAY2).text(data.packageName || `${data.destination} Holiday Package`, margin, 158);
+    const badgeY = 128;
+    const badgeX = W - 260;
+    badge(doc, badgeX, badgeY, data.duration, PURPLE, WHITE2, 80);
+    badge(doc, badgeX + 88, badgeY, `${data.people} Traveller${data.people > 1 ? "s" : ""}`, GREEN, WHITE2, 88);
+    if (data.travelDate) {
+      badge(doc, badgeX, badgeY + 22, data.travelDate, ACCENT2, WHITE2, 180);
+    }
+    let y = 200;
+    doc.rect(0, y, W, 2).fill(ACCENT2);
+    y += 10;
+    doc.font("Helvetica-Bold").fontSize(13).fillColor(DARK).text("Traveller Details", margin, y);
+    y += 20;
+    hr2(doc, y);
+    y += 10;
+    const col1 = margin;
+    const col2 = 230;
+    const col3 = 390;
+    doc.font("Helvetica").fontSize(8).fillColor(GRAY2).text("NAME", col1, y);
+    doc.font("Helvetica").fontSize(8).fillColor(GRAY2).text("CONTACT", col2, y);
+    doc.font("Helvetica").fontSize(8).fillColor(GRAY2).text("NO. OF TRAVELLERS", col3, y);
+    y += 12;
+    doc.font("Helvetica-Bold").fontSize(11).fillColor(DARK).text(data.customerName, col1, y);
+    doc.font("Helvetica-Bold").fontSize(11).fillColor(DARK).text(data.phone || "\u2014", col2, y);
+    doc.font("Helvetica-Bold").fontSize(11).fillColor(DARK).text(String(data.people), col3, y);
+    y += 24;
+    hr2(doc, y);
+    y += 12;
+    doc.font("Helvetica-Bold").fontSize(14).fillColor(PURPLE).text("Day-Wise Itinerary", margin, y);
+    y += 22;
+    for (const day of itin) {
+      const estimatedHeight = 28 + day.activities.length * 14 + 20;
+      if (y + estimatedHeight > 780) {
+        doc.addPage();
+        y = 50;
+        doc.rect(0, 0, W, 30).fill(PURPLE);
+        doc.font("Helvetica-Bold").fontSize(10).fillColor(WHITE2).text(`${APP_NAME}  \u2022  Holiday Itinerary`, margin, 10);
+        doc.font("Helvetica").fontSize(9).fillColor("#C4B5FD").text(data.destination, W - margin - 80, 10, { width: 80, align: "right" });
+        y = 45;
+      }
+      doc.rect(margin, y, W - margin * 2, 24).fill(LIGHT_P);
+      doc.rect(margin, y, 36, 24).fill(PURPLE);
+      doc.font("Helvetica-Bold").fontSize(9).fillColor(WHITE2).text(`D${day.day}`, margin, y + 8, { width: 36, align: "center" });
+      doc.font("Helvetica-Bold").fontSize(11).fillColor(PURPLE).text(day.title, margin + 44, y + 7);
+      y += 28;
+      for (const act of day.activities) {
+        if (y > 780) {
+          doc.addPage();
+          y = 50;
+        }
+        doc.rect(margin + 8, y + 4, 4, 4).fill(PURPLE);
+        doc.font("Helvetica").fontSize(9).fillColor(DARK).text(act, margin + 20, y, { width: W - margin * 2 - 30 });
+        y += 14;
+      }
+      doc.font("Helvetica").fontSize(8).fillColor(GRAY2).text(`Meals: ${day.meals}`, margin + 8, y, { width: 300 });
+      y += 18;
+    }
+    if (y + 120 > 800) {
+      doc.addPage();
+      y = 50;
+    }
+    y += 4;
+    hr2(doc, y, PURPLE);
+    y += 12;
+    doc.font("Helvetica-Bold").fontSize(13).fillColor(GREEN).text("What's Included", margin, y);
+    y += 18;
+    const inclusions = data.inclusions?.length ? data.inclusions : ["Hotel accommodation", "Daily breakfast", "Airport transfers", "AC vehicle for sightseeing", "Tour escort assistance"];
+    for (const inc of inclusions) {
+      if (y > 780) {
+        doc.addPage();
+        y = 50;
+      }
+      doc.font("Helvetica").fontSize(8).fillColor(GREEN).text("\u2713", margin, y);
+      doc.font("Helvetica").fontSize(9).fillColor(DARK).text(inc, margin + 14, y);
+      y += 15;
+    }
+    y += 8;
+    if (data.pricePerPerson && y + 90 < 800) {
+      hr2(doc, y, BORDER2);
+      y += 12;
+      doc.font("Helvetica-Bold").fontSize(13).fillColor(DARK).text("Price Summary", margin, y);
+      y += 18;
+      const priceTotal = data.totalPrice || data.pricePerPerson * data.people;
+      doc.font("Helvetica").fontSize(9).fillColor(GRAY2).text(`\u20B9${data.pricePerPerson.toLocaleString("en-IN")} \xD7 ${data.people} traveller${data.people > 1 ? "s" : ""}`, margin, y);
+      doc.font("Helvetica-Bold").fontSize(9).fillColor(DARK).text(`\u20B9${priceTotal.toLocaleString("en-IN")}`, W - margin - 100, y, { width: 100, align: "right" });
+      y += 20;
+      doc.rect(margin, y, W - margin * 2, 32).fill(PURPLE);
+      doc.font("Helvetica-Bold").fontSize(12).fillColor(WHITE2).text("TOTAL PACKAGE PRICE", margin + 12, y + 10);
+      doc.font("Helvetica-Bold").fontSize(16).fillColor(WHITE2).text(`\u20B9${priceTotal.toLocaleString("en-IN")}`, W - margin - 130, y + 8, { width: 120, align: "right" });
+      y += 44;
+    }
+    const footerY = 810;
+    doc.rect(0, footerY, W, 32).fill(PURPLE);
+    doc.font("Helvetica-Bold").fontSize(9).fillColor(WHITE2).text(`${APP_NAME} \u2708\uFE0F  |  Explore the world with confidence`, margin, footerY + 11, { align: "center", width: W - margin * 2 });
+    doc.end();
+  });
+}
+
+// src/routes/itinerary-pdf.ts
+var router13 = (0, import_express13.Router)();
+router13.get("/", async (req, res) => {
+  try {
+    const {
+      name: name2 = "Guest",
+      phone = "",
+      dest = "Goa",
+      duration: duration3 = "4D/3N",
+      people = "2",
+      date: date6,
+      pkg,
+      price,
+      total
+    } = req.query;
+    const pdfBuffer = await generateHolidayItineraryPDF({
+      customerName: name2,
+      phone,
+      destination: dest,
+      duration: duration3,
+      people: parseInt(people) || 2,
+      travelDate: date6,
+      packageName: pkg,
+      pricePerPerson: price ? parseInt(price) : void 0,
+      totalPrice: total ? parseInt(total) : void 0
+    });
+    const filename = `${APP_NAME}_${dest.replace(/\s+/g, "_")}_Itinerary.pdf`;
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
+    res.setHeader("Content-Length", pdfBuffer.length);
+    res.setHeader("Cache-Control", "no-store");
+    res.send(pdfBuffer);
+  } catch (err) {
+    console.error("[itinerary-pdf] Error:", err);
+    res.status(500).json({ error: "Failed to generate PDF", detail: err.message });
+  }
+});
+var itinerary_pdf_default = router13;
+
+// src/routes/holiday-whatsapp.ts
+var import_express14 = __toESM(require_express2(), 1);
+var router14 = (0, import_express14.Router)();
+router14.post("/", async (req, res) => {
+  try {
+    const data = req.body;
+    if (!data.phone || !data.destination) {
+      return res.status(400).json({ error: "Missing required fields: phone, destination" });
+    }
+    const result = await sendHolidayWhatsApp(data);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error("[holiday-whatsapp] Error:", err);
+    res.status(500).json({ error: err.message || "Failed to send WhatsApp" });
+  }
+});
+var holiday_whatsapp_default = router14;
+
+// src/routes/followup.ts
+var import_express15 = __toESM(require_express2(), 1);
+init_drizzle_orm();
+
+// src/lib/followup-scheduler.ts
+init_drizzle_orm();
+var DEFAULT_SETTINGS = {
+  enabled: true,
+  msg10min: "Hi {name}, just checking \u{1F60A}\nDid you see your {destination} itinerary? Our travel expert is ready to help you plan the perfect trip!",
+  msg2hr: "We have limited slots for your {destination} trip \u{1F334}\nLet us know if you want to customize your plan. Our expert can create a tailored package just for you!",
+  msg24hr: "Special offer \u{1F389}\nGet \u20B9500 OFF if you confirm your {destination} booking today!\nOffer valid for the next 24 hours only. Call us now to avail!"
+};
+var cachedSettings = null;
+var timers2 = /* @__PURE__ */ new Map();
+var STEPS = [
+  { key: "10min", delayMs: 10 * 60 * 1e3, msgKey: "msg10min" },
+  { key: "2hr", delayMs: 2 * 60 * 60 * 1e3, msgKey: "msg2hr" },
+  { key: "24hr", delayMs: 24 * 60 * 60 * 1e3, msgKey: "msg24hr" }
+];
+async function getFollowUpSettings() {
+  if (cachedSettings) return cachedSettings;
+  try {
+    const rows = await db.select().from(followupSettingsTable).limit(1);
+    if (rows.length > 0) {
+      cachedSettings = {
+        enabled: rows[0].enabled,
+        msg10min: rows[0].msg10min,
+        msg2hr: rows[0].msg2hr,
+        msg24hr: rows[0].msg24hr
+      };
+      return cachedSettings;
+    }
+    await db.insert(followupSettingsTable).values({});
+    cachedSettings = { ...DEFAULT_SETTINGS };
+    return cachedSettings;
+  } catch {
+    return { ...DEFAULT_SETTINGS };
+  }
+}
+async function updateFollowUpSettings(updates) {
+  const current = await getFollowUpSettings();
+  const next = { ...current, ...updates };
+  try {
+    const rows = await db.select().from(followupSettingsTable).limit(1);
+    if (rows.length > 0) {
+      await db.update(followupSettingsTable).set({ enabled: next.enabled, msg10min: next.msg10min, msg2hr: next.msg2hr, msg24hr: next.msg24hr, updatedAt: /* @__PURE__ */ new Date() }).where(eq(followupSettingsTable.id, rows[0].id));
+    } else {
+      await db.insert(followupSettingsTable).values(next);
+    }
+  } catch (err) {
+    console.error("[followup] Failed to persist settings:", err);
+  }
+  cachedSettings = next;
+  return next;
+}
+function formatMessage(template, lead) {
+  return template.replace(/\{name\}/g, lead.name).replace(/\{destination\}/g, lead.destination);
+}
+async function scheduleFollowUps(lead) {
+  const settings = await getFollowUpSettings();
+  if (!settings.enabled) {
+    console.info(`[followup] Auto follow-up disabled \u2014 skipping lead ${lead.leadId}`);
+    return;
+  }
+  const now = Date.now();
+  for (const step of STEPS) {
+    const message = formatMessage(settings[step.msgKey], lead);
+    const scheduledAt = new Date(now + step.delayMs);
+    let rowId;
+    try {
+      const inserted = await db.insert(leadFollowupsTable).values({
+        leadId: lead.leadId,
+        leadName: lead.name,
+        phone: lead.phone,
+        destination: lead.destination,
+        step: step.key,
+        message,
+        status: "pending",
+        scheduledAt
+      }).returning({ id: leadFollowupsTable.id });
+      rowId = inserted[0]?.id;
+    } catch (err) {
+      console.error(`[followup] DB insert failed for step ${step.key}:`, err);
+    }
+    const timerKey = `${lead.leadId}:${step.key}`;
+    const handle = setTimeout(
+      () => executeFollowUp(lead, step.key, rowId),
+      step.delayMs
+    );
+    timers2.set(timerKey, handle);
+    console.info(`[followup] Scheduled ${step.key} for lead ${lead.leadId} at ${scheduledAt.toISOString()}`);
+  }
+}
+async function cancelFollowUps(leadId) {
+  for (const step of STEPS) {
+    const timerKey = `${leadId}:${step.key}`;
+    const handle = timers2.get(timerKey);
+    if (handle) {
+      clearTimeout(handle);
+      timers2.delete(timerKey);
+    }
+  }
+  try {
+    await db.update(leadFollowupsTable).set({ status: "cancelled" }).where(
+      and(
+        eq(leadFollowupsTable.leadId, leadId),
+        eq(leadFollowupsTable.status, "pending")
+      )
+    );
+    console.info(`[followup] Cancelled all pending follow-ups for lead ${leadId}`);
+  } catch (err) {
+    console.error(`[followup] Failed to cancel DB rows for ${leadId}:`, err);
+  }
+}
+async function executeFollowUp(lead, step, rowId) {
+  const timerKey = `${lead.leadId}:${step}`;
+  timers2.delete(timerKey);
+  const settings = await getFollowUpSettings();
+  if (!settings.enabled) {
+    console.info(`[followup] Skipping ${step} for ${lead.leadId} \u2014 follow-up disabled`);
+    if (rowId) {
+      await db.update(leadFollowupsTable).set({ status: "cancelled" }).where(eq(leadFollowupsTable.id, rowId)).catch(() => {
+      });
+    }
+    return;
+  }
+  const stepConfig = STEPS.find((s) => s.key === step);
+  const message = formatMessage(settings[stepConfig.msgKey], lead);
+  console.info(`[followup] Sending ${step} message to ${lead.phone} for lead ${lead.leadId}`);
+  const result = await sendHolidayWhatsApp({
+    customerName: lead.name,
+    phone: lead.phone,
+    destination: lead.destination,
+    duration: lead.duration,
+    people: lead.people,
+    travelDate: lead.travelDate,
+    trigger: "lead"
+  });
+  const now = /* @__PURE__ */ new Date();
+  if (rowId) {
+    try {
+      await db.update(leadFollowupsTable).set({
+        status: result.sent ? "sent" : "failed",
+        message,
+        sentAt: now,
+        error: result.sent ? null : result.reason ?? "Unknown error"
+      }).where(eq(leadFollowupsTable.id, rowId));
+    } catch (err) {
+      console.error(`[followup] DB update failed for row ${rowId}:`, err);
+    }
+  }
+  console.info(`[followup] ${step} for ${lead.leadId}: ${result.sent ? "sent \u2713" : `failed \u2014 ${result.reason}`}`);
+}
+async function recoverPendingFollowUps() {
+  try {
+    const pending = await db.select().from(leadFollowupsTable).where(eq(leadFollowupsTable.status, "pending"));
+    if (pending.length === 0) return;
+    const now = Date.now();
+    let recovered = 0;
+    for (const row of pending) {
+      const fireAt = new Date(row.scheduledAt).getTime();
+      const delay = Math.max(0, fireAt - now);
+      const lead = {
+        leadId: row.leadId,
+        name: row.leadName,
+        phone: row.phone,
+        destination: row.destination
+      };
+      const step = row.step;
+      const timerKey = `${row.leadId}:${step}`;
+      if (!timers2.has(timerKey)) {
+        const handle = setTimeout(
+          () => executeFollowUp(lead, step, row.id),
+          delay
+        );
+        timers2.set(timerKey, handle);
+        recovered++;
+      }
+    }
+    if (recovered > 0) {
+      console.info(`[followup] Recovered ${recovered} pending follow-up(s) from DB`);
+    }
+  } catch (err) {
+    console.error("[followup] Recovery error:", err);
+  }
+}
+
+// src/routes/followup.ts
+var router15 = (0, import_express15.Router)();
+router15.post("/schedule", async (req, res) => {
+  try {
+    const lead = req.body;
+    if (!lead.leadId || !lead.phone || !lead.destination || !lead.name) {
+      return res.status(400).json({ error: "Missing required fields: leadId, name, phone, destination" });
+    }
+    await scheduleFollowUps(lead);
+    res.json({ success: true, message: "Follow-up sequence scheduled" });
+  } catch (err) {
+    console.error("[followup] /schedule error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+router15.post("/cancel", async (req, res) => {
+  try {
+    const { leadId } = req.body;
+    if (!leadId) return res.status(400).json({ error: "Missing leadId" });
+    await cancelFollowUps(leadId);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[followup] /cancel error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+router15.get("/log", async (req, res) => {
+  try {
+    const { leadId } = req.query;
+    const rows = leadId ? await db.select().from(leadFollowupsTable).where(eq(leadFollowupsTable.leadId, leadId)) : await db.select().from(leadFollowupsTable).orderBy(leadFollowupsTable.scheduledAt);
+    res.json(rows);
+  } catch (err) {
+    console.error("[followup] /log error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+router15.get("/settings", async (_req, res) => {
+  try {
+    const settings = await getFollowUpSettings();
+    res.json(settings);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+router15.put("/settings", async (req, res) => {
+  try {
+    const updates = req.body;
+    const updated = await updateFollowUpSettings(updates);
+    res.json({ success: true, settings: updated });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+var followup_default = router15;
+
+// src/routes/leads.ts
+var import_express16 = __toESM(require_express2(), 1);
+init_drizzle_orm();
+var router16 = (0, import_express16.Router)();
+router16.get("/leads", async (req, res) => {
+  try {
+    const { status, type, assignedTo } = req.query;
+    const rows = await db.select().from(leadsTable).orderBy(desc(leadsTable.createdAt));
+    const filtered = rows.filter((l) => {
+      if (status && l.status !== status) return false;
+      if (type && l.type !== type) return false;
+      if (assignedTo && l.assignedTo !== assignedTo) return false;
+      return true;
+    });
+    res.json(filtered.map((l) => ({
+      ...l,
+      createdAt: l.createdAt.toISOString(),
+      updatedAt: l.updatedAt.toISOString()
+    })));
+  } catch (err) {
+    console.error("[leads] GET error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+router16.post("/leads/convert", async (req, res) => {
+  try {
+    const { phone, type, bookingRef } = req.body;
+    if (!phone || !type) {
+      res.status(400).json({ error: "phone and type required" });
+      return;
+    }
+    const existing = await db.select().from(leadsTable).where(and(eq(leadsTable.phone, phone), eq(leadsTable.type, type)));
+    if (existing.length === 0) {
+      res.json({ skipped: true });
+      return;
+    }
+    const [updated] = await db.update(leadsTable).set({ status: "booked", bookingRef: bookingRef ?? null, updatedAt: /* @__PURE__ */ new Date() }).where(eq(leadsTable.id, existing[0].id)).returning();
+    res.json({ ...updated, createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString() });
+  } catch (err) {
+    console.error("[leads] convert error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+router16.post("/leads", async (req, res) => {
+  try {
+    const {
+      name: name2,
+      phone,
+      email: email3,
+      type = "flight",
+      source = "form",
+      status = "new",
+      packageId,
+      packageName,
+      notes
+    } = req.body;
+    if (!name2 || !phone) {
+      res.status(400).json({ error: "name and phone are required" });
+      return;
+    }
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1e3);
+    if (packageId) {
+      const existing = await db.select().from(leadsTable).where(
+        and(
+          eq(leadsTable.phone, phone),
+          eq(leadsTable.packageId, packageId),
+          gte(leadsTable.createdAt, oneHourAgo)
+        )
+      );
+      if (existing.length > 0) {
+        const lead = existing[0];
+        res.json({ ...lead, createdAt: lead.createdAt.toISOString(), updatedAt: lead.updatedAt.toISOString() });
+        return;
+      }
+    } else {
+      const existing = await db.select().from(leadsTable).where(
+        and(
+          eq(leadsTable.phone, phone),
+          eq(leadsTable.type, type),
+          gte(leadsTable.createdAt, oneHourAgo)
+        )
+      );
+      if (existing.length > 0) {
+        const lead = existing[0];
+        if (lead.status === "booked") {
+          res.json({ ...lead, createdAt: lead.createdAt.toISOString(), updatedAt: lead.updatedAt.toISOString() });
+          return;
+        }
+        const [updated] = await db.update(leadsTable).set({ name: name2, email: email3 ?? lead.email, notes: notes ?? lead.notes, updatedAt: /* @__PURE__ */ new Date() }).where(eq(leadsTable.id, lead.id)).returning();
+        res.json({ ...updated, createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString() });
+        return;
+      }
+    }
+    const leadId = `LD-${Date.now()}`;
+    const [created] = await db.insert(leadsTable).values({
+      leadId,
+      name: name2,
+      phone,
+      email: email3 ?? null,
+      type,
+      source,
+      status,
+      packageId: packageId ?? null,
+      packageName: packageName ?? null,
+      notes: notes ?? null
+    }).returning();
+    const notifData = {
+      leadId: created.leadId,
+      name: created.name,
+      phone: created.phone,
+      type: created.type,
+      email: created.email ?? void 0
+    };
+    sendLeadAdminAlert(notifData).catch(() => {
+    });
+    sendLeadCustomerConfirmation(notifData).catch(() => {
+    });
+    setTimeout(async () => {
+      try {
+        const [lead] = await db.select().from(leadsTable).where(eq(leadsTable.leadId, leadId));
+        if (lead && lead.status === "new") {
+          console.info(`[leads] 30-min elapsed, lead ${leadId} still new \u2014 sending staff reminder`);
+          sendStaffFollowUpReminder(notifData).catch(() => {
+          });
+          await db.update(leadsTable).set({ notes: (lead.notes ? lead.notes + " | " : "") + "Auto 30-min reminder sent" }).where(eq(leadsTable.leadId, leadId));
+        }
+      } catch (err) {
+        console.error("[leads] 30-min followup error:", err);
+      }
+    }, 30 * 60 * 1e3);
+    res.status(201).json({ ...created, createdAt: created.createdAt.toISOString(), updatedAt: created.updatedAt.toISOString() });
+  } catch (err) {
+    console.error("[leads] POST error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+router16.post("/leads/abandoned", async (req, res) => {
+  try {
+    const { name: name2, phone, type = "flight", notes, email: email3 } = req.body;
+    if (!name2 || !phone) {
+      res.status(400).json({ error: "name and phone required" });
+      return;
+    }
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1e3);
+    const existing = await db.select().from(leadsTable).where(and(eq(leadsTable.phone, phone), eq(leadsTable.type, type), eq(leadsTable.status, "abandoned"), gte(leadsTable.createdAt, twoHoursAgo)));
+    if (existing.length > 0) {
+      res.json({ ...existing[0], createdAt: existing[0].createdAt.toISOString(), updatedAt: existing[0].updatedAt.toISOString() });
+      return;
+    }
+    const leadId = `LD-${Date.now()}`;
+    const [created] = await db.insert(leadsTable).values({ leadId, name: name2, phone, email: email3 ?? null, type, source: "auto", status: "abandoned", notes: notes ?? null }).returning();
+    const notifData = { leadId: created.leadId, name: created.name, phone: created.phone, type: created.type };
+    sendLeadAdminAlert(notifData).catch(() => {
+    });
+    sendAbandonedLeadReminder(notifData).catch(() => {
+    });
+    res.status(201).json({ ...created, createdAt: created.createdAt.toISOString(), updatedAt: created.updatedAt.toISOString() });
+  } catch (err) {
+    console.error("[leads] abandoned POST error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+router16.patch("/leads/:leadId", async (req, res) => {
+  try {
+    const { leadId } = req.params;
+    const { status, assignedTo, assignedName, notes, bookingRef } = req.body;
+    const existing = await db.select().from(leadsTable).where(eq(leadsTable.leadId, leadId));
+    if (existing.length === 0) {
+      res.status(404).json({ error: "Lead not found" });
+      return;
+    }
+    const updates = { updatedAt: /* @__PURE__ */ new Date() };
+    if (status !== void 0) updates.status = status;
+    if (assignedTo !== void 0) updates.assignedTo = assignedTo;
+    if (assignedName !== void 0) updates.assignedName = assignedName;
+    if (notes !== void 0) updates.notes = notes;
+    if (bookingRef !== void 0) updates.bookingRef = bookingRef;
+    const [updated] = await db.update(leadsTable).set(updates).where(eq(leadsTable.leadId, leadId)).returning();
+    res.json({ ...updated, createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString() });
+  } catch (err) {
+    console.error("[leads] PATCH error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+var leads_default = router16;
+
+// src/routes/holiday-packages.ts
+var import_express17 = __toESM(require_express2(), 1);
+init_drizzle_orm();
+var router17 = (0, import_express17.Router)();
+var ITINERARY_TEMPLATES = {
+  Goa: [
+    { day: 1, title: "Arrival & North Goa Beach Evening", activities: ["Airport pickup", "Check-in at hotel", "Visit Calangute & Baga Beach", "Sunset at Fort Aguada", "Beach-side dinner with seafood"], meals: "Dinner", accommodation: "3\u2605 Beach Resort" },
+    { day: 2, title: "North Goa Sightseeing Tour", activities: ["Visit Basilica of Bom Jesus", "Old Goa churches tour", "Anjuna flea market", "Vagator Beach", "Nightlife at Tito's Lane"], meals: "Breakfast, Dinner", accommodation: "3\u2605 Beach Resort" },
+    { day: 3, title: "South Goa & Water Sports", activities: ["Colva Beach & Benaulim Beach", "Dolphin watching cruise", "Dudhsagar Waterfall visit", "Water sports: parasailing, jet ski", "Shopping at Panjim market"], meals: "Breakfast, Lunch", accommodation: "3\u2605 Beach Resort" },
+    { day: 4, title: "Checkout & Departure", activities: ["Morning beach walk", "Breakfast and checkout", "Last-minute souvenir shopping", "Airport/railway station drop"], meals: "Breakfast", accommodation: "\u2014" }
+  ],
+  Kashmir: [
+    { day: 1, title: "Arrival in Srinagar & Dal Lake", activities: ["Airport pickup in Srinagar", "Check-in to Houseboat on Dal Lake", "Shikara ride at sunset", "Dal Lake floating market visit", "Welcome Wazwan dinner"], meals: "Dinner", accommodation: "Houseboat, Dal Lake" },
+    { day: 2, title: "Mughal Gardens & City Tour", activities: ["Shalimar Bagh (Mughal garden)", "Nishat Bagh garden", "Chashme Shahi garden", "Shankaracharya Temple visit", "Local handicraft shopping"], meals: "Breakfast, Dinner", accommodation: "Houseboat, Dal Lake" },
+    { day: 3, title: "Gulmarg Day Trip", activities: ["Drive to Gulmarg (56km)", "Gondola cable car ride to Kongdoori", "Snow activities (season permitting)", "Meadow walk & photography", "Evening back to Srinagar"], meals: "Breakfast, Lunch", accommodation: "Houseboat, Dal Lake" },
+    { day: 4, title: "Pahalgam Day Trip", activities: ["Drive to Pahalgam (95km)", "Betaab Valley visit", "Aru Valley nature walk", "Lidder River rafting", "Evening return to Srinagar"], meals: "Breakfast, Dinner", accommodation: "Houseboat, Dal Lake" },
+    { day: 5, title: "Sonamarg Excursion & Departure", activities: ["Drive to Sonamarg (80km)", "Thajiwas Glacier pony ride", "Photography at Sindh River", "Return to Srinagar", "Airport drop"], meals: "Breakfast", accommodation: "\u2014" }
+  ],
+  Kerala: [
+    { day: 1, title: "Arrival in Kochi & Fort Kochi Tour", activities: ["Cochin airport pickup", "Chinese fishing nets visit", "Fort Kochi heritage walk", "Jew Town & Paradesi Synagogue", "Kathakali dance performance evening"], meals: "Dinner", accommodation: "Heritage Homestay, Fort Kochi" },
+    { day: 2, title: "Munnar Hills \u2013 Tea & Spice Country", activities: ["Drive to Munnar (130km)", "Mattupetty Dam & Echo Point", "Tea Garden tour & factory visit", "Spice plantation walk", "Sunset at Top Station"], meals: "Breakfast, Lunch, Dinner", accommodation: "Tea Estate Resort, Munnar" },
+    { day: 3, title: "Thekkady Wildlife & Spice Tour", activities: ["Drive to Thekkady (90km)", "Periyar Wildlife Sanctuary boat cruise", "Elephant interaction experience", "Spice garden guided tour", "Cultural bamboo rafting (optional)"], meals: "Breakfast, Dinner", accommodation: "Jungle Resort, Thekkady" },
+    { day: 4, title: "Alleppey Houseboat & Backwaters", activities: ["Drive to Alleppey (100km)", "Board traditional Kerala houseboat", "Village walk along backwater canals", "Village fishing experience", "Sunset cruise"], meals: "Breakfast, Lunch, Dinner (on houseboat)", accommodation: "Luxury Houseboat, Alleppey" },
+    { day: 5, title: "Kovalam Beach & Departure", activities: ["Morning cruise on backwaters", "Drive to Kovalam Beach (150km)", "Lighthouse Beach relaxation", "Ayurvedic massage session", "Thiruvananthapuram airport drop"], meals: "Breakfast, Lunch", accommodation: "\u2014" }
+  ],
+  Rajasthan: [
+    { day: 1, title: "Arrival in Jaipur \u2013 Pink City", activities: ["Jaipur airport/station pickup", "Check-in & freshen up", "City Palace visit", "Jantar Mantar observatory", "Hawa Mahal (Palace of Winds)", "Johri Bazaar evening shopping"], meals: "Dinner", accommodation: "Heritage Haveli, Jaipur" },
+    { day: 2, title: "Jaipur Forts & Amber Palace", activities: ["Amber Fort elephant ride", "Sheesh Mahal (mirror palace)", "Nahargarh Fort sunset view", "Jal Mahal (water palace) photos", "Traditional Rajasthani dinner with folk music"], meals: "Breakfast, Dinner", accommodation: "Heritage Haveli, Jaipur" },
+    { day: 3, title: "Jaisalmer \u2013 Golden City", activities: ["Drive/fly to Jaisalmer", "Jaisalmer Fort (living fort)", "Patwon ki Haveli", "Gadi Sagar Lake sunset", "Overnight desert camp arrangements"], meals: "Breakfast, Dinner", accommodation: "Desert Haveli, Jaisalmer" },
+    { day: 4, title: "Sam Sand Dunes Desert Safari", activities: ["Morning fort walk", "Sam Sand Dunes camel safari", "Desert jeep safari", "Cultural evening \u2013 folk dance, bonfire", "Stargazing in the desert"], meals: "Breakfast, Dinner (at desert camp)", accommodation: "Luxury Desert Camp, Sam" },
+    { day: 5, title: "Jodhpur \u2013 Blue City & Departure", activities: ["Drive to Jodhpur (275km)", "Mehrangarh Fort visit", "Jaswant Thada memorial", "Blue City old town walk", "Sardar Market shopping & departure"], meals: "Breakfast, Lunch", accommodation: "\u2014" }
+  ],
+  Manali: [
+    { day: 1, title: "Arrival in Manali & Old Town", activities: ["Bhuntar airport pickup", "Check-in at hotel", "Old Manali walk", "Hadimba Devi Temple visit", "Vashisht hot water springs"], meals: "Dinner", accommodation: "Mountain Resort, Manali" },
+    { day: 2, title: "Solang Valley & Adventure Sports", activities: ["Solang Valley (13km)", "Ropeway / Gondola ride", "Zorbing, paragliding, snow scooter", "Beas River rafting", "Evening bonfire at camp"], meals: "Breakfast, Lunch, Dinner", accommodation: "Mountain Resort, Manali" },
+    { day: 3, title: "Rohtang Pass Excursion", activities: ["Early morning drive to Rohtang Pass (51km)", "Snow play and photography", "Gulaba Valley meadows", "View of glaciers", "Return via Marhi dhaba lunch"], meals: "Breakfast, Lunch", accommodation: "Mountain Resort, Manali" },
+    { day: 4, title: "Kullu & Manikaran", activities: ["Drive to Kullu (40km)", "Kullu shawl weaving tour", "Raghunath temple visit", "Manikaran hot springs & Gurudwara", "Parvati River valley scenic drive"], meals: "Breakfast, Dinner", accommodation: "Mountain Resort, Manali" },
+    { day: 5, title: "Departure", activities: ["Morning leisure walk", "Breakfast and checkout", "Tibetan market souvenir shopping", "Bhuntar airport drop"], meals: "Breakfast", accommodation: "\u2014" }
+  ],
+  Andaman: [
+    { day: 1, title: "Arrival in Port Blair", activities: ["Port Blair airport pickup", "Cellular Jail visit", "Sound & Light Show at Cellular Jail", "Corbyn's Cove Beach evening", "Welcome dinner at seafood restaurant"], meals: "Dinner", accommodation: "3\u2605 Hotel, Port Blair" },
+    { day: 2, title: "Ross & North Bay Islands", activities: ["Ross Island (former British HQ)", "Snorkeling at North Bay Island", "Glass-bottom boat ride", "Rajiv Gandhi Water Sports Complex", "Aberdeen Bazaar evening shopping"], meals: "Breakfast, Lunch", accommodation: "3\u2605 Hotel, Port Blair" },
+    { day: 3, title: "Havelock Island \u2013 Radhanagar Beach", activities: ["Ferry to Havelock Island (90 mins)", "Check-in at eco resort", "Radhanagar Beach (Asia's best beach)", "Elephant Beach snorkeling trip", "Sunset viewing"], meals: "Breakfast, Dinner", accommodation: "Eco Resort, Havelock" },
+    { day: 4, title: "Neil Island Exploration", activities: ["Ferry to Neil Island (45 mins)", "Natural Bridge Rock formation", "Bharatpur Beach water sports", "Sitapur Beach sunrise", "Return to Havelock"], meals: "Breakfast, Lunch", accommodation: "Eco Resort, Havelock" },
+    { day: 5, title: "Departure from Port Blair", activities: ["Ferry back to Port Blair", "Samudrika Naval Marine Museum", "Local market shopping", "Airport departure"], meals: "Breakfast", accommodation: "\u2014" }
+  ],
+  Maldives: [
+    { day: 1, title: "Arrival & Resort Check-in", activities: ["Speedboat transfer to resort", "Overwater villa check-in", "Welcome cocktail & orientation", "Snorkeling at house reef", "Sunset deck dinner"], meals: "Dinner", accommodation: "Overwater Villa" },
+    { day: 2, title: "Snorkeling & Water Sports", activities: ["Morning snorkeling at coral garden", "Glass-bottom kayaking", "Dolphin cruise", "Stand-up paddleboarding", "Beachfront barbecue"], meals: "Breakfast, Dinner", accommodation: "Overwater Villa" },
+    { day: 3, title: "Diving & Spa Day", activities: ["Intro scuba diving session", "Visit marine biology centre", "Luxury spa treatment", "Private beach picnic", "Stargazing from the deck"], meals: "Breakfast, Lunch, Dinner", accommodation: "Overwater Villa" },
+    { day: 4, title: "Island Hopping & Departure", activities: ["Local island village visit", "Traditional Maldivian breakfast", "Last snorkeling", "Checkout & speedboat transfer", "Airport departure"], meals: "Breakfast", accommodation: "\u2014" }
+  ],
+  "Himachal Pradesh": [
+    { day: 1, title: "Arrival in Shimla", activities: ["Chandigarh pickup & drive to Shimla", "Mall Road walk", "Christ Church visit", "Jakhu Temple trek", "Sunset at Shimla Ridge"], meals: "Dinner", accommodation: "Heritage Hotel, Shimla" },
+    { day: 2, title: "Kufri & Chail", activities: ["Kufri snow valley visit", "Himalayan Nature Park", "Chail Palace visit", "Chail Cricket Ground (world's highest)", "Return to Shimla"], meals: "Breakfast, Dinner", accommodation: "Heritage Hotel, Shimla" },
+    { day: 3, title: "Shimla to Manali Drive", activities: ["Scenic drive via Kullu valley", "Kullu Shawl factory visit", "Pandoh Dam stop", "Arrive Manali", "Evening at Old Manali"], meals: "Breakfast, Dinner", accommodation: "Mountain Resort, Manali" },
+    { day: 4, title: "Solang Valley & Rohtang", activities: ["Solang Valley snow activities", "Ropeway ride", "Drive to Rohtang Pass", "Snow play & photography", "Return to Manali"], meals: "Breakfast, Lunch, Dinner", accommodation: "Mountain Resort, Manali" },
+    { day: 5, title: "Hadimba & River Rafting", activities: ["Hadimba Temple visit", "Manu Temple", "Beas River rafting", "Tibetan Monastery", "Candlelight dinner"], meals: "Breakfast, Dinner", accommodation: "Mountain Resort, Manali" },
+    { day: 6, title: "Leisure & Local Exploration", activities: ["Naggar Castle visit", "Jana Waterfall trek", "Rozy Falls", "Local market souvenir shopping", "Farewell dinner"], meals: "Breakfast, Dinner", accommodation: "Mountain Resort, Manali" },
+    { day: 7, title: "Departure", activities: ["Breakfast & checkout", "Drive back to Chandigarh/Delhi", "En-route Kullu valley views", "Railway station / airport drop"], meals: "Breakfast", accommodation: "\u2014" }
+  ]
+};
+function getItineraryForDest(destination) {
+  const key = Object.keys(ITINERARY_TEMPLATES).find(
+    (k) => destination.toLowerCase().includes(k.toLowerCase()) || k.toLowerCase().includes(destination.toLowerCase())
+  );
+  return key ? ITINERARY_TEMPLATES[key] : [
+    { day: 1, title: "Arrival & Check-in", activities: ["Airport/station pickup", "Hotel check-in", "Local area orientation", "Welcome dinner"], meals: "Dinner", accommodation: "Hotel" },
+    { day: 2, title: "Main Attractions Tour", activities: ["Major sightseeing spots", "Local cuisine experience", "Cultural show"], meals: "Breakfast, Dinner", accommodation: "Hotel" },
+    { day: 3, title: "Leisure & Activities", activities: ["Free time for shopping", "Adventure activities", "Spa or relaxation"], meals: "Breakfast", accommodation: "Hotel" },
+    { day: 4, title: "Departure", activities: ["Breakfast and checkout", "Last-minute shopping", "Airport/station drop"], meals: "Breakfast", accommodation: "\u2014" }
+  ];
+}
+var SEED_PACKAGES = [
+  {
+    name: "Goa Beach Bliss",
+    destination: "Goa",
+    type: "beach",
+    duration: 4,
+    nights: 3,
+    category: "domestic",
+    price: "12000",
+    rating: "4.5",
+    reviewCount: 1840,
+    featured: true,
+    imageUrl: "https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?w=800&q=80",
+    images: ["https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?w=800&q=80", "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&q=80", "https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=800&q=80"],
+    highlights: ["Baga & Calangute Beach", "Fort Aguada", "Water Sports", "Old Goa Churches", "Seafood Dinners"],
+    description: "Experience the sun, sand, and soul of India's party capital. Enjoy pristine beaches, vibrant nightlife, and fresh Goan seafood.",
+    includes: ["Hotel (3\u2605 Beach Resort)", "Daily breakfast", "Airport transfers", "Sightseeing by AC cab", "Tour escort"],
+    exclusions: ["Flights", "Personal expenses", "Alcohol", "Adventure sports charges", "Room service"],
+    createdBy: "admin"
+  },
+  {
+    name: "Kashmir Paradise",
+    destination: "Kashmir",
+    type: "honeymoon",
+    duration: 6,
+    nights: 5,
+    category: "domestic",
+    price: "32000",
+    rating: "4.8",
+    reviewCount: 1120,
+    featured: true,
+    imageUrl: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&q=80",
+    images: ["https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&q=80", "https://images.unsplash.com/photo-1518684079-3c830dcef090?w=800&q=80", "https://images.unsplash.com/photo-1455156218388-5e61b526818b?w=800&q=80"],
+    highlights: ["Houseboat on Dal Lake", "Gulmarg Gondola", "Pahalgam Valley", "Shikara Ride", "Mughal Gardens"],
+    description: "The paradise on Earth awaits you \u2014 snow-capped mountains, blooming gardens, and shimmering Dal Lake form the backdrop of your dream vacation.",
+    includes: ["Houseboat accommodation", "All meals", "Shikara rides", "All transfers", "Sightseeing"],
+    exclusions: ["Flights to/from Srinagar", "Gondola tickets", "Pony rides", "Personal expenses", "Travel insurance"],
+    createdBy: "admin"
+  },
+  {
+    name: "Kerala Backwaters & Hills",
+    destination: "Kerala",
+    type: "family",
+    duration: 6,
+    nights: 5,
+    category: "domestic",
+    price: "22000",
+    rating: "4.6",
+    reviewCount: 2310,
+    featured: false,
+    imageUrl: "https://images.unsplash.com/photo-1558618047-3c8c76ca7d13?w=800&q=80",
+    images: ["https://images.unsplash.com/photo-1558618047-3c8c76ca7d13?w=800&q=80", "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=800&q=80", "https://images.unsplash.com/photo-1571003123894-1f0594d2b5d9?w=800&q=80"],
+    highlights: ["Houseboat on backwaters", "Munnar tea gardens", "Periyar Wildlife Sanctuary", "Ayurvedic spa", "Kathakali dance show"],
+    description: "God's Own Country in all its glory \u2014 lush green hills, serene backwaters, spice-scented air, and unmatched Ayurvedic hospitality.",
+    includes: ["Hotel + Houseboat stay", "Daily breakfast & dinner", "Houseboat meals", "AC transfers", "Wildlife safari"],
+    exclusions: ["Flights", "Kathakali tickets", "Elephant rides", "Water sports", "Personal expenses"],
+    createdBy: "admin"
+  },
+  {
+    name: "Rajasthan Royal Tour",
+    destination: "Rajasthan",
+    type: "cultural",
+    duration: 6,
+    nights: 5,
+    category: "domestic",
+    price: "28000",
+    rating: "4.7",
+    reviewCount: 1560,
+    featured: true,
+    imageUrl: "https://images.unsplash.com/photo-1568084680786-a84f91d1153c?w=800&q=80",
+    images: ["https://images.unsplash.com/photo-1568084680786-a84f91d1153c?w=800&q=80", "https://images.unsplash.com/photo-1599661046289-e31897846e41?w=800&q=80", "https://images.unsplash.com/photo-1583422409516-2895a77efded?w=800&q=80"],
+    highlights: ["Amber Fort elephant ride", "Jaisalmer Desert Safari", "Sam Sand Dunes camp", "Heritage havelis", "Camel safari"],
+    description: "Step into a royal world of majestic forts, golden deserts, and opulent palaces. Rajasthan's colours, culture, and cuisine will leave you spellbound.",
+    includes: ["Heritage hotel stays", "Daily breakfast & dinner", "Elephant ride (Amber)", "Desert camp night", "All transfers"],
+    exclusions: ["Flights", "Camel safari extra", "Museum entry fees", "Personal expenses", "Travel insurance"],
+    createdBy: "admin"
+  },
+  {
+    name: "Manali Adventure Escape",
+    destination: "Manali",
+    type: "adventure",
+    duration: 5,
+    nights: 4,
+    category: "domestic",
+    price: "18000",
+    rating: "4.4",
+    reviewCount: 980,
+    featured: false,
+    imageUrl: "https://images.unsplash.com/photo-1587213811864-49e7b31bb862?w=800&q=80",
+    images: ["https://images.unsplash.com/photo-1587213811864-49e7b31bb862?w=800&q=80", "https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=800&q=80", "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80"],
+    highlights: ["Rohtang Pass (snow)", "Solang Valley skiing", "River rafting", "Paragliding", "Hadimba Temple"],
+    description: "For thrill-seekers and mountain lovers \u2014 rivers to raft, snowy peaks to climb, and misty valleys to explore in the majestic Himalayas.",
+    includes: ["Mountain resort stay", "Daily breakfast & dinner", "Rohtang Pass permit", "River rafting", "All transfers"],
+    exclusions: ["Flights/train to Manali", "Skiing equipment", "Paragliding charges", "Personal expenses", "Travel insurance"],
+    createdBy: "admin"
+  },
+  {
+    name: "Andaman Island Getaway",
+    destination: "Andaman",
+    type: "beach",
+    duration: 5,
+    nights: 4,
+    category: "domestic",
+    price: "26000",
+    rating: "4.6",
+    reviewCount: 740,
+    featured: false,
+    imageUrl: "https://images.unsplash.com/photo-1562973597-2c63e0c1b1ad?w=800&q=80",
+    images: ["https://images.unsplash.com/photo-1562973597-2c63e0c1b1ad?w=800&q=80", "https://images.unsplash.com/photo-1500916434205-0c77489c6cf7?w=800&q=80", "https://images.unsplash.com/photo-1439405326854-014607f694d7?w=800&q=80"],
+    highlights: ["Radhanagar Beach (Asia's best)", "Cellular Jail", "Snorkeling & scuba diving", "Havelock Island", "Glass-bottom boat ride"],
+    description: "Turquoise waters, white-sand beaches, and vibrant coral reefs \u2014 the Andaman Islands are India's best-kept tropical secret.",
+    includes: ["Hotel + Eco Resort stay", "Daily breakfast", "Ferry tickets", "Island transfers", "Snorkeling gear"],
+    exclusions: ["Flights to Port Blair", "Scuba diving charges", "Water sports", "Personal expenses", "Liquor"],
+    createdBy: "admin"
+  },
+  {
+    name: "Maldives Luxury Escape",
+    destination: "Maldives",
+    type: "luxury",
+    duration: 5,
+    nights: 4,
+    category: "international",
+    price: "85000",
+    rating: "4.9",
+    reviewCount: 430,
+    featured: true,
+    imageUrl: "https://images.unsplash.com/photo-1573843981267-be1999ff37cd?w=800&q=80",
+    images: ["https://images.unsplash.com/photo-1573843981267-be1999ff37cd?w=800&q=80", "https://images.unsplash.com/photo-1514282401047-d79a71a590e8?w=800&q=80", "https://images.unsplash.com/photo-1540202403-b7abd6747a18?w=800&q=80"],
+    highlights: ["Overwater villa", "Private beach", "Sunset dolphin cruise", "Snorkeling & diving", "Spa treatments"],
+    description: "Ultimate luxury in the middle of the Indian Ocean \u2014 private overwater villas, crystal-clear lagoons, and world-class dining await you.",
+    includes: ["Overwater villa stay", "All meals (full board)", "Speedboat transfers", "Snorkeling", "Sunset cruise"],
+    exclusions: ["International flights", "Scuba diving courses", "Spa (extra)", "Excursions not listed", "Travel insurance"],
+    createdBy: "admin"
+  },
+  {
+    name: "Shimla\u2013Manali Honeymoon",
+    destination: "Himachal Pradesh",
+    type: "honeymoon",
+    duration: 7,
+    nights: 6,
+    category: "domestic",
+    price: "24000",
+    rating: "4.5",
+    reviewCount: 860,
+    featured: false,
+    imageUrl: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80",
+    images: ["https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80", "https://images.unsplash.com/photo-1445257508802-b52e6e13b1ae?w=800&q=80", "https://images.unsplash.com/photo-1553428811-8a8a6e32e86a?w=800&q=80"],
+    highlights: ["Mall Road Shimla", "Kufri snow valley", "Rohtang Pass", "Solang Valley", "Romantic candlelight dinner"],
+    description: "The ultimate hill-station honeymoon \u2014 from colonial Shimla to adventurous Manali, paint your love story against a backdrop of snow peaks.",
+    includes: ["Hotel stay (couple rooms)", "Daily breakfast & dinner", "All transfers", "Romantic dinner (1 night)", "Sightseeing"],
+    exclusions: ["Flights/train", "Adventure sports", "Personal expenses", "Honeymoon suite upgrade", "Travel insurance"],
+    createdBy: "admin"
+  }
+];
+var PACKAGE_TYPE_MARKUP = {
+  honeymoon: 30,
+  luxury: 50,
+  family: 20,
+  friends: 15,
+  budget: 5
+};
+var PEAK_MONTHS = /* @__PURE__ */ new Set([4, 5, 6, 10, 11, 12]);
+var OFF_MONTHS = /* @__PURE__ */ new Set([7, 8, 9]);
+function getEffectiveMarkupPct(pkg) {
+  if (pkg.markupPct !== null && pkg.markupPct !== void 0) return Number(pkg.markupPct);
+  return PACKAGE_TYPE_MARKUP[pkg.packageType ?? ""] ?? PACKAGE_TYPE_MARKUP[pkg.type ?? ""] ?? 0;
+}
+function getDateMarkupInfo(travelDate) {
+  if (!travelDate) return { pct: 0, label: "", kind: "normal" };
+  const d = new Date(travelDate);
+  if (isNaN(d.getTime())) return { pct: 0, label: "", kind: "normal" };
+  const month = d.getMonth() + 1;
+  const weekday = d.getDay();
+  const isWeekend = weekday === 0 || weekday === 6;
+  if (PEAK_MONTHS.has(month)) {
+    const pct = isWeekend ? 30 : 20;
+    return { pct, label: `Peak Season (+${pct}%)`, kind: "peak" };
+  }
+  if (OFF_MONTHS.has(month)) {
+    const pct = isWeekend ? 0 : -10;
+    return pct < 0 ? { pct, label: `Off-Season Deal (${pct}%)`, kind: "offseason" } : { pct: 0, label: "Weekend", kind: "weekend" };
+  }
+  if (isWeekend) return { pct: 10, label: "Weekend (+10%)", kind: "weekend" };
+  return { pct: 0, label: "", kind: "normal" };
+}
+function computeSmartPrice(pkg, travelDate) {
+  const base = Number(pkg.price);
+  if (pkg.adminPrice !== null && pkg.adminPrice !== void 0) {
+    const adminFinal = Number(pkg.adminPrice);
+    return {
+      basePrice: base,
+      typeMarkupPct: 0,
+      typeMarkupAmt: 0,
+      dateMarkupPct: 0,
+      dateMarkupAmt: 0,
+      originalPrice: adminFinal,
+      finalPrice: adminFinal,
+      dateLabel: "",
+      dateKind: "normal"
+    };
+  }
+  const typeMarkupPct = getEffectiveMarkupPct(pkg);
+  const typeMarkupAmt = Math.round(base * typeMarkupPct / 100);
+  const originalPrice = base + typeMarkupAmt;
+  const { pct: dateMarkupPct, label: dateLabel, kind: dateKind } = getDateMarkupInfo(travelDate);
+  const dateMarkupAmt = Math.round(base * dateMarkupPct / 100);
+  const finalPrice = originalPrice + dateMarkupAmt;
+  return { basePrice: base, typeMarkupPct, typeMarkupAmt, dateMarkupPct, dateMarkupAmt, originalPrice, finalPrice, dateLabel, dateKind };
+}
+async function seedPackagesIfEmpty() {
+  try {
+    await db.execute(sql`ALTER TABLE packages ADD COLUMN IF NOT EXISTS package_type TEXT`);
+    await db.execute(sql`ALTER TABLE packages ADD COLUMN IF NOT EXISTS markup_pct NUMERIC(5,2)`);
+    const [{ count: count2 }] = await db.select({ count: sql`count(*)::int` }).from(packagesTable);
+    if (count2 === 0) {
+      logger.info("[holiday-packages] Seeding packages into DB\u2026");
+      for (const pkg of SEED_PACKAGES) {
+        await db.insert(packagesTable).values({
+          ...pkg,
+          itinerary: getItineraryForDest(pkg.destination)
+        });
+      }
+      logger.info(`[holiday-packages] Seeded ${SEED_PACKAGES.length} packages.`);
+    }
+  } catch (err) {
+    logger.error("[holiday-packages] Seed error:", err);
+  }
+}
+var PKG_TYPE_OVERLAYS = {
+  honeymoon: {
+    extraActivities: [
+      "Couples spa & aromatherapy massage",
+      "Candlelight dinner by the pool",
+      "Private sunset photography session",
+      "Rose petal room decoration",
+      "Champagne welcome & romantic turndown"
+    ],
+    accommodationSuffix: " (Deluxe Couple Suite)",
+    mealSuffix: " (Candlelight Dinner included)"
+  },
+  family: {
+    extraActivities: [
+      "Kid-friendly beach / snow games",
+      "Family group photo session",
+      "Children's activity corner",
+      "Family picnic with packed lunch"
+    ],
+    accommodationSuffix: " (Family Suite)",
+    mealSuffix: ""
+  },
+  friends: {
+    extraActivities: [
+      "Group adventure sports session",
+      "Street food & local nightlife tour",
+      "Group bonfire & music night",
+      "Pub crawl / bar hopping"
+    ],
+    accommodationSuffix: " (Shared Rooms / Dorm)",
+    mealSuffix: ""
+  },
+  budget: {
+    extraActivities: [
+      "Local market bargain shopping",
+      "Budget street food lunch",
+      "Free public viewpoints & attractions"
+    ],
+    accommodationSuffix: " (Budget Hotel)",
+    mealSuffix: ""
+  },
+  luxury: {
+    extraActivities: [
+      "Private luxury spa treatment",
+      "Fine dining at rooftop restaurant",
+      "Helicopter / seaplane sightseeing",
+      "Personal butler & concierge service"
+    ],
+    accommodationSuffix: " (5\u2605 Luxury Suite)",
+    mealSuffix: " (Fine Dining experience)"
+  }
+};
+function applyPackageType(days, packageType) {
+  const overlay = PKG_TYPE_OVERLAYS[packageType];
+  if (!overlay) return days;
+  return days.map((d, i) => {
+    const isLast = i === days.length - 1;
+    const extraAct = overlay.extraActivities[i % overlay.extraActivities.length];
+    return {
+      ...d,
+      activities: isLast ? d.activities : [...d.activities, extraAct],
+      accommodation: isLast ? d.accommodation : d.accommodation + (d.accommodation === "\u2014" ? "" : overlay.accommodationSuffix),
+      meals: isLast ? d.meals : d.meals + (i === 1 ? overlay.mealSuffix : "")
+    };
+  });
+}
+function mapPackage(p, includeAdminPrices = false, travelDate) {
+  const pricing = computeSmartPrice(p, travelDate);
+  const base = {
+    id: p.id,
+    name: p.name,
+    destination: p.destination,
+    type: p.type,
+    duration: p.duration,
+    nights: p.nights,
+    durationLabel: `${p.duration}D/${p.nights}N`,
+    pricePerPerson: pricing.finalPrice,
+    // what customers see
+    originalPrice: pricing.originalPrice,
+    // "was" price (type markup, no date)
+    pricingBreakdown: {
+      basePrice: pricing.basePrice,
+      typeMarkupPct: pricing.typeMarkupPct,
+      typeMarkupAmt: pricing.typeMarkupAmt,
+      dateMarkupPct: pricing.dateMarkupPct,
+      dateMarkupAmt: pricing.dateMarkupAmt,
+      dateLabel: pricing.dateLabel,
+      dateKind: pricing.dateKind
+    },
+    rating: Number(p.rating),
+    ratingCount: p.reviewCount,
+    images: p.images && p.images.length > 0 ? p.images : p.imageUrl ? [p.imageUrl] : [],
+    highlights: p.highlights,
+    description: p.description ?? "",
+    inclusions: p.includes,
+    exclusions: p.exclusions,
+    itinerary: normaliseItinerary(p.itinerary),
+    packageType: p.packageType ?? null,
+    category: p.category ?? null,
+    markupPct: p.markupPct !== null && p.markupPct !== void 0 ? Number(p.markupPct) : null,
+    featured: p.featured,
+    isEnabled: p.isEnabled,
+    createdBy: p.createdBy,
+    createdAt: p.createdAt
+  };
+  if (includeAdminPrices) {
+    base.aiPrice = p.aiPrice !== null ? Number(p.aiPrice) : null;
+    base.adminPrice = p.adminPrice !== null ? Number(p.adminPrice) : null;
+    base.basePrice = Number(p.price);
+  }
+  return base;
+}
+router17.get("/holiday-packages/generate-itinerary", async (req, res) => {
+  try {
+    const { destination = "", duration: durationStr = "4", packageType = "" } = req.query;
+    const duration3 = Math.max(1, Math.min(20, Number(durationStr) || 4));
+    let rawDays = getItineraryForDest(destination);
+    if (rawDays.length < duration3) {
+      while (rawDays.length < duration3) {
+        const n = rawDays.length + 1;
+        rawDays.push({
+          day: n,
+          title: n === duration3 ? "Departure" : `Day ${n} \u2014 Leisure & Exploration`,
+          activities: n === duration3 ? ["Breakfast and checkout", "Last-minute souvenir shopping", "Airport/station drop"] : ["Morning at leisure", "Visit local markets", "Cultural activity", "Evening free"],
+          meals: n === duration3 ? "Breakfast" : "Breakfast, Dinner",
+          accommodation: n === duration3 ? "\u2014" : "Hotel"
+        });
+      }
+    }
+    rawDays = rawDays.slice(0, duration3).map((d, i) => ({ ...d, day: i + 1 }));
+    if (packageType) {
+      rawDays = applyPackageType(rawDays, packageType);
+    }
+    const days = rawDays.map((d) => ({
+      day: d.day,
+      title: d.title,
+      description: Array.isArray(d.activities) ? d.activities.join(", ") : d.activities ?? "",
+      meals: d.meals,
+      hotel: d.accommodation ?? ""
+    }));
+    res.json({ itinerary: days, packageType: packageType || null });
+  } catch (err) {
+    logger.error(err);
+    res.status(500).json({ error: "Failed to generate itinerary" });
+  }
+});
+router17.get("/holiday-packages", async (req, res) => {
+  try {
+    const { destination, type, includeDisabled, travelDate } = req.query;
+    const isAdminView = includeDisabled === "true";
+    let query = db.select().from(packagesTable).$dynamic();
+    const conditions = [];
+    if (!isAdminView) {
+      conditions.push(eq(packagesTable.isEnabled, true));
+    }
+    if (destination) {
+      conditions.push(ilike(packagesTable.destination, `%${destination}%`));
+    }
+    if (type) {
+      conditions.push(eq(packagesTable.type, type));
+    }
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions));
+    }
+    const rows = await query.orderBy(packagesTable.id);
+    res.json(rows.map((p) => mapPackage(p, isAdminView, travelDate)));
+  } catch (err) {
+    logger.error(err);
+    res.status(500).json({ error: "Failed to fetch packages" });
+  }
+});
+router17.get("/holiday-packages/check-destination", async (req, res) => {
+  try {
+    const { destination } = req.query;
+    if (!destination) {
+      res.status(400).json({ error: "destination required" });
+      return;
+    }
+    const [existing] = await db.select().from(packagesTable).where(
+      and(
+        eq(packagesTable.createdBy, "ai"),
+        ilike(packagesTable.destination, destination.trim())
+      )
+    ).limit(1);
+    if (existing) {
+      res.json({ exists: true, package: mapPackage(existing, true) });
+    } else {
+      res.json({ exists: false });
+    }
+  } catch (err) {
+    logger.error(err);
+    res.status(500).json({ error: "Failed to check destination" });
+  }
+});
+router17.get("/holiday-packages/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (isNaN(id)) {
+      res.status(400).json({ error: "Invalid id" });
+      return;
+    }
+    const [pkg] = await db.select().from(packagesTable).where(eq(packagesTable.id, id));
+    if (!pkg) {
+      res.status(404).json({ error: "Package not found" });
+      return;
+    }
+    const isAdminView = req.query.admin === "true";
+    const travelDate = req.query.travelDate;
+    res.json(mapPackage(pkg, isAdminView, travelDate));
+  } catch (err) {
+    logger.error(err);
+    res.status(500).json({ error: "Failed to fetch package" });
+  }
+});
+function parseItinerary(raw) {
+  if (raw === void 0 || raw === null) return null;
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+function normaliseItinerary(raw) {
+  const parsed = parseItinerary(raw);
+  if (!parsed) return null;
+  return parsed.map((d) => ({
+    day: d.day,
+    title: d.title ?? "",
+    description: d.description ?? (Array.isArray(d.activities) ? d.activities.join(", ") : d.activities ?? ""),
+    meals: d.meals ?? "",
+    hotel: d.hotel ?? d.accommodation ?? ""
+  }));
+}
+router17.post("/holiday-packages", async (req, res) => {
+  try {
+    const body = req.body;
+    if (!body.name || !body.destination) {
+      res.status(400).json({ error: "name and destination are required" });
+      return;
+    }
+    const isAI = body.createdBy === "ai";
+    if (isAI && body.aiPrice === void 0) {
+      res.status(400).json({ error: "aiPrice is required for AI-generated packages" });
+      return;
+    }
+    if (!isAI && body.pricePerPerson === void 0 && body.adminPrice === void 0) {
+      res.status(400).json({ error: "pricePerPerson is required" });
+      return;
+    }
+    const duration3 = body.duration ?? 3;
+    const nights = body.nights ?? duration3 - 1;
+    const basePrice = isAI ? String(body.aiPrice) : String(body.pricePerPerson ?? body.adminPrice);
+    const itinerary = parseItinerary(body.itinerary) ?? getItineraryForDest(body.destination);
+    const [inserted] = await db.insert(packagesTable).values({
+      name: body.name,
+      destination: body.destination,
+      type: body.type ?? "beach",
+      duration: duration3,
+      nights,
+      price: basePrice,
+      aiPrice: body.aiPrice !== void 0 ? String(body.aiPrice) : null,
+      adminPrice: body.adminPrice !== void 0 ? String(body.adminPrice) : null,
+      images: body.images ?? [],
+      imageUrl: (body.images ?? [])[0] ?? null,
+      highlights: body.highlights ?? [],
+      description: body.description ?? null,
+      includes: body.inclusions ?? [],
+      exclusions: body.exclusions ?? [],
+      itinerary,
+      packageType: body.packageType ?? null,
+      category: body.category ?? null,
+      markupPct: body.markupPct !== void 0 && body.markupPct !== null ? String(body.markupPct) : null,
+      featured: body.featured ?? false,
+      isEnabled: body.isEnabled ?? true,
+      createdBy: body.createdBy ?? "admin"
+    }).returning();
+    res.status(201).json(mapPackage(inserted, true));
+  } catch (err) {
+    logger.error("SAVE ERROR [POST /holiday-packages]:", err);
+    res.status(500).json({ error: "Failed to create package \u2013 check itinerary format" });
+  }
+});
+router17.patch("/holiday-packages/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (isNaN(id)) {
+      res.status(400).json({ error: "Invalid id" });
+      return;
+    }
+    const body = req.body;
+    const updateData = {};
+    if ("adminPrice" in body) {
+      updateData.adminPrice = body.adminPrice !== null && body.adminPrice !== void 0 ? String(body.adminPrice) : null;
+    }
+    if ("markupPct" in body) {
+      updateData.markupPct = body.markupPct !== null && body.markupPct !== void 0 ? String(body.markupPct) : null;
+    }
+    if ("isEnabled" in body) updateData.isEnabled = body.isEnabled;
+    if ("featured" in body) updateData.featured = body.featured;
+    if (Object.keys(updateData).length === 0) {
+      res.status(400).json({ error: "No updatable fields provided" });
+      return;
+    }
+    const [updated] = await db.update(packagesTable).set(updateData).where(eq(packagesTable.id, id)).returning();
+    if (!updated) {
+      res.status(404).json({ error: "Package not found" });
+      return;
+    }
+    res.json(mapPackage(updated, true));
+  } catch (err) {
+    logger.error(err);
+    res.status(500).json({ error: "Failed to update package" });
+  }
+});
+router17.put("/holiday-packages/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (isNaN(id)) {
+      res.status(400).json({ error: "Invalid id" });
+      return;
+    }
+    const body = req.body;
+    const updateData = {};
+    if (body.name !== void 0) updateData.name = body.name;
+    if (body.destination !== void 0) updateData.destination = body.destination;
+    if (body.type !== void 0) updateData.type = body.type;
+    if (body.duration !== void 0) updateData.duration = body.duration;
+    if (body.nights !== void 0) updateData.nights = body.nights;
+    if (body.pricePerPerson !== void 0) updateData.price = String(body.pricePerPerson);
+    if ("adminPrice" in body) {
+      updateData.adminPrice = body.adminPrice !== null && body.adminPrice !== void 0 ? String(body.adminPrice) : null;
+    }
+    if (body.images !== void 0) {
+      updateData.images = body.images;
+      updateData.imageUrl = body.images[0] ?? null;
+    }
+    if (body.highlights !== void 0) updateData.highlights = body.highlights;
+    if (body.description !== void 0) updateData.description = body.description;
+    if (body.inclusions !== void 0) updateData.includes = body.inclusions;
+    if (body.exclusions !== void 0) updateData.exclusions = body.exclusions;
+    if (body.itinerary !== void 0) {
+      const parsed = parseItinerary(body.itinerary);
+      if (parsed === null || !Array.isArray(parsed)) {
+        res.status(400).json({ error: "Invalid itinerary format \u2013 must be a valid JSON array" });
+        return;
+      }
+      if (parsed.length === 0) {
+        res.status(400).json({ error: "Itinerary cannot be empty" });
+        return;
+      }
+      updateData.itinerary = parsed;
+    }
+    if ("packageType" in body) updateData.packageType = body.packageType ?? null;
+    if ("category" in body) updateData.category = body.category ?? null;
+    if ("markupPct" in body) {
+      updateData.markupPct = body.markupPct !== null && body.markupPct !== void 0 ? String(body.markupPct) : null;
+    }
+    if (body.featured !== void 0) updateData.featured = body.featured;
+    if (body.isEnabled !== void 0) updateData.isEnabled = body.isEnabled;
+    const [updated] = await db.update(packagesTable).set(updateData).where(eq(packagesTable.id, id)).returning();
+    if (!updated) {
+      res.status(404).json({ error: "Package not found" });
+      return;
+    }
+    res.json(mapPackage(updated, true));
+  } catch (err) {
+    logger.error("SAVE ERROR [PUT /holiday-packages/:id]:", err);
+    res.status(500).json({ error: "Failed to update package \u2013 check itinerary format" });
+  }
+});
+router17.delete("/holiday-packages/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (isNaN(id)) {
+      res.status(400).json({ error: "Invalid id" });
+      return;
+    }
+    await db.delete(packagesTable).where(eq(packagesTable.id, id));
+    res.json({ success: true });
+  } catch (err) {
+    logger.error(err);
+    res.status(500).json({ error: "Failed to delete package" });
+  }
+});
+var holiday_packages_default = router17;
+
+// src/routes/enquiries.ts
+var import_express18 = __toESM(require_express2(), 1);
+init_drizzle_orm();
+var router18 = (0, import_express18.Router)();
+router18.get("/enquiries", async (req, res) => {
+  try {
+    const { packageId, userId, phone } = req.query;
+    const rows = await db.select().from(enquiriesTable).orderBy(desc(enquiriesTable.createdAt));
+    const filtered = rows.filter((e) => {
+      if (packageId && String(e.packageId) !== packageId) return false;
+      if (userId && e.userId !== userId) return false;
+      if (phone && e.phone !== phone) return false;
+      return true;
+    });
+    res.json(filtered.map((e) => ({
+      ...e,
+      createdAt: e.createdAt.toISOString(),
+      updatedAt: e.updatedAt.toISOString()
+    })));
+  } catch (err) {
+    console.error("[enquiries] GET error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+router18.get("/enquiries/check", async (req, res) => {
+  try {
+    const { packageId, userId, phone } = req.query;
+    if (!packageId) {
+      res.status(400).json({ error: "packageId required" });
+      return;
+    }
+    const rows = await db.select().from(enquiriesTable).where(eq(enquiriesTable.packageId, Number(packageId)));
+    const exists2 = rows.some((e) => {
+      if (userId && e.userId === userId) return true;
+      if (phone && e.phone === phone) return true;
+      return false;
+    });
+    res.json({ exists: exists2 });
+  } catch (err) {
+    console.error("[enquiries] check error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+router18.post("/enquiries", async (req, res) => {
+  try {
+    const {
+      packageId,
+      packageName,
+      destination,
+      name: name2,
+      phone,
+      email: email3,
+      userId,
+      source = "guest",
+      agentId,
+      agentName,
+      travelDate,
+      people,
+      notes
+    } = req.body;
+    if (!packageId || !name2 || !phone && !userId) {
+      res.status(400).json({ error: "packageId, name and (phone or userId) are required" });
+      return;
+    }
+    const existingRows = await db.select().from(enquiriesTable).where(eq(enquiriesTable.packageId, packageId));
+    const existing = existingRows.filter((e) => {
+      if (phone && e.phone === phone) return true;
+      if (userId && e.userId === userId) return true;
+      return false;
+    });
+    if (existing.length > 0) {
+      const e = existing[0];
+      res.json({ ...e, createdAt: e.createdAt.toISOString(), updatedAt: e.updatedAt.toISOString(), duplicate: true });
+      return;
+    }
+    const enquiryId = `ENQ-${Date.now()}`;
+    const [created] = await db.insert(enquiriesTable).values({
+      enquiryId,
+      packageId,
+      packageName,
+      destination,
+      name: name2,
+      phone,
+      email: email3 ?? null,
+      userId: userId ?? null,
+      source,
+      agentId: agentId ?? null,
+      agentName: agentName ?? null,
+      travelDate: travelDate ?? null,
+      people: people ?? 2,
+      notes: notes ?? null,
+      status: "enquiry"
+    }).returning();
+    res.status(201).json({
+      ...created,
+      createdAt: created.createdAt.toISOString(),
+      updatedAt: created.updatedAt.toISOString()
+    });
+  } catch (err) {
+    console.error("[enquiries] POST error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+router18.patch("/enquiries/:enquiryId", async (req, res) => {
+  try {
+    const { enquiryId } = req.params;
+    const { status, notes } = req.body;
+    const existing = await db.select().from(enquiriesTable).where(eq(enquiriesTable.enquiryId, enquiryId));
+    if (existing.length === 0) {
+      res.status(404).json({ error: "Enquiry not found" });
+      return;
+    }
+    const updates = { updatedAt: /* @__PURE__ */ new Date() };
+    if (status !== void 0) updates.status = status;
+    if (notes !== void 0) updates.notes = notes;
+    const [updated] = await db.update(enquiriesTable).set(updates).where(eq(enquiriesTable.enquiryId, enquiryId)).returning();
+    res.json({ ...updated, createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString() });
+  } catch (err) {
+    console.error("[enquiries] PATCH error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+var enquiries_default = router18;
+
+// src/routes/push.ts
+var import_express19 = __toESM(require_express2(), 1);
+init_drizzle_orm();
+
+// src/lib/firebase-admin.ts
+import admin from "firebase-admin";
+var app = null;
+function getApp() {
+  if (app) return app;
+  const projectId = process.env.FIREBASE_PROJECT_ID || "";
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || "";
+  const privateKey = (process.env.FIREBASE_PRIVATE_KEY || "").replace(/\\n/g, "\n");
+  if (!projectId || !clientEmail || !privateKey) {
+    console.info("[firebase-admin] Credentials not configured \u2014 push disabled");
+    return null;
+  }
+  try {
+    app = admin.initializeApp({
+      credential: admin.credential.cert({ projectId, clientEmail, privateKey })
+    });
+    console.info("[firebase-admin] App initialised \u2713");
+  } catch (err) {
+    console.error("[firebase-admin] Init failed:", err.message);
+    app = null;
+  }
+  return app;
+}
+async function sendPushToToken(payload) {
+  const firebaseApp = getApp();
+  if (!firebaseApp) return { sent: false, reason: "Firebase not configured" };
+  try {
+    const messaging = firebaseApp.messaging();
+    const messageId = await messaging.send({
+      token: payload.token,
+      notification: {
+        title: payload.title,
+        body: payload.body,
+        ...payload.imageUrl ? { imageUrl: payload.imageUrl } : {}
+      },
+      webpush: {
+        notification: {
+          icon: payload.icon || "/favicon.svg",
+          badge: payload.icon || "/favicon.svg",
+          ...payload.url ? { click_action: payload.url } : {}
+        },
+        fcmOptions: payload.url ? { link: payload.url } : void 0
+      },
+      data: payload.data || {}
+    });
+    console.info(`[firebase-admin] Sent \u2713 messageId: ${messageId}`);
+    return { sent: true, messageId };
+  } catch (err) {
+    const reason = err.message || "Unknown error";
+    const isExpired = err.code === "messaging/registration-token-not-registered" || err.code === "messaging/invalid-registration-token";
+    console.error(`[firebase-admin] Failed: ${reason} (expired=${isExpired})`);
+    return { sent: false, reason, ...isExpired ? { expired: true } : {} };
+  }
+}
+async function sendPushToTokens(tokens, payload) {
+  const results = await Promise.allSettled(
+    tokens.map((token) => sendPushToToken({ ...payload, token }))
+  );
+  let sent = 0;
+  let failed = 0;
+  const expiredTokens = [];
+  results.forEach((result, i) => {
+    if (result.status === "fulfilled" && result.value.sent) {
+      sent++;
+    } else {
+      failed++;
+      const val = result.status === "fulfilled" ? result.value : null;
+      if (val?.expired) expiredTokens.push(tokens[i]);
+    }
+  });
+  return { sent, failed, expiredTokens };
+}
+
+// src/routes/push.ts
+var router19 = (0, import_express19.Router)();
+var DOMAIN = () => {
+  const d = process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(",")[0];
+  return d ? `https://${d}` : "http://localhost:5000";
+};
+router19.post("/push/register", async (req, res) => {
+  try {
+    const { token, userId, phone, email: email3, name: name2, platform = "web" } = req.body;
+    if (!token) {
+      res.status(400).json({ error: "token required" });
+      return;
+    }
+    const existing = await db.select().from(pushTokensTable).where(eq(pushTokensTable.token, token));
+    if (existing.length > 0) {
+      const [updated] = await db.update(pushTokensTable).set({
+        userId: userId ?? existing[0].userId,
+        phone: phone ?? existing[0].phone,
+        email: email3 ?? existing[0].email,
+        name: name2 ?? existing[0].name,
+        active: true,
+        updatedAt: /* @__PURE__ */ new Date()
+      }).where(eq(pushTokensTable.token, token)).returning();
+      res.json({ registered: true, id: updated.id, existing: true });
+      return;
+    }
+    const [created] = await db.insert(pushTokensTable).values({
+      token,
+      userId: userId ?? null,
+      phone: phone ?? null,
+      email: email3 ?? null,
+      name: name2 ?? null,
+      platform
+    }).returning();
+    sendPushToToken({
+      token,
+      title: `Welcome to ${APP_NAME}! \u2708\uFE0F`,
+      body: "Explore flights, hotels, and holiday packages. Great deals await you!",
+      url: DOMAIN()
+    }).then(async (result) => {
+      await db.insert(pushNotificationsLogTable).values({
+        token,
+        type: "welcome",
+        title: `Welcome to ${APP_NAME}! \u2708\uFE0F`,
+        body: "Explore flights, hotels, and holiday packages. Great deals await you!",
+        status: result.sent ? "sent" : "failed",
+        error: result.reason ?? null
+      }).catch(() => {
+      });
+    }).catch(() => {
+    });
+    res.status(201).json({ registered: true, id: created.id });
+  } catch (err) {
+    console.error("[push] register error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+router19.delete("/push/unregister", async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) {
+      res.status(400).json({ error: "token required" });
+      return;
+    }
+    await db.update(pushTokensTable).set({ active: false, updatedAt: /* @__PURE__ */ new Date() }).where(eq(pushTokensTable.token, token));
+    res.json({ unregistered: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+router19.post("/push/send-booking-confirmation", async (req, res) => {
+  try {
+    const { token, userId, phone, bookingId, route, amount } = req.body;
+    let tokens = [];
+    if (token) {
+      tokens = [token];
+    } else if (userId || phone) {
+      const rows = await db.select().from(pushTokensTable).where(
+        and(
+          eq(pushTokensTable.active, true),
+          userId ? eq(pushTokensTable.userId, userId) : eq(pushTokensTable.phone, phone)
+        )
+      );
+      tokens = rows.map((r) => r.token);
+    }
+    if (tokens.length === 0) {
+      res.json({ sent: 0, reason: "No tokens found" });
+      return;
+    }
+    const title = "Booking Confirmed! \u{1F389}";
+    const body = `${route} | Booking ID: ${bookingId} | \u20B9${amount.toLocaleString("en-IN")} paid`;
+    const { sent, failed, expiredTokens } = await sendPushToTokens(tokens, {
+      title,
+      body,
+      url: `${DOMAIN()}/my-bookings`
+    });
+    if (expiredTokens.length > 0) {
+      await Promise.all(expiredTokens.map(
+        (t) => db.update(pushTokensTable).set({ active: false }).where(eq(pushTokensTable.token, t))
+      ));
+    }
+    await db.insert(pushNotificationsLogTable).values(
+      tokens.map((t) => ({
+        token: t,
+        type: "booking_confirmation",
+        title,
+        body,
+        status: expiredTokens.includes(t) ? "expired" : "sent"
+      }))
+    ).catch(() => {
+    });
+    res.json({ sent, failed });
+  } catch (err) {
+    console.error("[push] booking-confirmation error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+router19.post("/push/broadcast", async (req, res) => {
+  try {
+    const { title, body, url: url3 } = req.body;
+    if (!title || !body) {
+      res.status(400).json({ error: "title and body required" });
+      return;
+    }
+    const rows = await db.select().from(pushTokensTable).where(eq(pushTokensTable.active, true));
+    const tokens = rows.map((r) => r.token);
+    if (tokens.length === 0) {
+      res.json({ sent: 0, total: 0, reason: "No active tokens" });
+      return;
+    }
+    const { sent, failed, expiredTokens } = await sendPushToTokens(tokens, {
+      title,
+      body,
+      url: url3 || DOMAIN()
+    });
+    if (expiredTokens.length > 0) {
+      await Promise.all(expiredTokens.map(
+        (t) => db.update(pushTokensTable).set({ active: false }).where(eq(pushTokensTable.token, t))
+      ));
+    }
+    await db.insert(pushNotificationsLogTable).values(
+      tokens.map((t) => ({
+        token: t,
+        type: "broadcast",
+        title,
+        body,
+        status: expiredTokens.includes(t) ? "expired" : "sent"
+      }))
+    ).catch(() => {
+    });
+    res.json({ sent, failed, total: tokens.length, expiredDeactivated: expiredTokens.length });
+  } catch (err) {
+    console.error("[push] broadcast error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+router19.get("/push/stats", async (req, res) => {
+  try {
+    const all3 = await db.select().from(pushTokensTable);
+    const active = all3.filter((r) => r.active).length;
+    const logs = await db.select().from(pushNotificationsLogTable);
+    const byType = logs.reduce((acc, l) => {
+      acc[l.type] = (acc[l.type] || 0) + 1;
+      return acc;
+    }, {});
+    res.json({ totalTokens: all3.length, activeTokens: active, notificationsByType: byType });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+var push_default = router19;
+
+// src/routes/currency.ts
+var import_express20 = __toESM(require_express2(), 1);
+var router20 = (0, import_express20.Router)();
+var cachedRates = null;
+var cacheExpiry = 0;
+var CACHE_TTL_MS2 = 60 * 60 * 1e3;
+var BASE_RATES_INR = {
+  USD: 83.5,
+  EUR: 90.2,
+  GBP: 105.8,
+  AED: 22.7,
+  SGD: 61.8,
+  AUD: 54.3,
+  CAD: 61.2,
+  JPY: 0.55,
+  THB: 2.32,
+  MYR: 17.8,
+  LKR: 0.26,
+  NPR: 0.63,
+  CNY: 11.5,
+  CHF: 93.1,
+  HKD: 10.7,
+  QAR: 22.9,
+  SAR: 22.2,
+  KWD: 272,
+  BHD: 221.5,
+  OMR: 217
+};
+router20.get("/currency/rates", async (_req, res) => {
+  const now = Date.now();
+  if (cachedRates && now < cacheExpiry) {
+    res.json({ rates: cachedRates, source: "cache", updatedAt: new Date(cacheExpiry - CACHE_TTL_MS2).toISOString() });
+    return;
+  }
+  try {
+    const apiRes = await fetch("https://open.er-api.com/v6/latest/INR", {
+      signal: AbortSignal.timeout(5e3)
+    });
+    if (apiRes.ok) {
+      const body = await apiRes.json();
+      if (body?.rates) {
+        const inv = body.rates;
+        const inrPer = {};
+        for (const [cur, rateFromInr] of Object.entries(inv)) {
+          if (rateFromInr > 0) inrPer[cur] = parseFloat((1 / rateFromInr).toFixed(4));
+        }
+        cachedRates = inrPer;
+        cacheExpiry = now + CACHE_TTL_MS2;
+        res.json({ rates: inrPer, source: "live", updatedAt: (/* @__PURE__ */ new Date()).toISOString() });
+        return;
+      }
+    }
+  } catch {
+  }
+  res.json({ rates: BASE_RATES_INR, source: "static", updatedAt: (/* @__PURE__ */ new Date()).toISOString() });
+});
+router20.get("/currency/convert", (req, res) => {
+  const amount = parseFloat(req.query.amount || "0");
+  const from = (req.query.from || "INR").toUpperCase();
+  const to = (req.query.to || "USD").toUpperCase();
+  if (!amount || isNaN(amount)) {
+    res.status(400).json({ error: "Valid amount required" });
+    return;
+  }
+  const rates = cachedRates || BASE_RATES_INR;
+  let amountInInr = amount;
+  if (from !== "INR") {
+    const rateFromToInr = rates[from];
+    if (!rateFromToInr) {
+      res.status(400).json({ error: `Unknown currency: ${from}` });
+      return;
+    }
+    amountInInr = amount * rateFromToInr;
+  }
+  let result = amountInInr;
+  if (to !== "INR") {
+    const rateToFromInr = rates[to];
+    if (!rateToFromInr) {
+      res.status(400).json({ error: `Unknown currency: ${to}` });
+      return;
+    }
+    result = amountInInr / rateToFromInr;
+  }
+  res.json({ amount, from, to, result: parseFloat(result.toFixed(2)), rate: parseFloat((result / amount).toFixed(6)) });
+});
+var currency_default = router20;
+
+// src/routes/marketing.ts
+var import_express21 = __toESM(require_express2(), 1);
+var router21 = (0, import_express21.Router)();
+router21.post("/marketing/search-event", async (req, res) => {
+  const {
+    userId,
+    name: name2,
+    phone,
+    searchType,
+    from,
+    to
+  } = req.body;
+  if (!userId || !searchType) {
+    return res.status(400).json({ error: "userId and searchType are required" });
+  }
+  if (!phone) {
+    await upsertUserActivity({ userId, name: name2, phone, searchType, searchFrom: from, searchTo: to }).catch(() => {
+    });
+    return res.json({ ok: true, scheduled: false, reason: "No phone number" });
+  }
+  scheduleSearchFollowUp({ userId, name: name2 || "Traveller", phone, searchType, from, to });
+  res.json({ ok: true, scheduled: true });
+});
+router21.post("/marketing/cancel-search", (req, res) => {
+  const { userId } = req.body;
+  if (!userId) return res.status(400).json({ error: "userId is required" });
+  cancelSearchFollowUp(userId);
+  res.json({ ok: true });
+});
+router21.post("/marketing/booking-followup", async (req, res) => {
+  const {
+    userId,
+    name: name2,
+    phone,
+    bookingId,
+    bookingType,
+    from,
+    to
+  } = req.body;
+  if (!userId || !bookingId) {
+    return res.status(400).json({ error: "userId and bookingId are required" });
+  }
+  if (!phone) {
+    await upsertUserActivity({ userId, name: name2, phone, bookingId, bookingType }).catch(() => {
+    });
+    return res.json({ ok: true, scheduled: false, reason: "No phone number" });
+  }
+  scheduleBookingFollowUp({
+    userId,
+    name: name2 || "Traveller",
+    phone,
+    bookingId,
+    bookingType: bookingType || "flight",
+    from,
+    to
+  });
+  res.json({ ok: true, scheduled: true });
+});
+router21.post("/marketing/activity", async (req, res) => {
+  const { userId, name: name2, phone, searchType, searchFrom, searchTo, bookingId, bookingType } = req.body;
+  if (!userId) return res.status(400).json({ error: "userId is required" });
+  await upsertUserActivity({ userId, name: name2, phone, searchType, searchFrom, searchTo, bookingId, bookingType });
+  res.json({ ok: true });
+});
+router21.post("/marketing/send-daily-offers", requireAuth, async (req, res) => {
+  if (req.user?.role !== "admin") {
+    return res.status(403).json({ error: "Admin only" });
+  }
+  const result = await triggerDailyOffersNow();
+  res.json({ ok: true, ...result });
+});
+router21.get("/marketing/status", requireAuth, async (req, res) => {
+  if (req.user?.role !== "admin") {
+    return res.status(403).json({ error: "Admin only" });
+  }
+  const stats = await getMarketingStats();
+  res.json(stats);
+});
+var marketing_default = router21;
+
+// src/routes/admin-bookings.ts
+var import_express22 = __toESM(require_express2(), 1);
+init_drizzle_orm();
+var router22 = (0, import_express22.Router)();
+var ALLOWED_STATUSES = ["pending", "confirmed", "cancelled", "refunded", "booking_failed"];
+function isAllowedStatus(s) {
+  return typeof s === "string" && ALLOWED_STATUSES.includes(s);
+}
+var ALLOWED_BOOKING_STATUSES = ["pending", "processing", "confirmed", "failed"];
+var ALLOWED_PAYMENT_STATUSES = ["pending", "paid", "failed"];
+async function loadRefundsForBookings(bookingIds) {
+  if (bookingIds.length === 0) return /* @__PURE__ */ new Map();
+  const rows = await db.select().from(bookingRefundsTable).where(inArray(bookingRefundsTable.bookingId, bookingIds));
+  const map2 = /* @__PURE__ */ new Map();
+  for (const r of rows) {
+    const existing = map2.get(r.bookingId);
+    if (!existing || existing.createdAt < r.createdAt) {
+      map2.set(r.bookingId, r);
+    }
+  }
+  return map2;
+}
+function shapeBooking(b, refund) {
+  const d = b.details ?? {};
+  const baseFare = b.baseFare != null ? Number(b.baseFare) : Number(d.rawBaseAmount ?? d.base_price ?? 0) || null;
+  const markupAmount = b.markupAmount != null ? Number(b.markupAmount) : Number(d.markupAmount ?? d.markup ?? 0) || null;
+  const convenienceFee = b.convenienceFee != null ? Number(b.convenienceFee) : Number(d.convenienceFee ?? d.convenience_fee ?? 0) || null;
+  return {
+    id: b.id,
+    bookingRef: b.bookingRef,
+    userId: b.userId,
+    userName: b.passengerName,
+    userEmail: b.passengerEmail,
+    userPhone: b.passengerPhone,
+    serviceType: b.bookingType,
+    title: b.title,
+    amount: Number(b.totalPrice),
+    baseFare,
+    markupAmount,
+    convenienceFee,
+    status: b.status,
+    bookingStatus: b.bookingStatus ?? "confirmed",
+    failureReason: b.failureReason ?? null,
+    failureCode: b.failureCode ?? null,
+    paymentMethod: b.paymentMethod,
+    paymentStatus: b.paymentStatus,
+    paymentId: b.paymentId,
+    razorpayOrderId: b.razorpayOrderId,
+    travelDate: b.travelDate,
+    passengers: b.passengers,
+    details: b.details,
+    createdAt: b.createdAt.toISOString(),
+    refund: refund ? {
+      id: refund.id,
+      status: refund.status,
+      amount: Number(refund.amount),
+      refundId: refund.refundId,
+      errorMessage: refund.errorMessage,
+      initiatedBy: refund.initiatedBy,
+      createdAt: refund.createdAt.toISOString(),
+      updatedAt: refund.updatedAt.toISOString()
+    } : null
+  };
+}
+function buildNotificationData(b) {
+  const d = b.details ?? {};
+  return {
+    bookingId: b.bookingRef ?? String(b.id),
+    bookingType: b.bookingType,
+    passengerName: b.passengerName,
+    passengerEmail: b.passengerEmail || void 0,
+    passengerPhone: b.passengerPhone || void 0,
+    travelDate: b.travelDate,
+    totalAmount: Number(b.totalPrice),
+    paymentId: b.paymentId ?? "",
+    passengers: b.passengers,
+    title: b.title || void 0,
+    // flight
+    from: d.from || d.origin || d.departure?.airport || void 0,
+    to: d.to || d.destination || d.arrival?.airport || void 0,
+    airline: d.airline || d.airlineName || void 0,
+    flightNumber: d.flightNumber || d.flight_number || void 0,
+    flightDeparture: d.departureTime || d.departure?.time || void 0,
+    flightArrival: d.arrivalTime || d.arrival?.time || void 0,
+    flightDuration: d.duration || void 0,
+    // bus
+    busOperator: d.operator || d.busName || void 0,
+    busType: d.busType || void 0,
+    boardingPoint: d.boardingPoint || void 0,
+    droppingPoint: d.droppingPoint || void 0,
+    busDeparture: d.departure || d.departureTime || void 0,
+    busArrival: d.arrival || d.arrivalTime || void 0,
+    // hotel
+    hotelName: d.hotelName || d.name || void 0,
+    hotelCity: d.city || d.hotelCity || void 0,
+    hotelNights: d.nights || void 0
+  };
+}
+router22.get("/admin/bookings", requireAdmin, async (req, res) => {
+  try {
+    const search = req.query.search?.trim() ?? "";
+    const status = req.query.status?.trim() ?? "";
+    const type = req.query.type?.trim() ?? "";
+    const paymentFilter = req.query.paymentStatus?.trim() ?? "";
+    const bookingFilter = req.query.bookingStatus?.trim() ?? "";
+    const limit = Math.min(Number(req.query.limit ?? 200), 500);
+    const offset = Math.max(Number(req.query.offset ?? 0), 0);
+    const where = [];
+    if (status && status !== "all" && isAllowedStatus(status)) {
+      where.push(eq(bookingsTable.status, status));
+    }
+    if (paymentFilter && paymentFilter !== "all" && ALLOWED_PAYMENT_STATUSES.includes(paymentFilter)) {
+      where.push(eq(bookingsTable.paymentStatus, paymentFilter));
+    }
+    if (bookingFilter && bookingFilter !== "all" && ALLOWED_BOOKING_STATUSES.includes(bookingFilter)) {
+      where.push(eq(bookingsTable.bookingStatus, bookingFilter));
+    }
+    if (type && type !== "all") {
+      where.push(eq(bookingsTable.bookingType, type));
+    }
+    if (search) {
+      const pattern = `%${search}%`;
+      const searchPredicate = or(
+        ilike(bookingsTable.bookingRef, pattern),
+        ilike(bookingsTable.passengerEmail, pattern),
+        ilike(bookingsTable.passengerName, pattern),
+        ilike(bookingsTable.passengerPhone, pattern),
+        ilike(bookingsTable.paymentId, pattern),
+        ilike(bookingsTable.razorpayOrderId, pattern)
+      );
+      if (searchPredicate) where.push(searchPredicate);
+    }
+    const baseQuery = db.select().from(bookingsTable).orderBy(desc(bookingsTable.id)).limit(limit).offset(offset);
+    const rows = where.length > 0 ? await baseQuery.where(where.length === 1 ? where[0] : and(...where)) : await baseQuery;
+    const refundMap = await loadRefundsForBookings(rows.map((r) => r.id));
+    const shaped = rows.map((b) => shapeBooking(b, refundMap.get(b.id)));
+    return res.json({
+      success: true,
+      bookings: shaped,
+      count: shaped.length
+    });
+  } catch (err) {
+    logger.error({ err }, "[admin-bookings] list failed");
+    return res.status(500).json({ success: false, error: "Failed to load bookings" });
+  }
+});
+router22.get("/admin/bookings/:id", requireAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ success: false, error: "Invalid booking id" });
+    }
+    const rows = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, error: "Booking not found" });
+    }
+    const refundMap = await loadRefundsForBookings([id]);
+    return res.json({ success: true, booking: shapeBooking(rows[0], refundMap.get(id)) });
+  } catch (err) {
+    logger.error({ err }, "[admin-bookings] get failed");
+    return res.status(500).json({ success: false, error: "Failed to load booking" });
+  }
+});
+router22.put("/admin/bookings/:id/status", requireAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ success: false, error: "Invalid booking id" });
+    }
+    const newStatus = req.body?.status ?? "";
+    if (!isAllowedStatus(newStatus)) {
+      return res.status(400).json({
+        success: false,
+        error: `status must be one of: ${ALLOWED_STATUSES.join(", ")}`
+      });
+    }
+    const rows = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, error: "Booking not found" });
+    }
+    await db.update(bookingsTable).set({ status: newStatus }).where(eq(bookingsTable.id, id));
+    const updated = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
+    const refundMap = await loadRefundsForBookings([id]);
+    return res.json({
+      success: true,
+      booking: shapeBooking(updated[0], refundMap.get(id))
+    });
+  } catch (err) {
+    logger.error({ err }, "[admin-bookings] update status failed");
+    return res.status(500).json({ success: false, error: "Failed to update status" });
+  }
+});
+router22.put("/admin/bookings/:id/convert-lead", requireAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ success: false, error: "Invalid booking id" });
+    }
+    const rows = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, error: "Booking not found" });
+    }
+    const booking = rows[0];
+    if (booking.paymentStatus === "paid" && booking.status === "confirmed") {
+      return res.status(409).json({ success: false, error: "Booking is already confirmed" });
+    }
+    const paymentMethod = String(req.body?.paymentMethod || "manual").trim();
+    const note = String(req.body?.note || "").trim();
+    const adminUser = String(req.adminUser?.email || "admin");
+    const existingDetails = typeof booking.details === "object" && booking.details !== null ? booking.details : {};
+    const conversionLog = {
+      convertedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      convertedBy: adminUser,
+      paymentMethod,
+      note: note || "Manually converted by admin"
+    };
+    const updatedDetails = {
+      ...existingDetails,
+      conversionLog,
+      adminNotes: [
+        ...existingDetails.adminNotes || [],
+        { note: `Lead converted \u2014 ${paymentMethod}${note ? `: ${note}` : ""}`, addedAt: (/* @__PURE__ */ new Date()).toISOString(), addedBy: adminUser }
+      ]
+    };
+    await db.update(bookingsTable).set({
+      paymentStatus: "paid",
+      status: "confirmed",
+      bookingStatus: "confirmed",
+      paymentMethod,
+      details: updatedDetails,
+      // Clear failure markers so the booking is treated as clean
+      failureReason: null,
+      failureCode: null
+    }).where(eq(bookingsTable.id, id));
+    const updated = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
+    const refundMap = await loadRefundsForBookings([id]);
+    logger.info({ id, paymentMethod, adminUser }, "[admin-bookings] lead converted to confirmed booking");
+    return res.json({
+      success: true,
+      booking: shapeBooking(updated[0], refundMap.get(id))
+    });
+  } catch (err) {
+    logger.error({ err }, "[admin-bookings] convert-lead failed");
+    return res.status(500).json({ success: false, error: "Failed to convert lead" });
+  }
+});
+async function loadRazorpayCreds() {
+  let dbKey = "";
+  let dbSecret = "";
+  try {
+    const rows = await db.select().from(apiKeysTable).limit(1);
+    if (rows.length > 0) {
+      dbKey = rows[0].paymentApiKey ?? "";
+      dbSecret = rows[0].paymentApiSecret ?? "";
+    }
+  } catch {
+  }
+  const envKey = process.env["RAZORPAY_KEY_ID"] ?? "";
+  const envSecret = process.env["RAZORPAY_KEY_SECRET"] ?? "";
+  const keyId = dbKey || envKey;
+  const keySecret = dbSecret || envSecret;
+  let source = "none";
+  if (keyId && keySecret) {
+    if (dbKey && dbSecret) source = "db";
+    else if (envKey && envSecret) source = "env";
+    else source = "mixed";
+  }
+  return { keyId, keySecret, source };
+}
+router22.post("/admin/refund", requireAdmin, async (req, res) => {
+  const adminEmail = req.admin?.email ?? "admin";
+  try {
+    const paymentId = String(req.body?.paymentId ?? "").trim();
+    const amountRaw = req.body?.amount;
+    const bookingIdRaw = req.body?.bookingId;
+    if (!paymentId) {
+      return res.status(400).json({ success: false, error: "paymentId is required" });
+    }
+    const amount = Number(amountRaw);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ success: false, error: "amount must be a positive number (in INR)" });
+    }
+    let booking = null;
+    if (bookingIdRaw !== void 0) {
+      const id = Number(bookingIdRaw);
+      if (Number.isFinite(id)) {
+        const rows = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
+        if (rows.length > 0) booking = rows[0];
+      }
+    }
+    if (!booking) {
+      const rows = await db.select().from(bookingsTable).where(eq(bookingsTable.paymentId, paymentId)).limit(1);
+      if (rows.length > 0) booking = rows[0];
+    }
+    const inserted = await db.insert(bookingRefundsTable).values({
+      bookingId: booking?.id ?? 0,
+      paymentId,
+      amount: amount.toFixed(2),
+      currency: "INR",
+      status: "processing",
+      initiatedBy: adminEmail
+    }).returning();
+    const refundRow = inserted[0];
+    const { keyId, keySecret, source } = await loadRazorpayCreds();
+    const isDemo = !keyId || !keySecret || paymentId.startsWith("demo_");
+    let finalStatus = "completed";
+    let providerRefundId = null;
+    let errorMessage = null;
+    if (isDemo) {
+      providerRefundId = `rfnd_demo_${Date.now()}`;
+      logger.info({ paymentId, amount, source }, "[admin-bookings] demo refund");
+    } else {
+      try {
+        const auth = Buffer.from(`${keyId}:${keySecret}`).toString("base64");
+        const response = await fetch(
+          `https://api.razorpay.com/v1/payments/${encodeURIComponent(paymentId)}/refund`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Basic ${auth}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              amount: Math.round(amount * 100),
+              // paise
+              speed: "normal",
+              notes: {
+                booking_id: String(booking?.id ?? ""),
+                booking_ref: booking?.bookingRef ?? "",
+                initiated_by: adminEmail
+              }
+            })
+          }
+        );
+        const json3 = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const errObj = json3?.error ?? {};
+          errorMessage = errObj?.description || errObj?.reason || `Razorpay error ${response.status}`;
+          finalStatus = "failed";
+          logger.error({ status: response.status, json: json3 }, "[admin-bookings] razorpay refund failed");
+        } else {
+          providerRefundId = json3?.id ?? null;
+          const status = json3?.status ?? "processed";
+          finalStatus = status === "failed" ? "failed" : "completed";
+        }
+      } catch (err) {
+        errorMessage = err instanceof Error ? err.message : "Refund request failed";
+        finalStatus = "failed";
+        logger.error({ err }, "[admin-bookings] razorpay request threw");
+      }
+    }
+    await db.update(bookingRefundsTable).set({
+      status: finalStatus,
+      refundId: providerRefundId,
+      errorMessage,
+      updatedAt: /* @__PURE__ */ new Date()
+    }).where(eq(bookingRefundsTable.id, refundRow.id));
+    if (finalStatus === "completed" && booking) {
+      await db.update(bookingsTable).set({ status: "refunded" }).where(eq(bookingsTable.id, booking.id));
+    }
+    return res.json({
+      success: finalStatus === "completed",
+      refund: {
+        id: refundRow.id,
+        bookingId: booking?.id ?? null,
+        paymentId,
+        amount,
+        currency: "INR",
+        status: finalStatus,
+        refundId: providerRefundId,
+        errorMessage,
+        demo: isDemo,
+        source
+      }
+    });
+  } catch (err) {
+    logger.error({ err }, "[admin-bookings] refund failed");
+    return res.status(500).json({ success: false, error: "Refund failed" });
+  }
+});
+router22.post("/admin/bookings/:id/resend", requireAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ success: false, error: "Invalid booking id" });
+    }
+    const channel = String(req.body?.channel ?? "all").trim().toLowerCase();
+    if (!["email", "sms", "whatsapp", "all"].includes(channel)) {
+      return res.status(400).json({ success: false, error: "channel must be email | sms | whatsapp | all" });
+    }
+    const rows = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, error: "Booking not found" });
+    }
+    const booking = rows[0];
+    const data = buildNotificationData(booking);
+    let results = {};
+    if (channel === "all") {
+      results = await sendAllBookingNotifications(data);
+    } else if (channel === "email") {
+      results.email = await sendBookingEmail(data);
+    } else if (channel === "sms") {
+      results.sms = await sendBookingSMS(data);
+    } else if (channel === "whatsapp") {
+      results.whatsapp = await sendBookingWhatsApp(data);
+    }
+    logger.info({ id, channel, results }, "[admin-bookings] resend notifications");
+    return res.json({ success: true, channel, results });
+  } catch (err) {
+    logger.error({ err }, "[admin-bookings] resend failed");
+    return res.status(500).json({ success: false, error: "Resend failed" });
+  }
+});
+router22.post("/admin/bookings/:id/mark-failed", requireAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ success: false, error: "Invalid booking id" });
+    const reason = String(req.body?.reason ?? "Booking failed").trim();
+    const code = String(req.body?.code ?? "api_error").trim();
+    const doRefund = req.body?.initiateRefund !== false;
+    const rows = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
+    if (rows.length === 0) return res.status(404).json({ success: false, error: "Booking not found" });
+    const booking = rows[0];
+    await db.update(bookingsTable).set({
+      status: "booking_failed",
+      bookingStatus: "failed",
+      failureReason: reason,
+      failureCode: code
+    }).where(eq(bookingsTable.id, id));
+    let refundResult = { initiated: false };
+    if (doRefund && booking.paymentStatus === "paid" && booking.paymentId) {
+      const totalPrice = Number(booking.totalPrice);
+      const [refundRow] = await db.insert(bookingRefundsTable).values({
+        bookingId: id,
+        paymentId: booking.paymentId,
+        amount: totalPrice.toFixed(2),
+        currency: "INR",
+        status: "processing",
+        initiatedBy: "admin_mark_failed"
+      }).returning();
+      const { keyId, keySecret } = await loadRazorpayCreds();
+      const isDemo = !keyId || !keySecret || booking.paymentId.startsWith("demo_");
+      let finalStatus = "completed";
+      let providerRefundId = null;
+      let errorMessage = null;
+      if (isDemo) {
+        providerRefundId = `rfnd_demo_${Date.now()}`;
+      } else {
+        try {
+          const auth = Buffer.from(`${keyId}:${keySecret}`).toString("base64");
+          const resp = await fetch(
+            `https://api.razorpay.com/v1/payments/${encodeURIComponent(booking.paymentId)}/refund`,
+            {
+              method: "POST",
+              headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/json" },
+              body: JSON.stringify({
+                amount: Math.round(totalPrice * 100),
+                speed: "normal",
+                notes: { booking_id: String(id), reason, initiated_by: "admin_mark_failed" }
+              })
+            }
+          );
+          const json3 = await resp.json().catch(() => ({}));
+          if (!resp.ok) {
+            const e = json3?.error ?? {};
+            errorMessage = e?.description || `Razorpay error ${resp.status}`;
+            finalStatus = "failed";
+          } else {
+            providerRefundId = json3?.id ?? null;
+            finalStatus = json3?.status === "failed" ? "failed" : "completed";
+          }
+        } catch (err) {
+          errorMessage = err instanceof Error ? err.message : "Refund failed";
+          finalStatus = "failed";
+        }
+      }
+      await db.update(bookingRefundsTable).set({ status: finalStatus, refundId: providerRefundId, errorMessage, updatedAt: /* @__PURE__ */ new Date() }).where(eq(bookingRefundsTable.id, refundRow.id));
+      if (finalStatus === "completed") {
+        await db.update(bookingsTable).set({ status: "refunded" }).where(eq(bookingsTable.id, id));
+      }
+      refundResult = { initiated: finalStatus === "completed", refundId: providerRefundId ?? void 0, error: errorMessage ?? void 0 };
+      const notifData = buildNotificationData(booking);
+      sendBookingFailureNotifications(notifData, reason).catch(() => {
+      });
+      if (finalStatus === "completed") {
+        sendRefundNotifications(notifData, "initiated", providerRefundId ?? void 0).catch(() => {
+        });
+      }
+    }
+    const updated = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
+    const refundMap = await loadRefundsForBookings([id]);
+    logger.info({ id, reason, refundResult }, "[admin-bookings] mark-failed done");
+    return res.json({
+      success: true,
+      booking: shapeBooking(updated[0], refundMap.get(id)),
+      refund: refundResult
+    });
+  } catch (err) {
+    logger.error({ err }, "[admin-bookings] mark-failed failed");
+    return res.status(500).json({ success: false, error: "Failed to mark booking as failed" });
+  }
+});
+router22.get("/admin/refund-logs", requireAdmin, async (req, res) => {
+  try {
+    const limit = Math.min(Number(req.query.limit ?? 200), 500);
+    const offset = Math.max(Number(req.query.offset ?? 0), 0);
+    const statusFilter = req.query.status?.trim() ?? "";
+    let query = db.select().from(bookingRefundsTable).orderBy(desc(bookingRefundsTable.id)).limit(limit).offset(offset);
+    const rows = await (statusFilter && statusFilter !== "all" ? query.where(eq(bookingRefundsTable.status, statusFilter)) : query);
+    const bookingIds = [...new Set(rows.map((r) => r.bookingId).filter((x) => x > 0))];
+    const bookingMap = /* @__PURE__ */ new Map();
+    if (bookingIds.length > 0) {
+      const bRows = await db.select().from(bookingsTable).where(inArray(bookingsTable.id, bookingIds));
+      for (const b of bRows) bookingMap.set(b.id, b);
+    }
+    const shaped = rows.map((r) => {
+      const b = bookingMap.get(r.bookingId);
+      return {
+        id: r.id,
+        bookingId: r.bookingId,
+        bookingRef: b?.bookingRef ?? null,
+        paymentId: r.paymentId,
+        refundId: r.refundId,
+        amount: Number(r.amount),
+        currency: r.currency,
+        status: r.status,
+        errorMessage: r.errorMessage,
+        initiatedBy: r.initiatedBy,
+        createdAt: r.createdAt.toISOString(),
+        updatedAt: r.updatedAt.toISOString(),
+        // booking context
+        passengerName: b?.passengerName ?? null,
+        passengerEmail: b?.passengerEmail ?? null,
+        passengerPhone: b?.passengerPhone ?? null,
+        bookingType: b?.bookingType ?? null,
+        bookingAmount: b ? Number(b.totalPrice) : null,
+        paymentStatus: b?.paymentStatus ?? null
+      };
+    });
+    return res.json({ success: true, refundLogs: shaped, count: shaped.length });
+  } catch (err) {
+    logger.error({ err }, "[admin-bookings] refund-logs failed");
+    return res.status(500).json({ success: false, error: "Failed to load refund logs" });
+  }
+});
+router22.post("/admin/bookings/:id/notes", requireAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ success: false, error: "Invalid booking id" });
+    }
+    const note = String(req.body?.note ?? "").trim();
+    if (!note) {
+      return res.status(400).json({ success: false, error: "note is required" });
+    }
+    const adminEmail = req.admin?.email ?? "admin";
+    const rows = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, error: "Booking not found" });
+    }
+    const booking = rows[0];
+    const existingDetails = booking.details ?? {};
+    const adminNotes = Array.isArray(existingDetails.adminNotes) ? existingDetails.adminNotes : [];
+    const newNote = { note, addedAt: (/* @__PURE__ */ new Date()).toISOString(), addedBy: adminEmail };
+    adminNotes.push(newNote);
+    await db.update(bookingsTable).set({ details: { ...existingDetails, adminNotes } }).where(eq(bookingsTable.id, id));
+    logger.info({ id, addedBy: adminEmail }, "[admin-bookings] note added");
+    return res.json({ success: true, note: newNote, adminNotes });
+  } catch (err) {
+    logger.error({ err }, "[admin-bookings] add note failed");
+    return res.status(500).json({ success: false, error: "Failed to add note" });
+  }
+});
+var admin_bookings_default = router22;
+
+// src/routes/book-flight.ts
+var import_express24 = __toESM(require_express2(), 1);
+init_drizzle_orm();
 
 // src/lib/tj-retry.ts
 var AUTH_ERROR_PATTERNS = [
@@ -98289,7 +98289,7 @@ async function tjPostWithRetry(path4, body, options = {}) {
       e.isAuthError = true;
       throw e;
     }
-    const url3 = `${TRIPJACK_BASE2}${path4}`;
+    const url3 = `${TRIPJACK_BASE}${path4}`;
     logger.info({ context, attempt, url: url3 }, "[tj-retry] sending request");
     const loggedHeaders = { ...headers };
     if (loggedHeaders["apikey"]) loggedHeaders["apikey"] = loggedHeaders["apikey"].slice(0, 6) + "\u2026";

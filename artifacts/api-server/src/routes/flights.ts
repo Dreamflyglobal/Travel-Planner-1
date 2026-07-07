@@ -9,7 +9,7 @@ import {
   GetFlightParams,
   GetFlightResponse,
 } from "@workspace/api-zod";
-import { getProviderConfig } from "../lib/provider-config.js";
+import { getTripJackApiKey, getTripJackHeaders } from "../lib/tripjack-auth.js";
 
 const router: IRouter = Router();
 
@@ -378,8 +378,7 @@ router.post("/flights", async (req, res): Promise<void> => {
     returnDate?: string;
   };
 
-  const cfg = await getProviderConfig();
-  const apiKey = cfg.flightApiKey || process.env.TRIPJACK_API_KEY || "";
+  const apiKey = await getTripJackApiKey();
   if (!apiKey) {
     res.status(503).json({ error: "TripJack API key is not configured. Please set it in Admin Settings → API Keys." });
     return;
@@ -449,9 +448,10 @@ router.post("/flights", async (req, res): Promise<void> => {
   const logLabel = resolvedRoutes.map((r) => `${r.fromIata}→${r.toIata} on ${r.travelDate}`).join(" | ");
 
   try {
+    const searchHeaders = await getTripJackHeaders();
     const apiRes = await fetch(`${TRIPJACK_BASE}/fms/v1/air-search-all`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", apikey: apiKey },
+      headers: searchHeaders,
       body: JSON.stringify(searchBody),
       signal: AbortSignal.timeout(20_000),
     });
