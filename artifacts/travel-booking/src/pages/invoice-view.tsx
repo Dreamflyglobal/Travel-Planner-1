@@ -585,7 +585,7 @@ export default function InvoiceView() {
               </div>
               <div className="border-l border-white border-opacity-10 px-5 py-4 text-right min-w-0 max-w-[230px]">
                 <p className="text-slate-400 text-xs uppercase tracking-wide">Dream Fly Booking ID</p>
-                <p className="text-white font-mono font-bold text-sm mt-0.5 break-all leading-snug">{invoice.bookingId || "—"}</p>
+                <p className="text-green-300 font-mono font-bold text-sm mt-0.5 break-all leading-snug">{invoice.bookingId || "—"}</p>
                 {invoice.tjBookingRef && (
                   <>
                     <p className="text-slate-400 text-xs uppercase tracking-wide mt-2">TripJack Booking ID</p>

@@ -605,9 +605,10 @@ export default function BookingPayment() {
         return { error: msg };
       }
 
+      // tj-book route returns TripJack body directly — no extra .data wrapper
       return {
-        pnr:          data?.data?.pnr       || undefined,
-        tjBookingRef: data?.data?.bookingId || undefined,
+        pnr:          data?.pnr || data?.pnrDetails?.[0]?.pnr || undefined,
+        tjBookingRef: data?.bookingId                          || undefined,
       };
     } catch {
       return { error: "Could not reach airline system." };
@@ -724,6 +725,19 @@ export default function BookingPayment() {
       (wLastSuccessful as any).tjPnr = wTjResult.pnr;
     }
     if (wTjResult?.tjBookingRef) (wLastSuccessful as any).tjBookingRef = wTjResult.tjBookingRef;
+    // Persist TripJack data back to the DB record (fire-and-forget)
+    if (wTjResult?.tjBookingRef || wTjResult?.pnr) {
+      const _apiBase = (import.meta.env.VITE_API_BASE_URL as string) ?? "";
+      fetch(`${_apiBase}/api/bookings/ref/${bookingRef}/tj-update`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tjBookingRef:  wTjResult.tjBookingRef || undefined,
+          pnr:           wTjResult.pnr          || undefined,
+          tjDetailStatus: wTjResult.tjBookingRef ? "CONFIRMED" : undefined,
+        }),
+      }).catch(() => { /* best-effort — invoice will refresh from polling */ });
+    }
     localStorage.setItem("lastSuccessfulBooking", JSON.stringify(wLastSuccessful));
     paymentDoneRef.current = true;
     clearBookingSession();
@@ -853,6 +867,19 @@ export default function BookingPayment() {
         (cLastSuccessful as any).tjPnr = cTjResult.pnr;
       }
       if (cTjResult?.tjBookingRef) (cLastSuccessful as any).tjBookingRef = cTjResult.tjBookingRef;
+      // Persist TripJack data back to the DB record (fire-and-forget)
+      if (cTjResult?.tjBookingRef || cTjResult?.pnr) {
+        const _apiBase2 = (import.meta.env.VITE_API_BASE_URL as string) ?? "";
+        fetch(`${_apiBase2}/api/bookings/ref/${bookingRef}/tj-update`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tjBookingRef:  cTjResult.tjBookingRef || undefined,
+            pnr:           cTjResult.pnr          || undefined,
+            tjDetailStatus: cTjResult.tjBookingRef ? "CONFIRMED" : undefined,
+          }),
+        }).catch(() => { /* best-effort */ });
+      }
       localStorage.setItem("lastSuccessfulBooking", JSON.stringify(cLastSuccessful));
       paymentDoneRef.current = true;
       clearBookingSession();

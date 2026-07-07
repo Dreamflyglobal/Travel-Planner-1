@@ -7,3 +7,4 @@
 - [TripJack per-fare resultIndex](tripjack-fare-resultindex.md) — each flight fare option has its own resultIndex distinct from the flight-level one; using the wrong one silently breaks FareQuote.
 - [TripJack booking session expiry](tripjack-booking-session-expiry.md) — review session expires in ~2-3 min; always call /fms/v1/review again server-side after payment before calling /oms/v1/air/book.
 - [Dream Fly Global parallel flight flows](dreamfly-parallel-flight-flows.md) — two separate flight booking implementations exist; only one is the real production flow.
+- [TripJack booking data sync](tripjack-booking-data-sync.md) — wallet/cash paths use /api/tj-book (thin proxy); must call PATCH /api/bookings/ref/:ref/tj-update after to persist tjBookingRef/pnr to DB.

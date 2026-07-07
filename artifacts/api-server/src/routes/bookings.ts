@@ -610,4 +610,48 @@ router.post("/bookings/record-failed", async (req, res): Promise<void> => {
   }
 });
 
+// ── PATCH /api/bookings/ref/:bookingRef/tj-update ──────────────────────────────
+// Lightweight endpoint to update a booking record with TripJack confirmation data.
+// Used by the wallet/credit payment paths which book via /api/tj-book (thin proxy)
+// and need to persist the TripJack booking ID + PNR back to the DB record.
+router.patch("/bookings/ref/:bookingRef/tj-update", async (req, res): Promise<void> => {
+  const { bookingRef } = req.params;
+  const { tjBookingRef, pnr, tjDetailStatus, tjPassengers, ticketNumbers } = req.body ?? {};
+
+  try {
+    const [booking] = await db
+      .select()
+      .from(bookingsTable)
+      .where(eq(bookingsTable.bookingRef, bookingRef))
+      .limit(1);
+
+    if (!booking) {
+      res.status(404).json({ error: "Booking not found" });
+      return;
+    }
+
+    const existingDetails = (booking.details as Record<string, any>) ?? {};
+    const patchDetails: Record<string, any> = { ...existingDetails };
+    if (tjBookingRef !== undefined && tjBookingRef !== null) patchDetails.tjBookingRef  = tjBookingRef;
+    if (pnr           !== undefined && pnr           !== null) patchDetails.pnr           = pnr;
+    if (tjDetailStatus)                                         patchDetails.tjDetailStatus = tjDetailStatus;
+    if (Array.isArray(tjPassengers)  && tjPassengers.length  > 0) patchDetails.tjPassengers  = tjPassengers;
+    if (Array.isArray(ticketNumbers) && ticketNumbers.length > 0) patchDetails.ticketNumbers = ticketNumbers;
+
+    const updateSet: any = { details: patchDetails };
+    if (tjBookingRef || pnr) {
+      updateSet.bookingStatus = "confirmed";
+      updateSet.status        = "confirmed";
+    }
+
+    await db.update(bookingsTable).set(updateSet).where(eq(bookingsTable.bookingRef, bookingRef));
+
+    logger.info({ bookingRef, tjBookingRef, pnr }, "[bookings] tj-update: booking enriched with TJ data");
+    res.json({ success: true });
+  } catch (err: any) {
+    logger.error({ err: err?.message, bookingRef }, "[bookings] tj-update failed");
+    res.status(500).json({ error: err?.message || "Update failed" });
+  }
+});
+
 export default router;

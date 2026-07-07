@@ -94504,6 +94504,35 @@ router9.post("/bookings/record-failed", async (req, res) => {
     res.status(500).json({ success: false, error: err?.message || "Failed to save record" });
   }
 });
+router9.patch("/bookings/ref/:bookingRef/tj-update", async (req, res) => {
+  const { bookingRef } = req.params;
+  const { tjBookingRef, pnr, tjDetailStatus, tjPassengers, ticketNumbers } = req.body ?? {};
+  try {
+    const [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.bookingRef, bookingRef)).limit(1);
+    if (!booking) {
+      res.status(404).json({ error: "Booking not found" });
+      return;
+    }
+    const existingDetails = booking.details ?? {};
+    const patchDetails = { ...existingDetails };
+    if (tjBookingRef !== void 0 && tjBookingRef !== null) patchDetails.tjBookingRef = tjBookingRef;
+    if (pnr !== void 0 && pnr !== null) patchDetails.pnr = pnr;
+    if (tjDetailStatus) patchDetails.tjDetailStatus = tjDetailStatus;
+    if (Array.isArray(tjPassengers) && tjPassengers.length > 0) patchDetails.tjPassengers = tjPassengers;
+    if (Array.isArray(ticketNumbers) && ticketNumbers.length > 0) patchDetails.ticketNumbers = ticketNumbers;
+    const updateSet = { details: patchDetails };
+    if (tjBookingRef || pnr) {
+      updateSet.bookingStatus = "confirmed";
+      updateSet.status = "confirmed";
+    }
+    await db.update(bookingsTable).set(updateSet).where(eq(bookingsTable.bookingRef, bookingRef));
+    logger.info({ bookingRef, tjBookingRef, pnr }, "[bookings] tj-update: booking enriched with TJ data");
+    res.json({ success: true });
+  } catch (err) {
+    logger.error({ err: err?.message, bookingRef }, "[bookings] tj-update failed");
+    res.status(500).json({ error: err?.message || "Update failed" });
+  }
+});
 var bookings_default = router9;
 
 // src/routes/payments.ts
@@ -98940,12 +98969,12 @@ router24.post("/book-flight", async (req, res) => {
       logger.warn({ paymentId, tjError }, "[book-flight] TripJack returned failure in body");
     } else if (tjBookingStatus === "PENDING" || tjBookingStatus === "PROCESSING") {
       tjPending = true;
-      pnr = data?.pnr || data?.data?.pnr || void 0;
+      pnr = data?.pnr || data?.pnrDetails?.[0]?.pnr || data?.data?.pnr || void 0;
       tjBookingRef = data?.bookingId || data?.data?.bookingId || void 0;
       logger.info({ paymentId, pnr, tjBookingRef, tjBookingStatus }, "[book-flight] TripJack AirBook PENDING");
     } else {
       tjSuccess = true;
-      pnr = data?.pnr || data?.data?.pnr || void 0;
+      pnr = data?.pnr || data?.pnrDetails?.[0]?.pnr || data?.data?.pnr || void 0;
       tjBookingRef = data?.bookingId || data?.data?.bookingId || void 0;
       logger.info({ paymentId, pnr, tjBookingRef, tjBookingStatus }, "[book-flight] TripJack AirBook SUCCESS");
     }

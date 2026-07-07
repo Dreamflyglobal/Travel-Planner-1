@@ -503,13 +503,13 @@ router.post("/book-flight", async (req, res): Promise<void> => {
       logger.warn({ paymentId, tjError }, "[book-flight] TripJack returned failure in body");
     } else if (tjBookingStatus === "PENDING" || tjBookingStatus === "PROCESSING") {
       tjPending    = true;
-      pnr          = data?.pnr      || data?.data?.pnr      || undefined;
+      pnr          = data?.pnr || data?.pnrDetails?.[0]?.pnr || data?.data?.pnr || undefined;
       tjBookingRef = data?.bookingId || data?.data?.bookingId || undefined;
       logger.info({ paymentId, pnr, tjBookingRef, tjBookingStatus }, "[book-flight] TripJack AirBook PENDING");
     } else {
       // CONFIRMED or no explicit status (treat as confirmed if no error)
       tjSuccess    = true;
-      pnr          = data?.pnr      || data?.data?.pnr      || undefined;
+      pnr          = data?.pnr || data?.pnrDetails?.[0]?.pnr || data?.data?.pnr || undefined;
       tjBookingRef = data?.bookingId || data?.data?.bookingId || undefined;
       logger.info({ paymentId, pnr, tjBookingRef, tjBookingStatus }, "[book-flight] TripJack AirBook SUCCESS");
     }
