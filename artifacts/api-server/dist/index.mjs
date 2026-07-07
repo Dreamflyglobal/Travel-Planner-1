@@ -99245,11 +99245,16 @@ router24.post("/book-flight", async (req, res) => {
       pnr = data?.pnr || data?.pnrDetails?.[0]?.pnr || data?.data?.pnr || void 0;
       tjBookingRef = data?.bookingId || data?.data?.bookingId || void 0;
       logger.info({ paymentId, pnr, tjBookingRef }, "[book-flight] TripJack AirBook CONFIRMED immediately");
-    } else if (tjBookingStatus === "PENDING" || tjBookingStatus === "PROCESSING" || tjBookingStatus === "") {
+    } else if (tjBookingStatus === "PENDING" || tjBookingStatus === "PROCESSING") {
       tjPending = true;
       pnr = data?.pnr || data?.pnrDetails?.[0]?.pnr || data?.data?.pnr || void 0;
       tjBookingRef = data?.bookingId || data?.data?.bookingId || void 0;
-      logger.info({ paymentId, pnr, tjBookingRef, tjBookingStatus: tjBookingStatus || "(absent)" }, "[book-flight] TripJack AirBook PENDING \u2014 will poll for confirmation");
+      logger.info({ paymentId, pnr, tjBookingRef, tjBookingStatus }, "[book-flight] TripJack AirBook PENDING \u2014 will poll for confirmation");
+    } else if (tjBookingStatus === "" && data?.status?.success === true && (data?.bookingId || data?.data?.bookingId)) {
+      tjSuccess = true;
+      pnr = data?.pnr || data?.pnrDetails?.[0]?.pnr || data?.data?.pnr || void 0;
+      tjBookingRef = data?.bookingId || data?.data?.bookingId || void 0;
+      logger.info({ paymentId, pnr, tjBookingRef }, "[book-flight] TripJack AirBook success:true + bookingId (no status.booking) \u2014 treating as CONFIRMED");
     } else {
       tjPending = true;
       pnr = data?.pnr || data?.pnrDetails?.[0]?.pnr || data?.data?.pnr || void 0;
@@ -99321,7 +99326,7 @@ router24.post("/book-flight", async (req, res) => {
     const finalPnr = detailPnr || pnr;
     const finalBkSt = tjDetailStatus === "CONFIRMED" ? "confirmed" : tjDetailStatus === "PENDING" ? "pending" : resolvedBookingSt;
     const finalDbSt = tjDetailStatus === "CONFIRMED" ? "confirmed" : tjDetailStatus === "PENDING" ? "pending" : resolvedDbStatus;
-    await db.update(bookingsTable).set({
+    const updatedRows = await db.update(bookingsTable).set({
       bookingStatus: finalBkSt,
       status: finalDbSt,
       details: {
@@ -99332,10 +99337,28 @@ router24.post("/book-flight", async (req, res) => {
         ...tjPassengers.length > 0 ? { tjPassengers } : {},
         ...ticketNumbers.length > 0 ? { ticketNumbers } : {}
       }
-    }).where(eq(bookingsTable.id, savedBooking.id));
+    }).where(eq(bookingsTable.id, savedBooking.id)).returning();
+    const updatedRecord = updatedRows[0];
     logger.info(
-      { paymentId, pnr: finalPnr, bookingRef, bookingId: savedBooking.id, finalBkSt },
-      `[book-flight] STEP 4: booking persisted as ${finalBkSt}`
+      {
+        dreamFlyBookingRef: bookingRef,
+        dreamFlyBookingId: savedBooking.id,
+        tripjackBookingId: tjBookingRef,
+        rowsUpdated: updatedRows.length,
+        finalBookingStatus: finalBkSt,
+        finalDbStatus: finalDbSt,
+        pnr: finalPnr || null,
+        dbRecord: updatedRecord ? {
+          id: updatedRecord.id,
+          bookingRef: updatedRecord.bookingRef,
+          bookingStatus: updatedRecord.bookingStatus,
+          status: updatedRecord.status,
+          paymentId: updatedRecord.paymentId,
+          tjBookingRef: updatedRecord.details?.tjBookingRef ?? null,
+          pnr: updatedRecord.details?.pnr ?? null
+        } : null
+      },
+      `[book-flight] STEP 4 COMPLETE \u2014 booking updated in DB`
     );
     res.json({
       success: true,

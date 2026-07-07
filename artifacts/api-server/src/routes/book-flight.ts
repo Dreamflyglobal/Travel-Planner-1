@@ -511,16 +511,22 @@ router.post("/book-flight", async (req, res): Promise<void> => {
       pnr          = data?.pnr || data?.pnrDetails?.[0]?.pnr || data?.data?.pnr || undefined;
       tjBookingRef = data?.bookingId || data?.data?.bookingId || undefined;
       logger.info({ paymentId, pnr, tjBookingRef }, "[book-flight] TripJack AirBook CONFIRMED immediately");
-    } else if (tjBookingStatus === "PENDING" || tjBookingStatus === "PROCESSING" || tjBookingStatus === "") {
-      // PENDING / PROCESSING / absent status.booking — booking created, TripJack is processing it.
-      // Do NOT treat absence of status.booking as confirmation; the booking requires polling until
-      // TripJack transitions it to CONFIRMED and generates a PNR.
+    } else if (tjBookingStatus === "PENDING" || tjBookingStatus === "PROCESSING") {
+      // Explicitly PENDING or PROCESSING — TripJack is still processing; poll until confirmed.
       tjPending    = true;
       pnr          = data?.pnr || data?.pnrDetails?.[0]?.pnr || data?.data?.pnr || undefined;
       tjBookingRef = data?.bookingId || data?.data?.bookingId || undefined;
-      logger.info({ paymentId, pnr, tjBookingRef, tjBookingStatus: tjBookingStatus || "(absent)" }, "[book-flight] TripJack AirBook PENDING — will poll for confirmation");
+      logger.info({ paymentId, pnr, tjBookingRef, tjBookingStatus }, "[book-flight] TripJack AirBook PENDING — will poll for confirmation");
+    } else if (tjBookingStatus === "" && data?.status?.success === true && (data?.bookingId || data?.data?.bookingId)) {
+      // status.booking absent but success:true + bookingId present.
+      // TripJack sandbox (and some production configs) returns success:true with no status.booking
+      // field — the booking IS accepted and confirmed; PNR may arrive via detail endpoint later.
+      tjSuccess    = true;
+      pnr          = data?.pnr || data?.pnrDetails?.[0]?.pnr || data?.data?.pnr || undefined;
+      tjBookingRef = data?.bookingId || data?.data?.bookingId || undefined;
+      logger.info({ paymentId, pnr, tjBookingRef }, "[book-flight] TripJack AirBook success:true + bookingId (no status.booking) — treating as CONFIRMED");
     } else {
-      // Any other non-failure status — treat as pending to be safe
+      // Any other unknown status — treat as pending to be safe
       tjPending    = true;
       pnr          = data?.pnr || data?.pnrDetails?.[0]?.pnr || data?.data?.pnr || undefined;
       tjBookingRef = data?.bookingId || data?.data?.bookingId || undefined;
@@ -629,7 +635,7 @@ router.post("/book-flight", async (req, res): Promise<void> => {
                     : resolvedDbStatus;
 
     // Persist enriched booking detail back to DB
-    await db
+    const updatedRows = await db
       .update(bookingsTable)
       .set({
         bookingStatus: finalBkSt,
@@ -643,11 +649,30 @@ router.post("/book-flight", async (req, res): Promise<void> => {
           ...(ticketNumbers.length > 0 ? { ticketNumbers } : {}),
         },
       })
-      .where(eq(bookingsTable.id, savedBooking.id));
+      .where(eq(bookingsTable.id, savedBooking.id))
+      .returning();
 
+    const updatedRecord = updatedRows[0];
     logger.info(
-      { paymentId, pnr: finalPnr, bookingRef, bookingId: savedBooking.id, finalBkSt },
-      `[book-flight] STEP 4: booking persisted as ${finalBkSt}`,
+      {
+        dreamFlyBookingRef: bookingRef,
+        dreamFlyBookingId:  savedBooking.id,
+        tripjackBookingId:  tjBookingRef,
+        rowsUpdated:        updatedRows.length,
+        finalBookingStatus: finalBkSt,
+        finalDbStatus:      finalDbSt,
+        pnr:                finalPnr || null,
+        dbRecord: updatedRecord ? {
+          id:            updatedRecord.id,
+          bookingRef:    updatedRecord.bookingRef,
+          bookingStatus: updatedRecord.bookingStatus,
+          status:        updatedRecord.status,
+          paymentId:     updatedRecord.paymentId,
+          tjBookingRef:  (updatedRecord.details as any)?.tjBookingRef ?? null,
+          pnr:           (updatedRecord.details as any)?.pnr ?? null,
+        } : null,
+      },
+      `[book-flight] STEP 4 COMPLETE — booking updated in DB`,
     );
 
     res.json({
