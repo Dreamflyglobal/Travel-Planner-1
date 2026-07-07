@@ -552,6 +552,8 @@ function BookingDetailSheet({
   const [forceConfirmPnr, setForceConfirmPnr] = useState("");
   const [forceConfirmTjRef, setForceConfirmTjRef] = useState("");
   const [forcingConfirm, setForcingConfirm] = useState(false);
+  const [tjSyncing, setTjSyncing] = useState(false);
+  const [tjSyncResult, setTjSyncResult] = useState<{ synced: boolean; message: string; pnr?: string | null; tjStatus?: string | null; source?: string } | null>(null);
 
   if (!booking) return null;
 
@@ -703,6 +705,55 @@ function BookingDetailSheet({
     } catch (e) {
       toast({ title: "Failed", description: String(e instanceof Error ? e.message : e), variant: "destructive" });
     } finally { setForcingConfirm(false); }
+  }
+
+  async function handleTjSync() {
+    const ref = booking!.bookingRef;
+    if (!ref) {
+      toast({ title: "No booking ref", description: "This booking has no reference.", variant: "destructive" });
+      return;
+    }
+    setTjSyncing(true);
+    setTjSyncResult(null);
+    try {
+      const res = await fetch(`/api/bookings/ref/${ref}/tj-sync`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...getAuthHeader() },
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Sync failed");
+      setTjSyncResult({
+        synced:   json.synced,
+        message:  json.message,
+        pnr:      json.pnr,
+        tjStatus: json.tjStatus,
+        source:   json.source,
+      });
+      if (json.synced && json.bookingStatus === "confirmed") {
+        onBookingUpdated({
+          ...booking!,
+          bookingStatus: "confirmed",
+          status:        "confirmed",
+          details: {
+            ...(booking!.details as Record<string, any>),
+            pnr:            json.pnr,
+            tjDetailStatus: "CONFIRMED",
+          },
+        });
+        toast({ title: "Booking Synced", description: `TripJack confirmed — PNR: ${json.pnr ?? "(pending)"}` });
+      } else {
+        toast({
+          title: json.synced ? "Sync Complete" : "Not Yet Confirmed",
+          description: json.message?.slice(0, 120) ?? "Check the result panel.",
+          variant: json.synced ? "default" : "destructive",
+        });
+      }
+    } catch (e) {
+      const msg = String(e instanceof Error ? e.message : e);
+      setTjSyncResult({ synced: false, message: msg });
+      toast({ title: "Sync Failed", description: msg.slice(0, 120), variant: "destructive" });
+    } finally { setTjSyncing(false); }
   }
 
   async function handleMarkFailed() {
@@ -982,13 +1033,36 @@ function BookingDetailSheet({
                   )}
                 </div>
 
-                {/* Force Confirm inline form — for flight bookings confirmed in TripJack but not yet synced */}
+                {/* TJ Auto-Sync button — queries TripJack automatically, no manual PNR entry */}
+                {booking.serviceType === "flight" && booking.bookingStatus !== "confirmed" && (
+                  <Button size="sm" variant="outline"
+                    className="gap-1.5 border-blue-300 text-blue-700 hover:bg-blue-50"
+                    onClick={handleTjSync} disabled={tjSyncing || forcingConfirm}>
+                    {tjSyncing
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      : <RefreshCw className="w-3.5 h-3.5" />}
+                    Auto-Sync from TripJack
+                  </Button>
+                )}
+
+                {/* Force Confirm inline form — manual fallback when auto-sync cannot reach TripJack */}
                 {booking.serviceType === "flight" && booking.bookingStatus !== "confirmed" && (
                   <Button size="sm" variant="outline"
                     className="gap-1.5 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-                    onClick={() => setShowForceConfirm(v => !v)} disabled={forcingConfirm}>
+                    onClick={() => setShowForceConfirm(v => !v)} disabled={forcingConfirm || tjSyncing}>
                     <CheckCheck className="w-3.5 h-3.5" /> Enter PNR &amp; Confirm
                   </Button>
+                )}
+
+                {/* TJ Sync result panel */}
+                {tjSyncResult && (
+                  <div className={`mt-3 p-3 rounded-xl border text-xs space-y-1 ${tjSyncResult.synced ? "border-blue-200 bg-blue-50 text-blue-900" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
+                    <p className="font-semibold">{tjSyncResult.synced ? "✅ Sync Successful" : "⚠️ Sync Result"}</p>
+                    {tjSyncResult.tjStatus && <p>TripJack status: <span className="font-mono font-bold">{tjSyncResult.tjStatus}</span></p>}
+                    {tjSyncResult.pnr && <p>PNR: <span className="font-mono font-bold">{tjSyncResult.pnr}</span></p>}
+                    {tjSyncResult.source && tjSyncResult.source !== "none" && <p>Fetched via: <span className="font-mono">{tjSyncResult.source}</span></p>}
+                    <p className="text-xs opacity-80">{tjSyncResult.message}</p>
+                  </div>
                 )}
 
                 {showForceConfirm && (

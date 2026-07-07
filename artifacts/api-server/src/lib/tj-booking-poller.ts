@@ -15,34 +15,13 @@
  */
 
 import { db, bookingsTable } from "@workspace/db";
-import { eq, and, or, isNotNull, lt, sql } from "drizzle-orm";
-import { tjPostWithRetry } from "./tj-retry.js";
+import { eq, and, or, sql } from "drizzle-orm";
+import { fetchTjBookingDetail } from "./tj-booking-helper.js";
 import { logger } from "./logger.js";
 
 const POLL_INTERVAL_MS  = 60_000;   // 60 seconds between full poll cycles
 const GIVE_UP_HOURS     = 24;        // give up after 24 hours of pending
 const MAX_BATCH         = 20;        // max bookings to check per cycle
-
-function extractPnr(dd: any, fallback?: string | null): string | null {
-  return dd?.pnr || dd?.pnrDetails?.[0]?.pnr || fallback || null;
-}
-
-function extractPassengers(dd: any, pnr: string | null): Array<{ name: string; pnr: string; ticketNum: string; paxType: string }> {
-  return ((dd?.pnrDetails || []) as any[])
-    .map((p: any) => ({
-      name:      (p.paxName || p.name || "").trim(),
-      pnr:       p.pnr || pnr || "",
-      ticketNum: p.ticketNum || p.eTicketNumber || p.ticket_num || "",
-      paxType:   (p.paxType || "ADULT").toUpperCase(),
-    }))
-    .filter((p) => p.name.length > 0);
-}
-
-function extractTickets(dd: any): string[] {
-  return ((dd?.pnrDetails || []) as any[])
-    .map((p: any) => p.ticketNum || p.eTicketNumber || p.ticket_num)
-    .filter(Boolean);
-}
 
 async function pollOnce(): Promise<void> {
   // Find all flight bookings that are pending AND have a TripJack booking ref
@@ -95,22 +74,27 @@ async function pollOnce(): Promise<void> {
     const tjBookingRef = details.tjBookingRef as string;
     const bookingRef  = booking.bookingRef ?? "(unknown)";
 
-    try {
-      const dd = await tjPostWithRetry(
-        "/oms/v1/booking/detail",
-        { bookingId: tjBookingRef },
-        { context: `tj-poller/${bookingRef}`, timeoutMs: 15_000, maxRetries: 1 },
+    // Uses multi-strategy helper: detail → air-detail → list-today → list-2d
+    const detail = await fetchTjBookingDetail(
+      tjBookingRef,
+      `tj-poller/${bookingRef}`,
+    ).catch((err: any) => {
+      logger.warn(
+        { bookingRef, tjBookingRef, err: err?.message },
+        "[tj-poller] fetchTjBookingDetail threw — will retry next cycle",
       );
+      return null;
+    });
 
-      const rawStatus    = ((dd?.status?.booking as string) || "").toUpperCase();
-      const refreshedPnr = extractPnr(dd, details.pnr as string | null);
-      const passengers   = extractPassengers(dd, refreshedPnr);
-      const tickets      = extractTickets(dd);
-
-      console.log(
-        `[tj-poller] ${bookingRef} / ${tjBookingRef} — detail response:`,
-        JSON.stringify({ rawStatus, pnr: refreshedPnr, pnrDetailsCount: (dd?.pnrDetails ?? []).length, pnrDetailsSample: (dd?.pnrDetails ?? [])[0] ?? null }, null, 2),
+    if (!detail || detail.source === "none") {
+      // All strategies failed — keep polling until endpoint becomes accessible or timeout
+      logger.info(
+        { bookingRef, tjBookingRef },
+        "[tj-poller] all strategies failed — will re-check next cycle",
       );
+    } else {
+      const rawStatus    = detail.rawStatus;
+      const refreshedPnr = detail.pnr || (details.pnr as string | null) || null;
 
       if (rawStatus === "CONFIRMED") {
         await db
@@ -120,16 +104,17 @@ async function pollOnce(): Promise<void> {
             status:        "confirmed",
             details: {
               ...details,
-              pnr:          refreshedPnr,
+              pnr:            refreshedPnr,
               tjDetailStatus: "CONFIRMED",
-              ...(passengers.length > 0 ? { tjPassengers: passengers }  : {}),
-              ...(tickets.length    > 0 ? { ticketNumbers: tickets }    : {}),
+              source:         detail.source,
+              ...(detail.tjPassengers.length  > 0 ? { tjPassengers:  detail.tjPassengers  } : {}),
+              ...(detail.ticketNumbers.length > 0 ? { ticketNumbers: detail.ticketNumbers } : {}),
             },
           })
           .where(eq(bookingsTable.bookingRef, bookingRef));
 
         logger.info(
-          { bookingRef, tjBookingRef, pnr: refreshedPnr, tickets: tickets.length },
+          { bookingRef, tjBookingRef, pnr: refreshedPnr, tickets: detail.ticketNumbers.length, source: detail.source },
           "[tj-poller] booking CONFIRMED by TripJack — DB updated",
         );
       } else if (rawStatus === "FAILED" || rawStatus === "CANCELLED") {
@@ -146,18 +131,11 @@ async function pollOnce(): Promise<void> {
 
         logger.warn({ bookingRef, tjBookingRef, rawStatus }, "[tj-poller] booking FAILED/CANCELLED by TripJack — DB updated");
       } else {
-        // Still PENDING or status absent — keep polling
         logger.info(
-          { bookingRef, tjBookingRef, rawStatus: rawStatus || "(absent)" },
+          { bookingRef, tjBookingRef, rawStatus: rawStatus || "(absent)", source: detail.source },
           "[tj-poller] booking still pending — will re-check next cycle",
         );
       }
-    } catch (err: any) {
-      const httpStatus = (err as any)?.tripjackHttpStatus ?? err?.response?.status;
-      logger.warn(
-        { bookingRef, tjBookingRef, httpStatus, err: err?.message },
-        "[tj-poller] detail call failed — will retry next cycle",
-      );
     }
 
     // Give up on bookings that have been pending too long

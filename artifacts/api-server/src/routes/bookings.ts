@@ -3,6 +3,7 @@ import { logger } from "../lib/logger.js";
 import { requireAdmin } from "../lib/admin-auth.js";
 import { eq, desc, or } from "drizzle-orm";
 import { db, bookingsTable, usersTable } from "@workspace/db";
+import { fetchTjBookingDetail } from "../lib/tj-booking-helper.js";
 import { nextBookingRef } from "../lib/booking-id.js";
 import { sanitizeLocation, formatRoute } from "../lib/location-utils.js";
 import {
@@ -652,6 +653,144 @@ router.patch("/bookings/ref/:bookingRef/tj-update", async (req, res): Promise<vo
   } catch (err: any) {
     logger.error({ err: err?.message, bookingRef }, "[bookings] tj-update failed");
     res.status(500).json({ error: err?.message || "Update failed" });
+  }
+});
+
+// ── POST /api/bookings/ref/:bookingRef/tj-sync ────────────────────────────────
+// Automatically query TripJack for the latest booking status and sync to DB.
+// Requires admin auth.  Returns the result of the sync attempt — no manual PNR
+// entry required.  This is the fully-automatic alternative to force-confirm.
+//
+// Flow:
+//  1. Lookup the booking in our DB to get the TripJack booking reference.
+//  2. Call fetchTjBookingDetail (multi-strategy: detail → air-detail → list).
+//  3. If TripJack returns CONFIRMED → update DB status, PNR, passengers, tickets.
+//  4. Return { synced, bookingStatus, pnr, tjStatus, source, message }.
+//
+// SANDBOX LIMITATION: /oms/v1/booking/* endpoints are not accessible in the
+// TripJack sandbox environment (returns 404) — only AirBook (/oms/v1/air/book)
+// is whitelisted.  synced=false with source="none" means this limitation is active.
+// In production (with correct IP whitelisting) synced=true will be returned
+// immediately when TripJack has confirmed the booking.
+router.post("/bookings/ref/:bookingRef/tj-sync", requireAdmin, async (req, res): Promise<void> => {
+  const { bookingRef } = req.params;
+
+  try {
+    const [booking] = await db
+      .select()
+      .from(bookingsTable)
+      .where(eq(bookingsTable.bookingRef, bookingRef))
+      .limit(1);
+
+    if (!booking) {
+      res.status(404).json({ error: "Booking not found" });
+      return;
+    }
+
+    const details     = (booking.details as Record<string, any>) ?? {};
+    const tjBookingRef: string = details.tjBookingRef ?? "";
+
+    if (!tjBookingRef) {
+      res.status(400).json({
+        error:   "No TripJack booking reference stored for this booking — cannot sync",
+        synced:  false,
+        message: "The booking does not have a tjBookingRef. It may not be a TripJack flight booking.",
+      });
+      return;
+    }
+
+    logger.info({ bookingRef, tjBookingRef }, "[bookings/tj-sync] starting automatic TripJack sync");
+
+    const detail = await fetchTjBookingDetail(tjBookingRef, `tj-sync/${bookingRef}`);
+
+    if (detail.source === "none") {
+      // All strategies failed — TripJack endpoint not accessible from this environment
+      res.json({
+        synced:        false,
+        bookingStatus: booking.bookingStatus,
+        pnr:           details.pnr ?? null,
+        tjStatus:      null,
+        source:        "none",
+        message:
+          "TripJack booking detail endpoint is not accessible from this server. " +
+          "In sandbox this is expected — /oms/v1/booking/* requires separate IP whitelisting " +
+          "from /oms/v1/air/book. Ask TripJack support to whitelist your server IP for the " +
+          "booking-management endpoints, then retry. The booking will be synced automatically " +
+          "once the endpoint becomes accessible.",
+      });
+      return;
+    }
+
+    const tjStatus = detail.rawStatus;   // "CONFIRMED" | "PENDING" | "FAILED" | ...
+    const pnr      = detail.pnr || (details.pnr as string | null) || null;
+
+    if (tjStatus === "CONFIRMED") {
+      const patchDetails: Record<string, any> = {
+        ...details,
+        pnr,
+        tjDetailStatus: "CONFIRMED",
+        tjSyncedAt:     new Date().toISOString(),
+        tjSyncSource:   detail.source,
+        ...(detail.tjPassengers.length  > 0 ? { tjPassengers:  detail.tjPassengers  } : {}),
+        ...(detail.ticketNumbers.length > 0 ? { ticketNumbers: detail.ticketNumbers } : {}),
+      };
+
+      await db
+        .update(bookingsTable)
+        .set({ bookingStatus: "confirmed", status: "confirmed", details: patchDetails })
+        .where(eq(bookingsTable.bookingRef, bookingRef));
+
+      logger.info(
+        { bookingRef, tjBookingRef, pnr, source: detail.source, paxCount: detail.tjPassengers.length },
+        "[bookings/tj-sync] booking CONFIRMED — DB updated",
+      );
+
+      res.json({
+        synced:        true,
+        bookingStatus: "confirmed",
+        pnr,
+        tjStatus:      "CONFIRMED",
+        source:        detail.source,
+        passengers:    detail.tjPassengers,
+        ticketNumbers: detail.ticketNumbers,
+        message:       `Booking confirmed by TripJack (via ${detail.source}). PNR: ${pnr ?? "(not yet issued)"}`,
+      });
+    } else if (tjStatus === "FAILED" || tjStatus === "CANCELLED") {
+      await db
+        .update(bookingsTable)
+        .set({
+          bookingStatus: "failed",
+          status:        "cancelled",
+          failureCode:   "tj_failed",
+          failureReason: `TripJack booking ${tjStatus.toLowerCase()} (auto-synced)`,
+          details: { ...details, tjDetailStatus: tjStatus, tjSyncedAt: new Date().toISOString() },
+        })
+        .where(eq(bookingsTable.bookingRef, bookingRef));
+
+      logger.warn({ bookingRef, tjBookingRef, tjStatus }, "[bookings/tj-sync] booking FAILED/CANCELLED — DB updated");
+
+      res.json({
+        synced:        true,
+        bookingStatus: "failed",
+        pnr:           null,
+        tjStatus,
+        source:        detail.source,
+        message:       `TripJack reports this booking as ${tjStatus}. DB updated to failed/cancelled.`,
+      });
+    } else {
+      // PENDING or unknown — no DB change yet
+      res.json({
+        synced:        false,
+        bookingStatus: booking.bookingStatus,
+        pnr:           pnr,
+        tjStatus:      tjStatus || "(pending/unknown)",
+        source:        detail.source,
+        message:       "TripJack is still processing this booking (status: PENDING). Will be synced automatically by the background poller once TripJack confirms.",
+      });
+    }
+  } catch (err: any) {
+    logger.error({ bookingRef, err: err?.message }, "[bookings/tj-sync] unexpected error");
+    res.status(500).json({ error: err?.message || "Failed to sync booking from TripJack" });
   }
 });
 

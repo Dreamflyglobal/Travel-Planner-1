@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db, bookingsTable, bookingRefundsTable } from "@workspace/db";
 import { extractTripJackError } from "../lib/tripjack-auth.js";
 import { tjPostWithRetry } from "../lib/tj-retry.js";
+import { fetchTjBookingDetail } from "../lib/tj-booking-helper.js";
 import { logger } from "../lib/logger.js";
 import { verifyRazorpaySignature, checkRazorpayPaymentLive } from "./verify-payment.js";
 import { getProviderConfig } from "../lib/provider-config.js";
@@ -574,9 +575,17 @@ router.post("/book-flight", async (req, res): Promise<void> => {
 
   if (tjSuccess || tjPending) {
     // ── STEP 4.5: Fetch booking detail to get enriched PNR/ticket/status ─────────
-    // TripJack typically returns the booking in PENDING state from AirBook; the
-    // detail endpoint reflects the real confirmed status once TripJack processes it.
-    // We try immediately then once more after a short delay to handle propagation lag.
+    // Uses fetchTjBookingDetail which tries 4 strategies in order:
+    //   1. /oms/v1/booking/detail   (standard OMS path)
+    //   2. /oms/v1/air/booking/detail (alternate sandbox path)
+    //   3. /oms/v1/booking/list filtered to today
+    //   4. /oms/v1/booking/list filtered to yesterday+today
+    //
+    // SANDBOX LIMITATION: If all 4 fail with 404, TripJack has not yet
+    // whitelisted the /oms/v1/booking/* endpoints for this API key / server IP.
+    // The booking is stored as PENDING and the background poller will retry
+    // every 60 seconds.  In production with correct IP whitelisting,
+    // strategy 1 succeeds on the first attempt.
     let detailPnr      = pnr;
     let tjDetailStatus = tjSuccess ? "CONFIRMED" : "PENDING";
     let tjPassengers: Array<{ name: string; pnr: string; ticketNum: string; paxType: string }> = [];
@@ -584,61 +593,29 @@ router.post("/book-flight", async (req, res): Promise<void> => {
     let detailFetched  = false;
 
     if (tjBookingRef) {
-      for (let detailAttempt = 1; detailAttempt <= 3 && !detailFetched; detailAttempt++) {
-        if (detailAttempt > 1) {
-          const delayMs = detailAttempt === 2 ? 5_000 : 10_000;
-          logger.info({ paymentId, tjBookingRef, delayMs }, `[book-flight] STEP 4.5: retrying detail (attempt ${detailAttempt}) after ${delayMs}ms`);
-          await new Promise((r) => setTimeout(r, delayMs));
-        }
-        try {
-          const detailRes = await tjPostWithRetry(
-            "/oms/v1/booking/detail",
-            { bookingId: tjBookingRef },
-            { context: `book-flight/detail-a${detailAttempt}`, timeoutMs: 15_000, maxRetries: 0 },
-          );
-          // tjPostWithRetry returns resp.data directly — no extra .data wrapper
-          const dd       = detailRes || {};
-          const rawStatus = ((dd.status?.booking as string) || "").toUpperCase();
+      logger.info({ paymentId, tjBookingRef }, "[book-flight] STEP 4.5: fetching booking detail (multi-strategy)");
 
-          console.log(
-            `[book-flight] STEP 4.5 attempt ${detailAttempt} — TripJack detail response:`,
-            JSON.stringify({ tjBookingRef, rawStatus, pnr: dd.pnr ?? null, pnrDetailsCount: (dd.pnrDetails ?? []).length, pnrDetailsSample: (dd.pnrDetails ?? [])[0] ?? null }, null, 2),
-          );
+      // Single attempt — the helper already retries internally across strategies.
+      // Adding an extra delay here to give TripJack a moment to propagate the booking.
+      await new Promise((r) => setTimeout(r, 3_000));
 
-          detailPnr      = dd.pnr || (dd.pnrDetails?.[0]?.pnr) || pnr;
-          tjDetailStatus = rawStatus || tjDetailStatus;
+      const detail = await fetchTjBookingDetail(tjBookingRef, "book-flight");
 
-          tjPassengers = ((dd.pnrDetails || []) as any[])
-            .map((p: any) => ({
-              name:      (p.paxName || p.name || "").trim(),
-              pnr:       p.pnr    || detailPnr || "",
-              ticketNum: p.ticketNum || p.eTicketNumber || p.ticket_num || "",
-              paxType:   (p.paxType   || "ADULT").toUpperCase(),
-            }))
-            .filter((p) => p.name.length > 0);
+      if (detail.source !== "none") {
+        detailPnr      = detail.pnr      || pnr;
+        tjDetailStatus = detail.rawStatus || tjDetailStatus;
+        tjPassengers   = detail.tjPassengers;
+        ticketNumbers  = detail.ticketNumbers;
+        detailFetched  = true;
 
-          ticketNumbers = ((dd.pnrDetails || []) as any[])
-            .map((p: any) => p.ticketNum || p.eTicketNumber || p.ticket_num)
-            .filter(Boolean);
-
-          logger.info(
-            { paymentId, tjBookingRef, detailPnr, tjDetailStatus, paxCount: tjPassengers.length, ticketCount: ticketNumbers.length, attempt: detailAttempt },
-            "[book-flight] STEP 4.5: booking detail enriched",
-          );
-          detailFetched = true;
-        } catch (detailErr: any) {
-          const httpStatus = (detailErr as any)?.tripjackHttpStatus ?? detailErr?.response?.status ?? "?";
-          logger.warn(
-            { paymentId, tjBookingRef, attempt: detailAttempt, httpStatus, err: detailErr?.message },
-            "[book-flight] STEP 4.5: detail attempt failed — will retry or defer to background poller",
-          );
-        }
-      }
-
-      if (!detailFetched) {
+        logger.info(
+          { paymentId, tjBookingRef, detailPnr, tjDetailStatus, source: detail.source, paxCount: tjPassengers.length },
+          "[book-flight] STEP 4.5: booking detail enriched",
+        );
+      } else {
         logger.warn(
           { paymentId, tjBookingRef },
-          "[book-flight] STEP 4.5: all detail attempts failed — booking stored as pending, background poller will update",
+          "[book-flight] STEP 4.5: all strategies failed — booking stored as pending, background poller will update when TripJack endpoint becomes accessible",
         );
       }
     }
@@ -800,39 +777,22 @@ router.get("/booking-status/:bookingRef", async (req, res): Promise<void> => {
     (currentStatus === "confirmed" && !currentPnr)
   );
   if (shouldFetchFromTj) {
-    try {
-      const tjData = await tjPostWithRetry(
-        "/oms/v1/booking/detail",
-        { bookingId: storedTjRef },
-        { context: "booking-status-check", timeoutMs: 15_000, maxRetries: 1 },
-      );
+    // Uses multi-strategy helper: detail → air-detail → list-today → list-2d
+    const detail = await fetchTjBookingDetail(storedTjRef, "booking-status-check").catch((err: any) => {
+      logger.warn({ bookingRef, err: err?.message }, "[booking-status] fetchTjBookingDetail threw — returning stored status");
+      return null;
+    });
 
-      // tjPostWithRetry returns resp.data directly — no extra .data wrapper
-      const dd              = tjData || {};
-      const tjBookingStatus = ((dd.status?.booking || "")).toUpperCase();
-
-      const refreshedPnr = dd.pnr || dd.pnrDetails?.[0]?.pnr || currentPnr;
-
-      const refreshedPassengers = ((dd.pnrDetails || []) as any[])
-        .map((p: any) => ({
-          name:      (p.paxName || p.name || "").trim(),
-          pnr:       p.pnr    || refreshedPnr || "",
-          ticketNum: p.ticketNum || p.eTicketNumber || p.ticket_num || "",
-          paxType:   (p.paxType || "ADULT").toUpperCase(),
-        }))
-        .filter((p) => p.name.length > 0);
-
-      const refreshedTickets = ((dd.pnrDetails || []) as any[])
-        .map((p: any) => p.ticketNum || p.eTicketNumber || p.ticket_num)
-        .filter(Boolean);
-
-      logger.info({ bookingRef, tjBookingStatus, refreshedPnr, paxCount: refreshedPassengers.length }, "[booking-status] TripJack status refresh");
+    if (detail && detail.source !== "none") {
+      const tjBookingStatus = detail.rawStatus;
+      const refreshedPnr    = detail.pnr || currentPnr;
+      logger.info({ bookingRef, tjBookingStatus, refreshedPnr, source: detail.source, paxCount: detail.tjPassengers.length }, "[booking-status] TripJack status refresh");
 
       if (tjBookingStatus === "CONFIRMED") {
         currentStatus = "confirmed";
         if (refreshedPnr) currentPnr = refreshedPnr;
-        if (refreshedPassengers.length > 0) tjPassengers = refreshedPassengers;
-        if (refreshedTickets.length    > 0) ticketNumbers = refreshedTickets;
+        if (detail.tjPassengers.length  > 0) tjPassengers  = detail.tjPassengers;
+        if (detail.ticketNumbers.length > 0) ticketNumbers = detail.ticketNumbers;
         await db
           .update(bookingsTable)
           .set({
@@ -841,6 +801,7 @@ router.get("/booking-status/:bookingRef", async (req, res): Promise<void> => {
             details: {
               ...details,
               pnr: currentPnr,
+              tjDetailStatus: "CONFIRMED",
               ...(tjPassengers.length  > 0 ? { tjPassengers }  : {}),
               ...(ticketNumbers.length > 0 ? { ticketNumbers } : {}),
             },
@@ -854,8 +815,8 @@ router.get("/booking-status/:bookingRef", async (req, res): Promise<void> => {
           .where(eq(bookingsTable.bookingRef, bookingRef));
       }
       // PENDING → no update, keep polling
-    } catch (err: any) {
-      logger.warn({ bookingRef, err: err?.message }, "[booking-status] TripJack refresh failed — returning stored status");
+    } else {
+      logger.warn({ bookingRef }, "[booking-status] all TripJack strategies failed — returning stored status");
     }
   }
 

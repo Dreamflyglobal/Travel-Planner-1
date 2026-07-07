@@ -39694,8 +39694,8 @@ var require_lt = __commonJS({
   "../../node_modules/.pnpm/semver@7.7.4/node_modules/semver/functions/lt.js"(exports, module) {
     "use strict";
     var compare2 = require_compare();
-    var lt3 = (a, b, loose) => compare2(a, b, loose) < 0;
-    module.exports = lt3;
+    var lt2 = (a, b, loose) => compare2(a, b, loose) < 0;
+    module.exports = lt2;
   }
 });
 
@@ -39747,7 +39747,7 @@ var require_cmp = __commonJS({
     var neq = require_neq();
     var gt2 = require_gt();
     var gte2 = require_gte();
-    var lt3 = require_lt();
+    var lt2 = require_lt();
     var lte2 = require_lte();
     var cmp = (a, op, b, loose) => {
       switch (op) {
@@ -39778,7 +39778,7 @@ var require_cmp = __commonJS({
         case ">=":
           return gte2(a, b, loose);
         case "<":
-          return lt3(a, b, loose);
+          return lt2(a, b, loose);
         case "<=":
           return lte2(a, b, loose);
         default:
@@ -40533,7 +40533,7 @@ var require_outside = __commonJS({
     var Range = require_range2();
     var satisfies = require_satisfies();
     var gt2 = require_gt();
-    var lt3 = require_lt();
+    var lt2 = require_lt();
     var lte2 = require_lte();
     var gte2 = require_gte();
     var outside = (version3, range, hilo, options) => {
@@ -40544,12 +40544,12 @@ var require_outside = __commonJS({
         case ">":
           gtfn = gt2;
           ltefn = lte2;
-          ltfn = lt3;
+          ltfn = lt2;
           comp = ">";
           ecomp = ">=";
           break;
         case "<":
-          gtfn = lt3;
+          gtfn = lt2;
           ltefn = gte2;
           ltfn = gt2;
           comp = "<";
@@ -40729,12 +40729,12 @@ var require_subset = __commonJS({
         }
       }
       const eqSet = /* @__PURE__ */ new Set();
-      let gt2, lt3;
+      let gt2, lt2;
       for (const c of sub) {
         if (c.operator === ">" || c.operator === ">=") {
           gt2 = higherGT(gt2, c, options);
         } else if (c.operator === "<" || c.operator === "<=") {
-          lt3 = lowerLT(lt3, c, options);
+          lt2 = lowerLT(lt2, c, options);
         } else {
           eqSet.add(c.semver);
         }
@@ -40743,11 +40743,11 @@ var require_subset = __commonJS({
         return null;
       }
       let gtltComp;
-      if (gt2 && lt3) {
-        gtltComp = compare2(gt2.semver, lt3.semver, options);
+      if (gt2 && lt2) {
+        gtltComp = compare2(gt2.semver, lt2.semver, options);
         if (gtltComp > 0) {
           return null;
-        } else if (gtltComp === 0 && (gt2.operator !== ">=" || lt3.operator !== "<=")) {
+        } else if (gtltComp === 0 && (gt2.operator !== ">=" || lt2.operator !== "<=")) {
           return null;
         }
       }
@@ -40755,7 +40755,7 @@ var require_subset = __commonJS({
         if (gt2 && !satisfies(eq2, String(gt2), options)) {
           return null;
         }
-        if (lt3 && !satisfies(eq2, String(lt3), options)) {
+        if (lt2 && !satisfies(eq2, String(lt2), options)) {
           return null;
         }
         for (const c of dom) {
@@ -40767,9 +40767,9 @@ var require_subset = __commonJS({
       }
       let higher, lower;
       let hasDomLT, hasDomGT;
-      let needDomLTPre = lt3 && !options.includePrerelease && lt3.semver.prerelease.length ? lt3.semver : false;
+      let needDomLTPre = lt2 && !options.includePrerelease && lt2.semver.prerelease.length ? lt2.semver : false;
       let needDomGTPre = gt2 && !options.includePrerelease && gt2.semver.prerelease.length ? gt2.semver : false;
-      if (needDomLTPre && needDomLTPre.prerelease.length === 1 && lt3.operator === "<" && needDomLTPre.prerelease[0] === 0) {
+      if (needDomLTPre && needDomLTPre.prerelease.length === 1 && lt2.operator === "<" && needDomLTPre.prerelease[0] === 0) {
         needDomLTPre = false;
       }
       for (const c of dom) {
@@ -40790,29 +40790,29 @@ var require_subset = __commonJS({
             return false;
           }
         }
-        if (lt3) {
+        if (lt2) {
           if (needDomLTPre) {
             if (c.semver.prerelease && c.semver.prerelease.length && c.semver.major === needDomLTPre.major && c.semver.minor === needDomLTPre.minor && c.semver.patch === needDomLTPre.patch) {
               needDomLTPre = false;
             }
           }
           if (c.operator === "<" || c.operator === "<=") {
-            lower = lowerLT(lt3, c, options);
-            if (lower === c && lower !== lt3) {
+            lower = lowerLT(lt2, c, options);
+            if (lower === c && lower !== lt2) {
               return false;
             }
-          } else if (lt3.operator === "<=" && !satisfies(lt3.semver, String(c), options)) {
+          } else if (lt2.operator === "<=" && !satisfies(lt2.semver, String(c), options)) {
             return false;
           }
         }
-        if (!c.operator && (lt3 || gt2) && gtltComp !== 0) {
+        if (!c.operator && (lt2 || gt2) && gtltComp !== 0) {
           return false;
         }
       }
-      if (gt2 && hasDomLT && !lt3 && gtltComp !== 0) {
+      if (gt2 && hasDomLT && !lt2 && gtltComp !== 0) {
         return false;
       }
-      if (lt3 && hasDomGT && !gt2 && gtltComp !== 0) {
+      if (lt2 && hasDomGT && !gt2 && gtltComp !== 0) {
         return false;
       }
       if (needDomGTPre || needDomLTPre) {
@@ -40862,7 +40862,7 @@ var require_semver2 = __commonJS({
     var sort = require_sort();
     var rsort = require_rsort();
     var gt2 = require_gt();
-    var lt3 = require_lt();
+    var lt2 = require_lt();
     var eq2 = require_eq();
     var neq = require_neq();
     var gte2 = require_gte();
@@ -40900,7 +40900,7 @@ var require_semver2 = __commonJS({
       sort,
       rsort,
       gt: gt2,
-      lt: lt3,
+      lt: lt2,
       eq: eq2,
       neq,
       gte: gte2,
@@ -94025,6 +94025,357 @@ var packages_default = router8;
 var import_express9 = __toESM(require_express2(), 1);
 init_drizzle_orm();
 
+// src/lib/tj-retry.ts
+var AUTH_ERROR_PATTERNS = [
+  /invalid[\s_-]?access/i,
+  /token[\s_-]?expired/i,
+  /session[\s_-]?expired/i,
+  /authentication[\s_-]?failed/i,
+  /access[\s_-]?denied/i,
+  /unauthorized/i
+];
+var BUSY_PATTERNS = [
+  /server[\s.-]?busy/i,
+  /service[\s.-]?unavailable/i,
+  /temporarily[\s.-]?unavailable/i,
+  /airline[\s.-]?not[\s.-]?reachable/i,
+  /please[\s.-]?try[\s.-]?again/i,
+  /timeout/i,
+  /gateway/i,
+  /connection/i
+];
+function isBodyBusy(data) {
+  const msg = extractTripJackError(data, "");
+  return BUSY_PATTERNS.some((p) => p.test(msg));
+}
+function isBodyAuthError(data) {
+  const msg = extractTripJackError(data, "");
+  return AUTH_ERROR_PATTERNS.some((p) => p.test(msg));
+}
+function sleep(ms) {
+  return new Promise((resolve2) => setTimeout(resolve2, ms));
+}
+async function tjPostWithRetry(path4, body, options = {}) {
+  const { maxRetries = 2, timeoutMs = 15e3, context = path4 } = options;
+  const totalAttempts = maxRetries + 1;
+  logger.info("[tj-retry] Calling Booking API:", path4);
+  let tokenRefreshUsed = false;
+  for (let attempt = 1; attempt <= totalAttempts; attempt++) {
+    if (attempt > 1) {
+      const delay = (attempt - 1) * 1e3;
+      logger.info({ context, attempt, delay }, `[tj-retry] retrying after ${delay}ms`);
+      await sleep(delay);
+    }
+    let headers;
+    try {
+      headers = await getTripJackHeaders();
+    } catch (authErr) {
+      logger.error({ context, err: authErr.message }, "[tj-retry] token fetch failed");
+      const e = new Error(authErr.message);
+      e.isAuthError = true;
+      throw e;
+    }
+    const url3 = `${TRIPJACK_BASE}${path4}`;
+    logger.info({ context, attempt, url: url3 }, "[tj-retry] sending request");
+    const loggedHeaders = { ...headers };
+    if (loggedHeaders["apikey"]) loggedHeaders["apikey"] = loggedHeaders["apikey"].slice(0, 6) + "\u2026";
+    if (loggedHeaders["Authorization"]) loggedHeaders["Authorization"] = loggedHeaders["Authorization"].slice(0, 16) + "\u2026";
+    console.log("TripJack Booking URL:", url3);
+    console.log("TripJack Method:", "POST");
+    console.log("TripJack Headers:", JSON.stringify(loggedHeaders));
+    console.log("TripJack Payload:", JSON.stringify(body));
+    let data;
+    try {
+      const resp = await axios_default.post(url3, body, { headers, timeout: timeoutMs });
+      data = resp.data;
+      console.log(
+        `[tj-retry] ${context} \u2014 full response:`,
+        JSON.stringify({ status: resp.status, data }, null, 2).slice(0, 4e3)
+      );
+    } catch (err) {
+      const httpStatus = err.response?.status;
+      const errCode = err.code ?? "?";
+      const errBody = err.response?.data;
+      const safeHeaders = { ...headers };
+      if (safeHeaders["apikey"]) safeHeaders["apikey"] = safeHeaders["apikey"].slice(0, 6) + "\u2026";
+      if (safeHeaders["Authorization"]) safeHeaders["Authorization"] = safeHeaders["Authorization"].slice(0, 16) + "\u2026";
+      console.log(
+        `[tj-retry] ${context} \u2014 request failed:`,
+        JSON.stringify(
+          {
+            url: url3,
+            method: "POST",
+            headers: safeHeaders,
+            payload: body,
+            httpStatus,
+            errCode,
+            responseBody: errBody ?? err.message
+          },
+          null,
+          2
+        ).slice(0, 4e3)
+      );
+      if (httpStatus === 401 || httpStatus === 403 || httpStatus === 405) {
+        if (!tokenRefreshUsed) {
+          tokenRefreshUsed = true;
+          bustTripJackToken();
+          logger.warn(
+            { context, attempt, status: httpStatus },
+            "[tj-retry] HTTP auth/access error \u2014 busting token and retrying"
+          );
+          attempt--;
+          continue;
+        }
+        const errDetails = extractTripJackErrorDetails(
+          errBody,
+          httpStatus === 405 ? "Method Not Allowed" : "Invalid API key"
+        );
+        logger.error(
+          { context, attempt, status: httpStatus, reason: errDetails.message, url: url3 },
+          "[tj-retry] auth rejected after token refresh \u2014 check TRIPJACK_API_KEY and IP whitelist"
+        );
+        const e = new Error(
+          httpStatus === 405 ? `TripJack rejected the request (HTTP 405) at ${url3}. This endpoint accepts POST, so a 405 here means TripJack's gateway is blocking this server before routing the request \u2014 almost always because the server's outbound IP is not yet whitelisted for API access (token exchange and the apikey-header fallback both failed). Ask TripJack support to whitelist this server's IP for TRIPJACK_API_KEY, then retry.` : `TripJack authentication failed: ${errDetails.message}. Check that your API key is active and this server's IP is whitelisted in the TripJack portal.`
+        );
+        e.isAuthError = true;
+        e.tripjackHttpStatus = httpStatus;
+        e.tripjackCode = errDetails.code;
+        e.tripjackMessage = errDetails.message;
+        e.tripjackRaw = errDetails.raw;
+        throw e;
+      }
+      const isTransient = !err.response || errCode === "ECONNABORTED" || errCode === "ETIMEDOUT" || errCode === "ECONNRESET" || httpStatus && httpStatus >= 500;
+      if (isTransient && attempt < totalAttempts) {
+        logger.warn(
+          { context, attempt, code: errCode, status: httpStatus },
+          "[tj-retry] transient network error \u2014 retrying"
+        );
+        continue;
+      }
+      logger.error(
+        { context, attempt, code: errCode, status: httpStatus, err: err.message },
+        "[tj-retry] request failed"
+      );
+      const netErrDetails = extractTripJackErrorDetails(errBody, err.message);
+      err.tripjackHttpStatus = httpStatus;
+      err.tripjackCode = netErrDetails.code ?? errCode;
+      err.tripjackMessage = netErrDetails.message;
+      err.tripjackRaw = netErrDetails.raw;
+      throw err;
+    }
+    const traceId = data?.data?.traceId ?? data?.traceId;
+    const resultIndex = data?.data?.results?.[0]?.resultIndex ?? data?.data?.resultIndex ?? data?.resultIndex;
+    const pnr = data?.data?.pnr;
+    logger.info(
+      { context, attempt, traceId, resultIndex, pnr: pnr ?? void 0 },
+      "[tj-retry] response received"
+    );
+    if (isBodyAuthError(data) && !tokenRefreshUsed) {
+      tokenRefreshUsed = true;
+      bustTripJackToken();
+      const msg = extractTripJackError(data, "auth error");
+      logger.warn({ context, attempt, msg }, "[tj-retry] body auth error \u2014 busting token and retrying");
+      attempt--;
+      continue;
+    }
+    if (data?.status?.success === false && isBodyBusy(data)) {
+      const details = extractTripJackErrorDetails(data, "Server busy");
+      logger.warn({ context, attempt, msg: details.message }, "[tj-retry] busy body response");
+      if (attempt < totalAttempts) continue;
+      const e = new Error("Temporary airline issue. Please try again.");
+      e.isTransient = true;
+      e.tripjackMsg = details.message;
+      e.tripjackHttpStatus = 200;
+      e.tripjackCode = details.code;
+      e.tripjackMessage = details.message;
+      e.tripjackRaw = details.raw;
+      throw e;
+    }
+    if (data?.status?.success === false) {
+      const details = extractTripJackErrorDetails(data, "TripJack returned an unspecified error");
+      logger.warn({ context, attempt, msg: details.message, code: details.code }, "[tj-retry] non-success body response");
+      data.tripjackCode = details.code ?? null;
+      data.tripjackMessage = details.message;
+      return data;
+    }
+    return data;
+  }
+  throw new Error("Unexpected retry loop exit");
+}
+function handleTjError(res, err, context) {
+  if (err.isAuthError) {
+    logger.error({ context, err: err.message }, "[tj-retry] auth error");
+    res.status(503).json({
+      error: err.message,
+      tripjackHttpStatus: err.tripjackHttpStatus ?? null,
+      tripjackCode: err.tripjackCode ?? null,
+      tripjackMessage: err.tripjackMessage ?? err.message
+    });
+    return;
+  }
+  if (err.isTransient) {
+    res.status(503).json({
+      error: "Temporary airline issue. Please try again.",
+      tripjackHttpStatus: err.tripjackHttpStatus ?? null,
+      tripjackCode: err.tripjackCode ?? null,
+      tripjackMessage: err.tripjackMessage ?? err.tripjackMsg ?? null
+    });
+    return;
+  }
+  const httpStatus = err.response?.status || err.tripjackHttpStatus || 502;
+  const details = err.response?.data ? extractTripJackErrorDetails(err.response.data, err.message) : { message: err.tripjackMessage ?? err.message ?? "Unknown error", code: err.tripjackCode, raw: err.tripjackRaw ?? null };
+  logger.error({ context, status: httpStatus, message: details.message, code: details.code }, "[tj-retry] api error");
+  res.status(httpStatus).json({
+    error: details.message,
+    tripjackHttpStatus: httpStatus,
+    tripjackCode: details.code ?? null,
+    tripjackMessage: details.message
+  });
+}
+
+// src/lib/tj-booking-helper.ts
+function extractPnr(dd, fallback) {
+  return dd?.pnr || dd?.pnrDetails?.[0]?.pnr || fallback || null;
+}
+function extractPassengers(dd, pnr) {
+  return (dd?.pnrDetails || []).map((p) => ({
+    name: (p.paxName || p.name || "").trim(),
+    pnr: p.pnr || pnr || "",
+    ticketNum: p.ticketNum || p.eTicketNumber || p.ticket_num || "",
+    paxType: (p.paxType || "ADULT").toUpperCase()
+  })).filter((p) => p.name.length > 0);
+}
+function extractTickets(dd) {
+  return (dd?.pnrDetails || []).map((p) => p.ticketNum || p.eTicketNumber || p.ticket_num).filter(Boolean);
+}
+function dateStr(d) {
+  return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+}
+async function fetchTjBookingDetail(tjBookingRef, context) {
+  const today = /* @__PURE__ */ new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const strategies = [
+    // ── 1. Standard OMS detail endpoint ─────────────────────────────────
+    {
+      label: "detail",
+      isList: false,
+      fn: () => tjPostWithRetry(
+        "/oms/v1/booking/detail",
+        { bookingId: tjBookingRef },
+        { context: `${context}/detail`, timeoutMs: 15e3, maxRetries: 0 }
+      )
+    },
+    // ── 2. Alternate air-scoped path (some TripJack sandbox configs) ─────
+    {
+      label: "air-detail",
+      isList: false,
+      fn: () => tjPostWithRetry(
+        "/oms/v1/air/booking/detail",
+        { bookingId: tjBookingRef },
+        { context: `${context}/air-detail`, timeoutMs: 15e3, maxRetries: 0 }
+      )
+    },
+    // ── 3. Booking list — today only ─────────────────────────────────────
+    {
+      label: "list-today",
+      isList: true,
+      fn: () => tjPostWithRetry(
+        "/oms/v1/booking/list",
+        { fromDate: dateStr(today), toDate: dateStr(today), bookingType: "AIRLINE" },
+        { context: `${context}/list-today`, timeoutMs: 15e3, maxRetries: 0 }
+      )
+    },
+    // ── 4. Booking list — yesterday + today (covers midnight boundary) ───
+    {
+      label: "list-2d",
+      isList: true,
+      fn: () => tjPostWithRetry(
+        "/oms/v1/booking/list",
+        { fromDate: dateStr(yesterday), toDate: dateStr(today), bookingType: "AIRLINE" },
+        { context: `${context}/list-2d`, timeoutMs: 15e3, maxRetries: 0 }
+      )
+    }
+  ];
+  for (const strategy of strategies) {
+    logger.info(
+      { context, tjBookingRef, strategy: strategy.label },
+      "[tj-booking-helper] trying strategy"
+    );
+    try {
+      const raw = await strategy.fn();
+      let dd = raw;
+      if (strategy.isList) {
+        const items = raw?.data?.bookings || raw?.bookings || (Array.isArray(raw?.data) ? raw.data : null) || [];
+        console.log(
+          `[tj-booking-helper] ${context}/${strategy.label} \u2014 list returned ${items.length} booking(s)`,
+          items.length > 0 ? JSON.stringify(items.map((b) => ({
+            bookingId: b.bookingId ?? b.orderId ?? "(no-id)",
+            status: b.status?.booking ?? "(no-status)",
+            pnr: b.pnr ?? "(no-pnr)"
+          })), null, 2).slice(0, 2e3) : "(empty)"
+        );
+        dd = items.find(
+          (b) => b.bookingId === tjBookingRef || b.orderId === tjBookingRef || b.tripJackBookingId === tjBookingRef
+        ) ?? null;
+        if (!dd) {
+          logger.info(
+            { context, tjBookingRef, strategy: strategy.label, total: items.length },
+            "[tj-booking-helper] booking not found in list \u2014 trying next strategy"
+          );
+          continue;
+        }
+      }
+      if (!dd) continue;
+      const rawStatus = (dd?.status?.booking || "").toUpperCase();
+      const pnr = extractPnr(dd);
+      const passengers = extractPassengers(dd, pnr);
+      const tickets = extractTickets(dd);
+      console.log(
+        `[tj-booking-helper] ${context}/${strategy.label} \u2014 SUCCESS:`,
+        JSON.stringify({
+          rawStatus,
+          pnr,
+          pnrDetailsCount: (dd?.pnrDetails ?? []).length,
+          pnrDetailsSample: (dd?.pnrDetails ?? [])[0] ?? null,
+          source: strategy.label
+        }, null, 2)
+      );
+      logger.info(
+        {
+          context,
+          tjBookingRef,
+          strategy: strategy.label,
+          rawStatus,
+          pnr,
+          paxCount: passengers.length,
+          ticketCount: tickets.length
+        },
+        "[tj-booking-helper] strategy succeeded"
+      );
+      const source = strategy.label === "detail" ? "detail" : strategy.label === "air-detail" ? "air-detail" : "list";
+      return { rawStatus, pnr, tjPassengers: passengers, ticketNumbers: tickets, source, rawResponse: dd };
+    } catch (err) {
+      const httpStatus = err?.tripjackHttpStatus ?? err?.response?.status ?? "?";
+      logger.warn(
+        { context, tjBookingRef, strategy: strategy.label, httpStatus, err: err?.message },
+        "[tj-booking-helper] strategy failed \u2014 trying next"
+      );
+      if (httpStatus === 404 && strategy.label === "detail") {
+        logger.warn(
+          { context, tjBookingRef },
+          "[tj-booking-helper] SANDBOX LIMITATION: /oms/v1/booking/detail returned 404. This means TripJack has NOT whitelisted the booking-management (/oms/v1/booking/*) endpoints for this API key / IP. AirBook (/oms/v1/air/book) is whitelisted separately. ACTION REQUIRED: Ask TripJack support to whitelist /oms/v1/booking/detail and /oms/v1/booking/list for the sandbox (and production) API key. Automatic sync WILL work in production once these endpoints are accessible."
+        );
+      }
+    }
+  }
+  logger.warn(
+    { context, tjBookingRef },
+    "[tj-booking-helper] all strategies exhausted \u2014 cannot retrieve booking detail. See SANDBOX LIMITATION log above for the expected reason and resolution steps."
+  );
+  return { rawStatus: "", pnr: null, tjPassengers: [], ticketNumbers: [], source: "none", rawResponse: null };
+}
+
 // src/lib/booking-id.ts
 init_drizzle_orm();
 var TYPE_PREFIX = {
@@ -94533,6 +94884,96 @@ router9.patch("/bookings/ref/:bookingRef/tj-update", async (req, res) => {
     res.status(500).json({ error: err?.message || "Update failed" });
   }
 });
+router9.post("/bookings/ref/:bookingRef/tj-sync", requireAdmin, async (req, res) => {
+  const { bookingRef } = req.params;
+  try {
+    const [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.bookingRef, bookingRef)).limit(1);
+    if (!booking) {
+      res.status(404).json({ error: "Booking not found" });
+      return;
+    }
+    const details = booking.details ?? {};
+    const tjBookingRef = details.tjBookingRef ?? "";
+    if (!tjBookingRef) {
+      res.status(400).json({
+        error: "No TripJack booking reference stored for this booking \u2014 cannot sync",
+        synced: false,
+        message: "The booking does not have a tjBookingRef. It may not be a TripJack flight booking."
+      });
+      return;
+    }
+    logger.info({ bookingRef, tjBookingRef }, "[bookings/tj-sync] starting automatic TripJack sync");
+    const detail = await fetchTjBookingDetail(tjBookingRef, `tj-sync/${bookingRef}`);
+    if (detail.source === "none") {
+      res.json({
+        synced: false,
+        bookingStatus: booking.bookingStatus,
+        pnr: details.pnr ?? null,
+        tjStatus: null,
+        source: "none",
+        message: "TripJack booking detail endpoint is not accessible from this server. In sandbox this is expected \u2014 /oms/v1/booking/* requires separate IP whitelisting from /oms/v1/air/book. Ask TripJack support to whitelist your server IP for the booking-management endpoints, then retry. The booking will be synced automatically once the endpoint becomes accessible."
+      });
+      return;
+    }
+    const tjStatus = detail.rawStatus;
+    const pnr = detail.pnr || details.pnr || null;
+    if (tjStatus === "CONFIRMED") {
+      const patchDetails = {
+        ...details,
+        pnr,
+        tjDetailStatus: "CONFIRMED",
+        tjSyncedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        tjSyncSource: detail.source,
+        ...detail.tjPassengers.length > 0 ? { tjPassengers: detail.tjPassengers } : {},
+        ...detail.ticketNumbers.length > 0 ? { ticketNumbers: detail.ticketNumbers } : {}
+      };
+      await db.update(bookingsTable).set({ bookingStatus: "confirmed", status: "confirmed", details: patchDetails }).where(eq(bookingsTable.bookingRef, bookingRef));
+      logger.info(
+        { bookingRef, tjBookingRef, pnr, source: detail.source, paxCount: detail.tjPassengers.length },
+        "[bookings/tj-sync] booking CONFIRMED \u2014 DB updated"
+      );
+      res.json({
+        synced: true,
+        bookingStatus: "confirmed",
+        pnr,
+        tjStatus: "CONFIRMED",
+        source: detail.source,
+        passengers: detail.tjPassengers,
+        ticketNumbers: detail.ticketNumbers,
+        message: `Booking confirmed by TripJack (via ${detail.source}). PNR: ${pnr ?? "(not yet issued)"}`
+      });
+    } else if (tjStatus === "FAILED" || tjStatus === "CANCELLED") {
+      await db.update(bookingsTable).set({
+        bookingStatus: "failed",
+        status: "cancelled",
+        failureCode: "tj_failed",
+        failureReason: `TripJack booking ${tjStatus.toLowerCase()} (auto-synced)`,
+        details: { ...details, tjDetailStatus: tjStatus, tjSyncedAt: (/* @__PURE__ */ new Date()).toISOString() }
+      }).where(eq(bookingsTable.bookingRef, bookingRef));
+      logger.warn({ bookingRef, tjBookingRef, tjStatus }, "[bookings/tj-sync] booking FAILED/CANCELLED \u2014 DB updated");
+      res.json({
+        synced: true,
+        bookingStatus: "failed",
+        pnr: null,
+        tjStatus,
+        source: detail.source,
+        message: `TripJack reports this booking as ${tjStatus}. DB updated to failed/cancelled.`
+      });
+    } else {
+      res.json({
+        synced: false,
+        bookingStatus: booking.bookingStatus,
+        pnr,
+        tjStatus: tjStatus || "(pending/unknown)",
+        source: detail.source,
+        message: "TripJack is still processing this booking (status: PENDING). Will be synced automatically by the background poller once TripJack confirms."
+      });
+    }
+  } catch (err) {
+    logger.error({ bookingRef, err: err?.message }, "[bookings/tj-sync] unexpected error");
+    res.status(500).json({ error: err?.message || "Failed to sync booking from TripJack" });
+  }
+});
 router9.post("/bookings/ref/:bookingRef/force-confirm", requireAdmin, async (req, res) => {
   const { bookingRef } = req.params;
   const { pnr, tjBookingRef, ticketNumbers } = req.body ?? {};
@@ -94722,7 +95163,7 @@ var SERVICE_EMOJI = {
 };
 function generalBookingEmailHTML(data) {
   const emoji3 = SERVICE_EMOJI[data.bookingType] ?? "\u{1F4CB}";
-  const dateStr = new Date(data.travelDate).toLocaleDateString("en-IN", {
+  const dateStr2 = new Date(data.travelDate).toLocaleDateString("en-IN", {
     day: "2-digit",
     month: "long",
     year: "numeric"
@@ -94792,7 +95233,7 @@ function generalBookingEmailHTML(data) {
     </div>
     <div class="row">
       <label>Travel Date</label>
-      <span>${dateStr}</span>
+      <span>${dateStr2}</span>
     </div>
     <div class="row">
       <label>${data.bookingType === "hotel" ? "Rooms" : "Passengers"}</label>
@@ -95161,7 +95602,7 @@ function formatPhone3(raw) {
 }
 function buildSmsBody(data) {
   const typeLabel = data.bookingType.charAt(0).toUpperCase() + data.bookingType.slice(1);
-  const dateStr = (() => {
+  const dateStr2 = (() => {
     try {
       return new Date(data.travelDate).toLocaleDateString("en-IN", {
         day: "2-digit",
@@ -95181,7 +95622,7 @@ function buildSmsBody(data) {
   } else if (data.bookingType === "hotel" && data.hotelName) {
     detail = ` | ${data.hotelName}`;
   }
-  return `Your ${typeLabel} booking with ${APP_NAME} is confirmed${detail}. Booking ID: ${data.bookingId} | Date: ${dateStr} | Amount: ${amount}. Support: ${APP_SUPPORT_PHONE}`;
+  return `Your ${typeLabel} booking with ${APP_NAME} is confirmed${detail}. Booking ID: ${data.bookingId} | Date: ${dateStr2} | Amount: ${amount}. Support: ${APP_SUPPORT_PHONE}`;
 }
 async function sendBookingEmail(data) {
   if (!data.passengerEmail) {
@@ -95244,7 +95685,7 @@ async function sendBookingWhatsApp(data) {
     logger.warn(`[notification/whatsapp] No phone number \u2014 skipping (booking: ${data.bookingId})`);
     return { sent: false, reason: "No passenger phone number" };
   }
-  const dateStr = (() => {
+  const dateStr2 = (() => {
     try {
       return new Date(data.travelDate).toLocaleDateString("en-IN", {
         day: "2-digit",
@@ -95262,7 +95703,7 @@ async function sendBookingWhatsApp(data) {
     bookingType: data.bookingType,
     from: data.from || "",
     to: data.to || "",
-    date: dateStr,
+    date: dateStr2,
     amount: data.totalAmount,
     invoiceUrl: data.invoiceUrl,
     airline: data.airline,
@@ -98346,214 +98787,6 @@ var admin_bookings_default = router22;
 var import_express24 = __toESM(require_express2(), 1);
 init_drizzle_orm();
 
-// src/lib/tj-retry.ts
-var AUTH_ERROR_PATTERNS = [
-  /invalid[\s_-]?access/i,
-  /token[\s_-]?expired/i,
-  /session[\s_-]?expired/i,
-  /authentication[\s_-]?failed/i,
-  /access[\s_-]?denied/i,
-  /unauthorized/i
-];
-var BUSY_PATTERNS = [
-  /server[\s.-]?busy/i,
-  /service[\s.-]?unavailable/i,
-  /temporarily[\s.-]?unavailable/i,
-  /airline[\s.-]?not[\s.-]?reachable/i,
-  /please[\s.-]?try[\s.-]?again/i,
-  /timeout/i,
-  /gateway/i,
-  /connection/i
-];
-function isBodyBusy(data) {
-  const msg = extractTripJackError(data, "");
-  return BUSY_PATTERNS.some((p) => p.test(msg));
-}
-function isBodyAuthError(data) {
-  const msg = extractTripJackError(data, "");
-  return AUTH_ERROR_PATTERNS.some((p) => p.test(msg));
-}
-function sleep(ms) {
-  return new Promise((resolve2) => setTimeout(resolve2, ms));
-}
-async function tjPostWithRetry(path4, body, options = {}) {
-  const { maxRetries = 2, timeoutMs = 15e3, context = path4 } = options;
-  const totalAttempts = maxRetries + 1;
-  logger.info("[tj-retry] Calling Booking API:", path4);
-  let tokenRefreshUsed = false;
-  for (let attempt = 1; attempt <= totalAttempts; attempt++) {
-    if (attempt > 1) {
-      const delay = (attempt - 1) * 1e3;
-      logger.info({ context, attempt, delay }, `[tj-retry] retrying after ${delay}ms`);
-      await sleep(delay);
-    }
-    let headers;
-    try {
-      headers = await getTripJackHeaders();
-    } catch (authErr) {
-      logger.error({ context, err: authErr.message }, "[tj-retry] token fetch failed");
-      const e = new Error(authErr.message);
-      e.isAuthError = true;
-      throw e;
-    }
-    const url3 = `${TRIPJACK_BASE}${path4}`;
-    logger.info({ context, attempt, url: url3 }, "[tj-retry] sending request");
-    const loggedHeaders = { ...headers };
-    if (loggedHeaders["apikey"]) loggedHeaders["apikey"] = loggedHeaders["apikey"].slice(0, 6) + "\u2026";
-    if (loggedHeaders["Authorization"]) loggedHeaders["Authorization"] = loggedHeaders["Authorization"].slice(0, 16) + "\u2026";
-    console.log("TripJack Booking URL:", url3);
-    console.log("TripJack Method:", "POST");
-    console.log("TripJack Headers:", JSON.stringify(loggedHeaders));
-    console.log("TripJack Payload:", JSON.stringify(body));
-    let data;
-    try {
-      const resp = await axios_default.post(url3, body, { headers, timeout: timeoutMs });
-      data = resp.data;
-      console.log(
-        `[tj-retry] ${context} \u2014 full response:`,
-        JSON.stringify({ status: resp.status, data }, null, 2).slice(0, 4e3)
-      );
-    } catch (err) {
-      const httpStatus = err.response?.status;
-      const errCode = err.code ?? "?";
-      const errBody = err.response?.data;
-      const safeHeaders = { ...headers };
-      if (safeHeaders["apikey"]) safeHeaders["apikey"] = safeHeaders["apikey"].slice(0, 6) + "\u2026";
-      if (safeHeaders["Authorization"]) safeHeaders["Authorization"] = safeHeaders["Authorization"].slice(0, 16) + "\u2026";
-      console.log(
-        `[tj-retry] ${context} \u2014 request failed:`,
-        JSON.stringify(
-          {
-            url: url3,
-            method: "POST",
-            headers: safeHeaders,
-            payload: body,
-            httpStatus,
-            errCode,
-            responseBody: errBody ?? err.message
-          },
-          null,
-          2
-        ).slice(0, 4e3)
-      );
-      if (httpStatus === 401 || httpStatus === 403 || httpStatus === 405) {
-        if (!tokenRefreshUsed) {
-          tokenRefreshUsed = true;
-          bustTripJackToken();
-          logger.warn(
-            { context, attempt, status: httpStatus },
-            "[tj-retry] HTTP auth/access error \u2014 busting token and retrying"
-          );
-          attempt--;
-          continue;
-        }
-        const errDetails = extractTripJackErrorDetails(
-          errBody,
-          httpStatus === 405 ? "Method Not Allowed" : "Invalid API key"
-        );
-        logger.error(
-          { context, attempt, status: httpStatus, reason: errDetails.message, url: url3 },
-          "[tj-retry] auth rejected after token refresh \u2014 check TRIPJACK_API_KEY and IP whitelist"
-        );
-        const e = new Error(
-          httpStatus === 405 ? `TripJack rejected the request (HTTP 405) at ${url3}. This endpoint accepts POST, so a 405 here means TripJack's gateway is blocking this server before routing the request \u2014 almost always because the server's outbound IP is not yet whitelisted for API access (token exchange and the apikey-header fallback both failed). Ask TripJack support to whitelist this server's IP for TRIPJACK_API_KEY, then retry.` : `TripJack authentication failed: ${errDetails.message}. Check that your API key is active and this server's IP is whitelisted in the TripJack portal.`
-        );
-        e.isAuthError = true;
-        e.tripjackHttpStatus = httpStatus;
-        e.tripjackCode = errDetails.code;
-        e.tripjackMessage = errDetails.message;
-        e.tripjackRaw = errDetails.raw;
-        throw e;
-      }
-      const isTransient = !err.response || errCode === "ECONNABORTED" || errCode === "ETIMEDOUT" || errCode === "ECONNRESET" || httpStatus && httpStatus >= 500;
-      if (isTransient && attempt < totalAttempts) {
-        logger.warn(
-          { context, attempt, code: errCode, status: httpStatus },
-          "[tj-retry] transient network error \u2014 retrying"
-        );
-        continue;
-      }
-      logger.error(
-        { context, attempt, code: errCode, status: httpStatus, err: err.message },
-        "[tj-retry] request failed"
-      );
-      const netErrDetails = extractTripJackErrorDetails(errBody, err.message);
-      err.tripjackHttpStatus = httpStatus;
-      err.tripjackCode = netErrDetails.code ?? errCode;
-      err.tripjackMessage = netErrDetails.message;
-      err.tripjackRaw = netErrDetails.raw;
-      throw err;
-    }
-    const traceId = data?.data?.traceId ?? data?.traceId;
-    const resultIndex = data?.data?.results?.[0]?.resultIndex ?? data?.data?.resultIndex ?? data?.resultIndex;
-    const pnr = data?.data?.pnr;
-    logger.info(
-      { context, attempt, traceId, resultIndex, pnr: pnr ?? void 0 },
-      "[tj-retry] response received"
-    );
-    if (isBodyAuthError(data) && !tokenRefreshUsed) {
-      tokenRefreshUsed = true;
-      bustTripJackToken();
-      const msg = extractTripJackError(data, "auth error");
-      logger.warn({ context, attempt, msg }, "[tj-retry] body auth error \u2014 busting token and retrying");
-      attempt--;
-      continue;
-    }
-    if (data?.status?.success === false && isBodyBusy(data)) {
-      const details = extractTripJackErrorDetails(data, "Server busy");
-      logger.warn({ context, attempt, msg: details.message }, "[tj-retry] busy body response");
-      if (attempt < totalAttempts) continue;
-      const e = new Error("Temporary airline issue. Please try again.");
-      e.isTransient = true;
-      e.tripjackMsg = details.message;
-      e.tripjackHttpStatus = 200;
-      e.tripjackCode = details.code;
-      e.tripjackMessage = details.message;
-      e.tripjackRaw = details.raw;
-      throw e;
-    }
-    if (data?.status?.success === false) {
-      const details = extractTripJackErrorDetails(data, "TripJack returned an unspecified error");
-      logger.warn({ context, attempt, msg: details.message, code: details.code }, "[tj-retry] non-success body response");
-      data.tripjackCode = details.code ?? null;
-      data.tripjackMessage = details.message;
-      return data;
-    }
-    return data;
-  }
-  throw new Error("Unexpected retry loop exit");
-}
-function handleTjError(res, err, context) {
-  if (err.isAuthError) {
-    logger.error({ context, err: err.message }, "[tj-retry] auth error");
-    res.status(503).json({
-      error: err.message,
-      tripjackHttpStatus: err.tripjackHttpStatus ?? null,
-      tripjackCode: err.tripjackCode ?? null,
-      tripjackMessage: err.tripjackMessage ?? err.message
-    });
-    return;
-  }
-  if (err.isTransient) {
-    res.status(503).json({
-      error: "Temporary airline issue. Please try again.",
-      tripjackHttpStatus: err.tripjackHttpStatus ?? null,
-      tripjackCode: err.tripjackCode ?? null,
-      tripjackMessage: err.tripjackMessage ?? err.tripjackMsg ?? null
-    });
-    return;
-  }
-  const httpStatus = err.response?.status || err.tripjackHttpStatus || 502;
-  const details = err.response?.data ? extractTripJackErrorDetails(err.response.data, err.message) : { message: err.tripjackMessage ?? err.message ?? "Unknown error", code: err.tripjackCode, raw: err.tripjackRaw ?? null };
-  logger.error({ context, status: httpStatus, message: details.message, code: details.code }, "[tj-retry] api error");
-  res.status(httpStatus).json({
-    error: details.message,
-    tripjackHttpStatus: httpStatus,
-    tripjackCode: details.code ?? null,
-    tripjackMessage: details.message
-  });
-}
-
 // src/routes/verify-payment.ts
 var import_express23 = __toESM(require_express2(), 1);
 import crypto4 from "crypto";
@@ -99065,50 +99298,23 @@ router24.post("/book-flight", async (req, res) => {
     let ticketNumbers = [];
     let detailFetched = false;
     if (tjBookingRef) {
-      for (let detailAttempt = 1; detailAttempt <= 3 && !detailFetched; detailAttempt++) {
-        if (detailAttempt > 1) {
-          const delayMs = detailAttempt === 2 ? 5e3 : 1e4;
-          logger.info({ paymentId, tjBookingRef, delayMs }, `[book-flight] STEP 4.5: retrying detail (attempt ${detailAttempt}) after ${delayMs}ms`);
-          await new Promise((r) => setTimeout(r, delayMs));
-        }
-        try {
-          const detailRes = await tjPostWithRetry(
-            "/oms/v1/booking/detail",
-            { bookingId: tjBookingRef },
-            { context: `book-flight/detail-a${detailAttempt}`, timeoutMs: 15e3, maxRetries: 0 }
-          );
-          const dd = detailRes || {};
-          const rawStatus = (dd.status?.booking || "").toUpperCase();
-          console.log(
-            `[book-flight] STEP 4.5 attempt ${detailAttempt} \u2014 TripJack detail response:`,
-            JSON.stringify({ tjBookingRef, rawStatus, pnr: dd.pnr ?? null, pnrDetailsCount: (dd.pnrDetails ?? []).length, pnrDetailsSample: (dd.pnrDetails ?? [])[0] ?? null }, null, 2)
-          );
-          detailPnr = dd.pnr || dd.pnrDetails?.[0]?.pnr || pnr;
-          tjDetailStatus = rawStatus || tjDetailStatus;
-          tjPassengers = (dd.pnrDetails || []).map((p) => ({
-            name: (p.paxName || p.name || "").trim(),
-            pnr: p.pnr || detailPnr || "",
-            ticketNum: p.ticketNum || p.eTicketNumber || p.ticket_num || "",
-            paxType: (p.paxType || "ADULT").toUpperCase()
-          })).filter((p) => p.name.length > 0);
-          ticketNumbers = (dd.pnrDetails || []).map((p) => p.ticketNum || p.eTicketNumber || p.ticket_num).filter(Boolean);
-          logger.info(
-            { paymentId, tjBookingRef, detailPnr, tjDetailStatus, paxCount: tjPassengers.length, ticketCount: ticketNumbers.length, attempt: detailAttempt },
-            "[book-flight] STEP 4.5: booking detail enriched"
-          );
-          detailFetched = true;
-        } catch (detailErr) {
-          const httpStatus = detailErr?.tripjackHttpStatus ?? detailErr?.response?.status ?? "?";
-          logger.warn(
-            { paymentId, tjBookingRef, attempt: detailAttempt, httpStatus, err: detailErr?.message },
-            "[book-flight] STEP 4.5: detail attempt failed \u2014 will retry or defer to background poller"
-          );
-        }
-      }
-      if (!detailFetched) {
+      logger.info({ paymentId, tjBookingRef }, "[book-flight] STEP 4.5: fetching booking detail (multi-strategy)");
+      await new Promise((r) => setTimeout(r, 3e3));
+      const detail = await fetchTjBookingDetail(tjBookingRef, "book-flight");
+      if (detail.source !== "none") {
+        detailPnr = detail.pnr || pnr;
+        tjDetailStatus = detail.rawStatus || tjDetailStatus;
+        tjPassengers = detail.tjPassengers;
+        ticketNumbers = detail.ticketNumbers;
+        detailFetched = true;
+        logger.info(
+          { paymentId, tjBookingRef, detailPnr, tjDetailStatus, source: detail.source, paxCount: tjPassengers.length },
+          "[book-flight] STEP 4.5: booking detail enriched"
+        );
+      } else {
         logger.warn(
           { paymentId, tjBookingRef },
-          "[book-flight] STEP 4.5: all detail attempts failed \u2014 booking stored as pending, background poller will update"
+          "[book-flight] STEP 4.5: all strategies failed \u2014 booking stored as pending, background poller will update when TripJack endpoint becomes accessible"
         );
       }
     }
@@ -99226,34 +99432,26 @@ router24.get("/booking-status/:bookingRef", async (req, res) => {
   let ticketNumbers = details.ticketNumbers || [];
   const shouldFetchFromTj = storedTjRef && (currentStatus === "pending" || currentStatus === "confirmed" && !currentPnr);
   if (shouldFetchFromTj) {
-    try {
-      const tjData = await tjPostWithRetry(
-        "/oms/v1/booking/detail",
-        { bookingId: storedTjRef },
-        { context: "booking-status-check", timeoutMs: 15e3, maxRetries: 1 }
-      );
-      const dd = tjData || {};
-      const tjBookingStatus = (dd.status?.booking || "").toUpperCase();
-      const refreshedPnr = dd.pnr || dd.pnrDetails?.[0]?.pnr || currentPnr;
-      const refreshedPassengers = (dd.pnrDetails || []).map((p) => ({
-        name: (p.paxName || p.name || "").trim(),
-        pnr: p.pnr || refreshedPnr || "",
-        ticketNum: p.ticketNum || p.eTicketNumber || p.ticket_num || "",
-        paxType: (p.paxType || "ADULT").toUpperCase()
-      })).filter((p) => p.name.length > 0);
-      const refreshedTickets = (dd.pnrDetails || []).map((p) => p.ticketNum || p.eTicketNumber || p.ticket_num).filter(Boolean);
-      logger.info({ bookingRef, tjBookingStatus, refreshedPnr, paxCount: refreshedPassengers.length }, "[booking-status] TripJack status refresh");
+    const detail = await fetchTjBookingDetail(storedTjRef, "booking-status-check").catch((err) => {
+      logger.warn({ bookingRef, err: err?.message }, "[booking-status] fetchTjBookingDetail threw \u2014 returning stored status");
+      return null;
+    });
+    if (detail && detail.source !== "none") {
+      const tjBookingStatus = detail.rawStatus;
+      const refreshedPnr = detail.pnr || currentPnr;
+      logger.info({ bookingRef, tjBookingStatus, refreshedPnr, source: detail.source, paxCount: detail.tjPassengers.length }, "[booking-status] TripJack status refresh");
       if (tjBookingStatus === "CONFIRMED") {
         currentStatus = "confirmed";
         if (refreshedPnr) currentPnr = refreshedPnr;
-        if (refreshedPassengers.length > 0) tjPassengers = refreshedPassengers;
-        if (refreshedTickets.length > 0) ticketNumbers = refreshedTickets;
+        if (detail.tjPassengers.length > 0) tjPassengers = detail.tjPassengers;
+        if (detail.ticketNumbers.length > 0) ticketNumbers = detail.ticketNumbers;
         await db.update(bookingsTable).set({
           bookingStatus: "confirmed",
           status: "confirmed",
           details: {
             ...details,
             pnr: currentPnr,
+            tjDetailStatus: "CONFIRMED",
             ...tjPassengers.length > 0 ? { tjPassengers } : {},
             ...ticketNumbers.length > 0 ? { ticketNumbers } : {}
           }
@@ -99262,8 +99460,8 @@ router24.get("/booking-status/:bookingRef", async (req, res) => {
         currentStatus = "failed";
         await db.update(bookingsTable).set({ bookingStatus: "failed", status: "cancelled", failureCode: "api_error" }).where(eq(bookingsTable.bookingRef, bookingRef));
       }
-    } catch (err) {
-      logger.warn({ bookingRef, err: err?.message }, "[booking-status] TripJack refresh failed \u2014 returning stored status");
+    } else {
+      logger.warn({ bookingRef }, "[booking-status] all TripJack strategies failed \u2014 returning stored status");
     }
   }
   res.json({
@@ -100408,20 +100606,6 @@ init_drizzle_orm();
 var POLL_INTERVAL_MS = 6e4;
 var GIVE_UP_HOURS = 24;
 var MAX_BATCH = 20;
-function extractPnr(dd, fallback) {
-  return dd?.pnr || dd?.pnrDetails?.[0]?.pnr || fallback || null;
-}
-function extractPassengers(dd, pnr) {
-  return (dd?.pnrDetails || []).map((p) => ({
-    name: (p.paxName || p.name || "").trim(),
-    pnr: p.pnr || pnr || "",
-    ticketNum: p.ticketNum || p.eTicketNumber || p.ticket_num || "",
-    paxType: (p.paxType || "ADULT").toUpperCase()
-  })).filter((p) => p.name.length > 0);
-}
-function extractTickets(dd) {
-  return (dd?.pnrDetails || []).map((p) => p.ticketNum || p.eTicketNumber || p.ticket_num).filter(Boolean);
-}
 async function pollOnce() {
   const giveUpBefore = new Date(Date.now() - GIVE_UP_HOURS * 60 * 60 * 1e3);
   const recentCutoff = new Date(Date.now() - 30 * 60 * 1e3);
@@ -100459,20 +100643,24 @@ async function pollOnce() {
     const details = booking.details || {};
     const tjBookingRef = details.tjBookingRef;
     const bookingRef = booking.bookingRef ?? "(unknown)";
-    try {
-      const dd = await tjPostWithRetry(
-        "/oms/v1/booking/detail",
-        { bookingId: tjBookingRef },
-        { context: `tj-poller/${bookingRef}`, timeoutMs: 15e3, maxRetries: 1 }
+    const detail = await fetchTjBookingDetail(
+      tjBookingRef,
+      `tj-poller/${bookingRef}`
+    ).catch((err) => {
+      logger.warn(
+        { bookingRef, tjBookingRef, err: err?.message },
+        "[tj-poller] fetchTjBookingDetail threw \u2014 will retry next cycle"
       );
-      const rawStatus = (dd?.status?.booking || "").toUpperCase();
-      const refreshedPnr = extractPnr(dd, details.pnr);
-      const passengers = extractPassengers(dd, refreshedPnr);
-      const tickets = extractTickets(dd);
-      console.log(
-        `[tj-poller] ${bookingRef} / ${tjBookingRef} \u2014 detail response:`,
-        JSON.stringify({ rawStatus, pnr: refreshedPnr, pnrDetailsCount: (dd?.pnrDetails ?? []).length, pnrDetailsSample: (dd?.pnrDetails ?? [])[0] ?? null }, null, 2)
+      return null;
+    });
+    if (!detail || detail.source === "none") {
+      logger.info(
+        { bookingRef, tjBookingRef },
+        "[tj-poller] all strategies failed \u2014 will re-check next cycle"
       );
+    } else {
+      const rawStatus = detail.rawStatus;
+      const refreshedPnr = detail.pnr || details.pnr || null;
       if (rawStatus === "CONFIRMED") {
         await db.update(bookingsTable).set({
           bookingStatus: "confirmed",
@@ -100481,12 +100669,13 @@ async function pollOnce() {
             ...details,
             pnr: refreshedPnr,
             tjDetailStatus: "CONFIRMED",
-            ...passengers.length > 0 ? { tjPassengers: passengers } : {},
-            ...tickets.length > 0 ? { ticketNumbers: tickets } : {}
+            source: detail.source,
+            ...detail.tjPassengers.length > 0 ? { tjPassengers: detail.tjPassengers } : {},
+            ...detail.ticketNumbers.length > 0 ? { ticketNumbers: detail.ticketNumbers } : {}
           }
         }).where(eq(bookingsTable.bookingRef, bookingRef));
         logger.info(
-          { bookingRef, tjBookingRef, pnr: refreshedPnr, tickets: tickets.length },
+          { bookingRef, tjBookingRef, pnr: refreshedPnr, tickets: detail.ticketNumbers.length, source: detail.source },
           "[tj-poller] booking CONFIRMED by TripJack \u2014 DB updated"
         );
       } else if (rawStatus === "FAILED" || rawStatus === "CANCELLED") {
@@ -100500,16 +100689,10 @@ async function pollOnce() {
         logger.warn({ bookingRef, tjBookingRef, rawStatus }, "[tj-poller] booking FAILED/CANCELLED by TripJack \u2014 DB updated");
       } else {
         logger.info(
-          { bookingRef, tjBookingRef, rawStatus: rawStatus || "(absent)" },
+          { bookingRef, tjBookingRef, rawStatus: rawStatus || "(absent)", source: detail.source },
           "[tj-poller] booking still pending \u2014 will re-check next cycle"
         );
       }
-    } catch (err) {
-      const httpStatus = err?.tripjackHttpStatus ?? err?.response?.status;
-      logger.warn(
-        { bookingRef, tjBookingRef, httpStatus, err: err?.message },
-        "[tj-poller] detail call failed \u2014 will retry next cycle"
-      );
     }
     if (booking.bookingStatus === "pending") {
       const createdAt = booking.createdAt ? new Date(booking.createdAt) : null;
