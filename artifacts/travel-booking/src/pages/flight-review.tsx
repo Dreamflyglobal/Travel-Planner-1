@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
   Plane, ArrowLeft, CheckCircle2, ChevronRight,
-  User, Armchair, Luggage, ShieldCheck, ShieldAlert, Loader2, Lock,
+  User, Armchair, Luggage, ShieldCheck, ShieldAlert, Loader2, Lock, UtensilsCrossed,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -47,6 +47,7 @@ export default function FlightReview() {
 
   const seatAddOn    = session.seatAddOnPrice    ?? 0;
   const baggageAddOn = session.baggageAddOnPrice ?? 0;
+  const mealAddOn    = session.mealAddOnPrice    ?? 0;
   const baseFareTotal = session.baseFare * session.travelers;
   const convFeeTotal  = session.convFee  * session.travelers;
   const grandTotal    = session.totalBase;
@@ -255,6 +256,24 @@ export default function FlightReview() {
                     </div>
                   </div>
 
+                  {/* Meal */}
+                  <div className="flex items-start gap-3 p-3 rounded-xl border bg-slate-50">
+                    <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                      <UtensilsCrossed className="w-4 h-4 text-emerald-600" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-slate-700">Meal Preference</p>
+                      {session.selectedMealDesc ? (
+                        <p className="text-xs text-slate-600 mt-1">
+                          {session.selectedMealDesc}
+                          {mealAddOn > 0 && ` · +₹${mealAddOn.toLocaleString("en-IN")}`}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground mt-1">No meal selected</p>
+                      )}
+                    </div>
+                  </div>
+
                   {/* Baggage */}
                   <div className="flex items-start gap-3 p-3 rounded-xl border bg-slate-50">
                     <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center shrink-0">
@@ -322,6 +341,13 @@ export default function FlightReview() {
                         <div className="flex justify-between text-sm text-slate-600">
                           <span>Seat Charges</span>
                           <span className="font-medium">+₹{seatAddOn.toLocaleString("en-IN")}</span>
+                        </div>
+                      )}
+
+                      {mealAddOn > 0 && (
+                        <div className="flex justify-between text-sm text-slate-600">
+                          <span>Meal ({session.selectedMealDesc})</span>
+                          <span className="font-medium">+₹{mealAddOn.toLocaleString("en-IN")}</span>
                         </div>
                       )}
 

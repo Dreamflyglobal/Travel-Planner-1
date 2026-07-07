@@ -32,6 +32,9 @@ export type FlightBookingSession = {
   extraBaggageKg: number;
   extraBaggageCost: number;
   extraBaggageCode: string;
+  selectedMealCode?: string;
+  selectedMealDesc?: string;
+  mealAddOnCost?: number;
   rawPrice: number;
   hiddenMarkup: number;
   baseFare: number;
@@ -39,6 +42,7 @@ export type FlightBookingSession = {
   totalBase: number;
   seatAddOnPrice?: number;
   baggageAddOnPrice?: number;
+  mealAddOnPrice?: number;
   lockedTotalPrice?: number;
   isAgent: boolean;
   agentSavings: number;
@@ -53,6 +57,12 @@ export type FlightBookingSession = {
     cancellationCharge?: number;
     dateChangeCharge?: number;
     note?: string;
+    tfr?: {
+      CANCELLATION?: Array<{ amount?: number; additionalFee?: number; policyInfo?: string; st?: string; et?: string }>;
+      DATECHANGE?: Array<{ amount?: number; additionalFee?: number; policyInfo?: string; st?: string; et?: string }>;
+      NO_SHOW?: Array<{ policyInfo?: string; st?: string; et?: string }>;
+      SEAT_CHARGEABLE?: Array<{ policyInfo?: string }>;
+    };
   };
 };
 

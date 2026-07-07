@@ -483,6 +483,7 @@ router.post("/book-flight", async (req, res): Promise<void> => {
       // Only include SSR arrays when non-empty — TripJack rejects empty arrays for optional fields
       if (p.seatCode)    traveller.ssrSeatInfos    = [{ key: p.seatCode,    code: p.seatCode    }];
       if (p.baggageCode) traveller.ssrBaggageInfos = [{ key: p.baggageCode, code: p.baggageCode }];
+      if (p.mealCode)    traveller.ssrMealInfos    = [{ key: p.mealCode,    code: p.mealCode    }];
       return traveller;
     }),
     deliveryInfo: {

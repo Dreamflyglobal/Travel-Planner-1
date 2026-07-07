@@ -93030,7 +93030,20 @@ function mapTripJackFlight(item, idx, fromIata, toIata, traceId = "") {
     const rTNum = typeof rTRaw === "number" ? rTRaw : rTStr !== "" && !Number.isNaN(Number(rTStr)) ? Number(rTStr) : null;
     const nRF = adultFd?.nRF === true || adultFd?.nRF === 1;
     const refundable = rTNum === 1 || rTNum === 2 || rTStr === "FULL_REFUNDABLE" || rTStr === "PARTIAL_REFUNDABLE" || rTStr === "REFUNDABLE" ? true : rTNum === 0 || rTStr === "NON_REFUNDABLE" ? false : !nRF;
-    const apiLabel = (pl.fareIdentifier || pl.fn || adultFd.fareIdentifier || "").trim();
+    const FARE_SOURCE_LABEL = {
+      PUBLISHED: "Regular",
+      NDC_VALUE: "Airline Direct",
+      CORPORATE: "Corporate",
+      SME: "SME",
+      SPECIAL: "Special",
+      OFFER: "Offer",
+      GOVERNMENT: "Government",
+      STUDENT: "Student",
+      SENIOR: "Senior",
+      ARMED_FORCE: "Armed Forces"
+    };
+    const rawFareId = (pl.fareIdentifier || pl.fn || adultFd?.fareIdentifier || "").trim();
+    const apiLabel = FARE_SOURCE_LABEL[rawFareId] || rawFareId;
     const fareLabel = apiLabel || (cc === "BUSINESS" || cc === "FIRST" ? refundable ? "Business Flex" : "Business Saver" : cc === "PREMIUM_ECONOMY" ? "Premium Economy" : refundable ? "Flex" : "Saver");
     const bI = adultFd?.bI ?? {};
     const checkedBaggage = bI.iB ? String(bI.iB) : bI.checkIn ? String(bI.checkIn) : cc === "BUSINESS" || cc === "FIRST" ? "30 kg" : cc === "PREMIUM_ECONOMY" ? "20 kg" : "15 kg";
@@ -93050,6 +93063,15 @@ function mapTripJackFlight(item, idx, fromIata, toIata, traceId = "") {
     };
   }).filter(Boolean);
   fareOptions.sort((a, b) => a.totalFare - b.totalFare);
+  const _seenFareKey = /* @__PURE__ */ new Set();
+  const fareOptionsDeduped = fareOptions.filter((f) => {
+    const key = `${f.cabinClass}:${f.totalFare}`;
+    if (_seenFareKey.has(key)) return false;
+    _seenFareKey.add(key);
+    return true;
+  });
+  fareOptions.length = 0;
+  fareOptionsDeduped.forEach((f) => fareOptions.push(f));
   const priceInfo = item.totalPriceList?.[0]?.fd?.ADULT;
   const price = fareOptions.length > 0 ? Math.min(...fareOptions.map((f) => f.totalFare)) : priceInfo?.fC?.TF || priceInfo?.fC?.BF || 0;
   const seatsLeft = priceInfo?.sR ?? 9;
@@ -99234,6 +99256,7 @@ ${"#".repeat(80)}`);
       if (p.email && String(p.email).trim()) traveller.eml = String(p.email).trim();
       if (p.seatCode) traveller.ssrSeatInfos = [{ key: p.seatCode, code: p.seatCode }];
       if (p.baggageCode) traveller.ssrBaggageInfos = [{ key: p.baggageCode, code: p.baggageCode }];
+      if (p.mealCode) traveller.ssrMealInfos = [{ key: p.mealCode, code: p.mealCode }];
       return traveller;
     }),
     deliveryInfo: {

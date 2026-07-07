@@ -229,9 +229,21 @@ function mapTripJackFlight(item: any, idx: number, fromIata: string, toIata: str
           // non-refundable flag rather than guessing off cabin class.
           : !nRF;
 
-      // Fare label — prefer API-provided name, derive from refundability otherwise
-      const apiLabel: string =
-        (pl.fareIdentifier || pl.fn || adultFd.fareIdentifier || "").trim();
+      // Fare label — map TripJack internal fareIdentifier values to user-friendly names
+      const FARE_SOURCE_LABEL: Record<string, string> = {
+        PUBLISHED:   "Regular",
+        NDC_VALUE:   "Airline Direct",
+        CORPORATE:   "Corporate",
+        SME:         "SME",
+        SPECIAL:     "Special",
+        OFFER:       "Offer",
+        GOVERNMENT:  "Government",
+        STUDENT:     "Student",
+        SENIOR:      "Senior",
+        ARMED_FORCE: "Armed Forces",
+      };
+      const rawFareId: string = (pl.fareIdentifier || pl.fn || adultFd?.fareIdentifier || "").trim();
+      const apiLabel: string = FARE_SOURCE_LABEL[rawFareId] || rawFareId;
       const fareLabel: string = apiLabel ||
         (cc === "BUSINESS" || cc === "FIRST" ? (refundable ? "Business Flex" : "Business Saver") :
          cc === "PREMIUM_ECONOMY" ? "Premium Economy" :
@@ -272,6 +284,19 @@ function mapTripJackFlight(item: any, idx: number, fromIata: string, toIata: str
 
   // Sort cheapest-first within each cabin so the best price leads
   fareOptions.sort((a, b) => a.totalFare - b.totalFare);
+
+  // Deduplicate: if two entries have the same cabinClass + totalFare they are the
+  // same fare from different source channels (e.g. PUBLISHED vs NDC_VALUE).
+  // Keep only the first (cheapest-first sort already ensures best one leads).
+  const _seenFareKey = new Set<string>();
+  const fareOptionsDeduped = fareOptions.filter((f) => {
+    const key = `${f.cabinClass}:${f.totalFare}`;
+    if (_seenFareKey.has(key)) return false;
+    _seenFareKey.add(key);
+    return true;
+  });
+  fareOptions.length = 0;
+  fareOptionsDeduped.forEach((f) => fareOptions.push(f));
 
   // Primary price = cheapest available fare (for sort/filter compatibility)
   const priceInfo  = item.totalPriceList?.[0]?.fd?.ADULT;

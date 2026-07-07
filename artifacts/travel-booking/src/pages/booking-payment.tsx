@@ -586,6 +586,7 @@ export default function BookingPayment() {
             if (p.email) t.eml  = p.email;
             if (s.selectedSeats[idx])  t.ssrSeatInfos    = [{ key: s.selectedSeats[idx],  code: s.selectedSeats[idx] }];
             if (s.extraBaggageCode)    t.ssrBaggageInfos = [{ key: s.extraBaggageCode,    code: s.extraBaggageCode }];
+            if (s.selectedMealCode)    t.ssrMealInfos    = [{ key: s.selectedMealCode,    code: s.selectedMealCode }];
             return t;
           }),
           deliveryInfo: {
@@ -1058,8 +1059,9 @@ export default function BookingPayment() {
                   email:       p.email,
                   phone:       p.phone,
                   gender:      p.gender,
-                  seatCode:    fs.selectedSeats[idx] || undefined,
-                  baggageCode: fs.extraBaggageCode   || undefined,
+                  seatCode:    fs.selectedSeats[idx]     || undefined,
+                  baggageCode: fs.extraBaggageCode       || undefined,
+                  mealCode:    fs.selectedMealCode       || undefined,
                 })),
                 bookingMeta: {
                   bookingRef,
