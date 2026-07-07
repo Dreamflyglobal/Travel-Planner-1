@@ -544,7 +544,7 @@ export default function BookingPayment() {
 
   async function attemptTjBook(
     s: FlightBookingSession,
-  ): Promise<{ pnr?: string; tjBookingRef?: string; error?: string }> {
+  ): Promise<{ pnr?: string; tjBookingRef?: string; status?: "pending" | "confirmed"; error?: string }> {
     const tjId = sessionStorage.getItem("ww_tj_booking_id");
     if (!tjId) return { error: "No TripJack booking ID found" };
 
@@ -605,10 +605,18 @@ export default function BookingPayment() {
         return { error: msg };
       }
 
-      // tj-book route returns TripJack body directly — no extra .data wrapper
+      // tj-book route returns TripJack body directly — no extra .data wrapper.
+      // Determine the actual booking status from the TripJack response:
+      // - status.booking === "CONFIRMED" → confirmed
+      // - status.booking === "PENDING" / "PROCESSING" / absent → pending
+      const rawBkStatus = (data?.status?.booking ?? data?.data?.status?.booking ?? "").toUpperCase();
+      const resolvedStatus: "confirmed" | "pending" =
+        rawBkStatus === "CONFIRMED" ? "confirmed" : "pending";
+
       return {
         pnr:          data?.pnr || data?.pnrDetails?.[0]?.pnr || undefined,
         tjBookingRef: data?.bookingId                          || undefined,
+        status:       resolvedStatus,
       };
     } catch {
       return { error: "Could not reach airline system." };
@@ -720,11 +728,13 @@ export default function BookingPayment() {
       toast({ variant: "destructive", title: "Booking Failed", description: wTjResult.error, duration: 8000 });
       return;
     }
+    const wTjStatus = wTjResult?.status ?? "pending";
     if (wTjResult?.pnr) {
       (wLastSuccessful as any).pnr   = wTjResult.pnr;
       (wLastSuccessful as any).tjPnr = wTjResult.pnr;
     }
     if (wTjResult?.tjBookingRef) (wLastSuccessful as any).tjBookingRef = wTjResult.tjBookingRef;
+    (wLastSuccessful as any).tjBookingStatus = wTjStatus;
     // Persist TripJack data back to the DB record (fire-and-forget)
     if (wTjResult?.tjBookingRef || wTjResult?.pnr) {
       const _apiBase = (import.meta.env.VITE_API_BASE_URL as string) ?? "";
@@ -734,7 +744,7 @@ export default function BookingPayment() {
         body: JSON.stringify({
           tjBookingRef:  wTjResult.tjBookingRef || undefined,
           pnr:           wTjResult.pnr          || undefined,
-          tjDetailStatus: wTjResult.tjBookingRef ? "CONFIRMED" : undefined,
+          tjDetailStatus: wTjStatus === "confirmed" ? "CONFIRMED" : "PENDING",
         }),
       }).catch(() => { /* best-effort — invoice will refresh from polling */ });
     }
@@ -743,7 +753,12 @@ export default function BookingPayment() {
     clearBookingSession();
     refreshUser();
     setWalletPaying(false);
-    toast({ title: "Booking Confirmed! 🎉", description: "Paid from wallet. Redirecting…" });
+    toast({
+      title:       wTjStatus === "pending" ? "Booking Submitted ✓" : "Booking Confirmed! 🎉",
+      description: wTjStatus === "pending"
+        ? "Payment received. Awaiting airline confirmation — we'll update your PNR shortly."
+        : "Paid from wallet. Redirecting…",
+    });
     notifyBookingSuccess({
       customerName:  session.type === "hotel" ? (session as HotelBookingSession).guest.name  : (session as any).passengers[0].name,
       customerEmail: session.type === "hotel" ? (session as HotelBookingSession).guest.email : (session as any).passengers[0].email,
@@ -862,11 +877,13 @@ export default function BookingPayment() {
         toast({ variant: "destructive", title: "Booking Failed", description: cTjResult.error, duration: 8000 });
         return;
       }
+      const cTjStatus = cTjResult?.status ?? "pending";
       if (cTjResult?.pnr) {
         (cLastSuccessful as any).pnr   = cTjResult.pnr;
         (cLastSuccessful as any).tjPnr = cTjResult.pnr;
       }
       if (cTjResult?.tjBookingRef) (cLastSuccessful as any).tjBookingRef = cTjResult.tjBookingRef;
+      (cLastSuccessful as any).tjBookingStatus = cTjStatus;
       // Persist TripJack data back to the DB record (fire-and-forget)
       if (cTjResult?.tjBookingRef || cTjResult?.pnr) {
         const _apiBase2 = (import.meta.env.VITE_API_BASE_URL as string) ?? "";
@@ -876,7 +893,7 @@ export default function BookingPayment() {
           body: JSON.stringify({
             tjBookingRef:  cTjResult.tjBookingRef || undefined,
             pnr:           cTjResult.pnr          || undefined,
-            tjDetailStatus: cTjResult.tjBookingRef ? "CONFIRMED" : undefined,
+            tjDetailStatus: cTjStatus === "confirmed" ? "CONFIRMED" : "PENDING",
           }),
         }).catch(() => { /* best-effort */ });
       }
@@ -885,7 +902,12 @@ export default function BookingPayment() {
       clearBookingSession();
       refreshUser();
       setProcessing(false);
-      toast({ title: "Booking Confirmed! 🎉", description: "Paid entirely with Travel Credits." });
+      toast({
+        title:       cTjStatus === "pending" ? "Booking Submitted ✓" : "Booking Confirmed! 🎉",
+        description: cTjStatus === "pending"
+          ? "Payment received. Awaiting airline confirmation — we'll update your PNR shortly."
+          : "Paid entirely with Travel Credits.",
+      });
       notifyBookingSuccess({
         customerName:  session.type === "hotel" ? (session as HotelBookingSession).guest.name  : (session as any).passengers[0].name,
         customerEmail: session.type === "hotel" ? (session as HotelBookingSession).guest.email : (session as any).passengers[0].email,

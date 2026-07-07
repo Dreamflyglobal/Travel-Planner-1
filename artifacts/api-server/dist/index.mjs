@@ -99294,10 +99294,10 @@ ${"#".repeat(80)}`);
       tjBookingRef = data?.bookingId || data?.data?.bookingId || void 0;
       logger.info({ paymentId, pnr, tjBookingRef, tjBookingStatus }, "[book-flight] TripJack AirBook PENDING \u2014 will poll for confirmation");
     } else if (tjBookingStatus === "" && data?.status?.success === true && (data?.bookingId || data?.data?.bookingId)) {
-      tjSuccess = true;
+      tjPending = true;
       pnr = data?.pnr || data?.pnrDetails?.[0]?.pnr || data?.data?.pnr || void 0;
       tjBookingRef = data?.bookingId || data?.data?.bookingId || void 0;
-      logger.info({ paymentId, pnr, tjBookingRef }, "[book-flight] TripJack AirBook success:true + bookingId (no status.booking) \u2014 treating as CONFIRMED");
+      logger.info({ paymentId, pnr, tjBookingRef }, "[book-flight] TripJack AirBook success:true + bookingId (no status.booking) \u2014 treating as PENDING until detail confirms");
     } else {
       tjPending = true;
       pnr = data?.pnr || data?.pnrDetails?.[0]?.pnr || data?.data?.pnr || void 0;

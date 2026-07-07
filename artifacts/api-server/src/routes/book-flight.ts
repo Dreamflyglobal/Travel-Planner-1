@@ -553,12 +553,15 @@ router.post("/book-flight", async (req, res): Promise<void> => {
       logger.info({ paymentId, pnr, tjBookingRef, tjBookingStatus }, "[book-flight] TripJack AirBook PENDING — will poll for confirmation");
     } else if (tjBookingStatus === "" && data?.status?.success === true && (data?.bookingId || data?.data?.bookingId)) {
       // status.booking absent but success:true + bookingId present.
-      // TripJack sandbox (and some production configs) returns success:true with no status.booking
-      // field — the booking IS accepted and confirmed; PNR may arrive via detail endpoint later.
-      tjSuccess    = true;
+      // TripJack does not return status.booking when the booking is queued / still processing
+      // (common in sandbox AND in production when the airline hasn't confirmed yet).
+      // Treat as PENDING so STEP 4.5 (booking detail) determines the real status.
+      // If the detail fetch fails (sandbox 404), the background poller will update when
+      // TripJack's booking-management endpoints become accessible.
+      tjPending    = true;
       pnr          = data?.pnr || data?.pnrDetails?.[0]?.pnr || data?.data?.pnr || undefined;
       tjBookingRef = data?.bookingId || data?.data?.bookingId || undefined;
-      logger.info({ paymentId, pnr, tjBookingRef }, "[book-flight] TripJack AirBook success:true + bookingId (no status.booking) — treating as CONFIRMED");
+      logger.info({ paymentId, pnr, tjBookingRef }, "[book-flight] TripJack AirBook success:true + bookingId (no status.booking) — treating as PENDING until detail confirms");
     } else {
       // Any other unknown status — treat as pending to be safe
       tjPending    = true;
