@@ -20905,27 +20905,27 @@ var require_router = __commonJS({
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var methods = METHODS.map((method) => method.toLowerCase());
-    module.exports = Router34;
+    module.exports = Router35;
     module.exports.Route = Route;
-    function Router34(options) {
-      if (!(this instanceof Router34)) {
-        return new Router34(options);
+    function Router35(options) {
+      if (!(this instanceof Router35)) {
+        return new Router35(options);
       }
       const opts = options || {};
-      function router34(req, res, next) {
-        router34.handle(req, res, next);
+      function router35(req, res, next) {
+        router35.handle(req, res, next);
       }
-      Object.setPrototypeOf(router34, this);
-      router34.caseSensitive = opts.caseSensitive;
-      router34.mergeParams = opts.mergeParams;
-      router34.params = {};
-      router34.strict = opts.strict;
-      router34.stack = [];
-      return router34;
+      Object.setPrototypeOf(router35, this);
+      router35.caseSensitive = opts.caseSensitive;
+      router35.mergeParams = opts.mergeParams;
+      router35.params = {};
+      router35.strict = opts.strict;
+      router35.stack = [];
+      return router35;
     }
-    Router34.prototype = function() {
+    Router35.prototype = function() {
     };
-    Router34.prototype.param = function param2(name2, fn) {
+    Router35.prototype.param = function param2(name2, fn) {
       if (!name2) {
         throw new TypeError("argument name is required");
       }
@@ -20945,7 +20945,7 @@ var require_router = __commonJS({
       params.push(fn);
       return this;
     };
-    Router34.prototype.handle = function handle(req, res, callback) {
+    Router35.prototype.handle = function handle(req, res, callback) {
       if (!callback) {
         throw new TypeError("argument callback is required");
       }
@@ -21072,7 +21072,7 @@ var require_router = __commonJS({
         }
       }
     };
-    Router34.prototype.use = function use(handler) {
+    Router35.prototype.use = function use(handler) {
       let offset = 0;
       let path4 = "/";
       if (typeof handler !== "function") {
@@ -21105,7 +21105,7 @@ var require_router = __commonJS({
       }
       return this;
     };
-    Router34.prototype.route = function route(path4) {
+    Router35.prototype.route = function route(path4) {
       const route2 = new Route(path4);
       const layer = new Layer(path4, {
         sensitive: this.caseSensitive,
@@ -21120,7 +21120,7 @@ var require_router = __commonJS({
       return route2;
     };
     methods.concat("all").forEach(function(method) {
-      Router34.prototype[method] = function(path4) {
+      Router35.prototype[method] = function(path4) {
         const route = this.route(path4);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
@@ -21303,13 +21303,13 @@ var require_application = __commonJS({
     var compileTrust = require_utils3().compileTrust;
     var resolve2 = __require("node:path").resolve;
     var once = require_once();
-    var Router34 = require_router();
+    var Router35 = require_router();
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var app3 = exports = module.exports = {};
     var trustProxyDefaultSymbol = "@@symbol:trust_proxy_default";
     app3.init = function init() {
-      var router34 = null;
+      var router35 = null;
       this.cache = /* @__PURE__ */ Object.create(null);
       this.engines = /* @__PURE__ */ Object.create(null);
       this.settings = /* @__PURE__ */ Object.create(null);
@@ -21318,13 +21318,13 @@ var require_application = __commonJS({
         configurable: true,
         enumerable: true,
         get: function getrouter() {
-          if (router34 === null) {
-            router34 = new Router34({
+          if (router35 === null) {
+            router35 = new Router35({
               caseSensitive: this.enabled("case sensitive routing"),
               strict: this.enabled("strict routing")
             });
           }
-          return router34;
+          return router35;
         }
       });
     };
@@ -21395,15 +21395,15 @@ var require_application = __commonJS({
       if (fns.length === 0) {
         throw new TypeError("app.use() requires a middleware function");
       }
-      var router34 = this.router;
+      var router35 = this.router;
       fns.forEach(function(fn2) {
         if (!fn2 || !fn2.handle || !fn2.set) {
-          return router34.use(path4, fn2);
+          return router35.use(path4, fn2);
         }
         debug(".use app under %s", path4);
         fn2.mountpath = path4;
         fn2.parent = this;
-        router34.use(path4, function mounted_app(req, res, next) {
+        router35.use(path4, function mounted_app(req, res, next) {
           var orig = req.app;
           fn2.handle(req, res, function(err) {
             Object.setPrototypeOf(req, orig.request);
@@ -23976,7 +23976,7 @@ var require_express = __commonJS({
     var EventEmitter2 = __require("node:events").EventEmitter;
     var mixin = require_merge_descriptors();
     var proto = require_application();
-    var Router34 = require_router();
+    var Router35 = require_router();
     var req = require_request();
     var res = require_response();
     exports = module.exports = createApplication;
@@ -23998,8 +23998,8 @@ var require_express = __commonJS({
     exports.application = proto;
     exports.request = req;
     exports.response = res;
-    exports.Route = Router34.Route;
-    exports.Router = Router34;
+    exports.Route = Router35.Route;
+    exports.Router = Router35;
     exports.json = bodyParser.json;
     exports.raw = bodyParser.raw;
     exports.static = require_serve_static();
@@ -66068,7 +66068,7 @@ var require_multer = __commonJS({
 })();
 
 // src/app.ts
-var import_express34 = __toESM(require_express2(), 1);
+var import_express35 = __toESM(require_express2(), 1);
 var import_cors = __toESM(require_lib3(), 1);
 var import_cookie_parser = __toESM(require_cookie_parser(), 1);
 var import_pino_http = __toESM(require_logger(), 1);
@@ -66077,7 +66077,7 @@ import { dirname, resolve, join } from "node:path";
 import { existsSync } from "node:fs";
 
 // src/routes/index.ts
-var import_express33 = __toESM(require_express2(), 1);
+var import_express34 = __toESM(require_express2(), 1);
 
 // src/routes/health.ts
 var import_express = __toESM(require_express2(), 1);
@@ -93108,7 +93108,6 @@ function mapTripJackFlight(item, idx, fromIata, toIata, traceId = "") {
     // ← search session ID — embedded per-flight for reliable access
   };
 }
-var TRIPJACK_BASE2 = process.env.TRIPJACK_BASE_URL || "https://apitest.tripjack.com";
 function resolveCabinClass(raw) {
   const v = (raw || "ECONOMY").toUpperCase().replace(/[\s-]/g, "_");
   if (v === "BUSINESS") return "BUSINESS";
@@ -93185,7 +93184,7 @@ router5.post("/flights", async (req, res) => {
   const logLabel = resolvedRoutes.map((r) => `${r.fromIata}\u2192${r.toIata} on ${r.travelDate}`).join(" | ");
   try {
     const searchHeaders = await getTripJackHeaders();
-    const apiRes = await fetch(`${TRIPJACK_BASE2}/fms/v1/air-search-all`, {
+    const apiRes = await fetch(`${TRIPJACK_BASE}/fms/v1/air-search-all`, {
       method: "POST",
       headers: searchHeaders,
       body: JSON.stringify(searchBody),
@@ -99900,44 +99899,99 @@ router32.use(
 );
 var upload_default = router32;
 
-// src/routes/index.ts
+// src/routes/tripjack-diag.ts
+var import_express33 = __toESM(require_express2(), 1);
 var router33 = (0, import_express33.Router)();
-router33.use(health_default);
-router33.use(auth_default);
-router33.use(admin_default);
-router33.use(admin_notify_default);
-router33.use(flights_default);
-router33.use(buses_default);
-router33.use(hotels_default);
-router33.use(packages_default);
-router33.use(bookings_default);
-router33.use("/payments", payments_default);
-router33.use("/tickets", tickets_default);
-router33.use("/send-whatsapp", whatsapp_default);
-router33.use("/itinerary-pdf", itinerary_pdf_default);
-router33.use("/holiday-whatsapp", holiday_whatsapp_default);
-router33.use("/followup", followup_default);
-router33.use(leads_default);
-router33.use(holiday_packages_default);
-router33.use(enquiries_default);
-router33.use(push_default);
-router33.use(currency_default);
-router33.use(marketing_default);
-router33.use(admin_bookings_default);
-router33.use(book_flight_default);
-router33.use(verify_payment_default);
-router33.use(tripjack_default);
-router33.use(tripjackRoutes_default);
-router33.use(tbo_default);
-router33.use(test_comms_default);
-router33.use(users_default);
-router33.use(coupons_default);
-router33.use(settings_default);
-router33.use(upload_default);
-var routes_default = router33;
+router33.get("/tripjack-diag", async (_req, res) => {
+  try {
+    const rows = await db.select().from(apiKeysTable).limit(1);
+    const dbRow = rows[0];
+    const dbKey = dbRow?.flightApiKey?.trim() ?? "";
+    const envKey = (process.env["TRIPJACK_API_KEY"] ?? "").trim();
+    const activeKey = dbKey || envKey;
+    const keySource = dbKey ? "db" : envKey ? "env" : "none";
+    const mask = (k) => k.length <= 4 ? "****" : k.slice(0, 4) + "****";
+    let tokenExchange = "skipped";
+    let tokenMessage = "";
+    if (activeKey) {
+      try {
+        const resp = await axios_default.post(
+          `${TRIPJACK_BASE}/auth/v1/token`,
+          { apiKey: activeKey },
+          { headers: { "Content-Type": "application/json" }, timeout: 1e4 }
+        );
+        const data = resp.data;
+        if (data?.status?.success === false) {
+          const reason = data?.errors?.[0]?.message ?? data?.status?.messages?.[0]?.description ?? "rejected by TripJack";
+          tokenExchange = "failed";
+          tokenMessage = reason;
+        } else if (data?.tokenId || data?.data?.tokenId || data?.token) {
+          tokenExchange = "ok";
+        } else {
+          tokenExchange = "failed";
+          tokenMessage = "tokenId not found in response";
+        }
+      } catch (err) {
+        tokenExchange = "failed";
+        tokenMessage = err?.response?.data?.errors?.[0]?.message ?? err?.response?.data?.error ?? err?.message ?? "network error";
+      }
+    }
+    res.json({
+      baseUrl: TRIPJACK_BASE,
+      keyConfigured: !!activeKey,
+      keySource,
+      keyPrefix: activeKey ? mask(activeKey) : "(none)",
+      keyLength: activeKey.length,
+      tokenExchange,
+      tokenMessage: tokenMessage || void 0,
+      dbHasKey: !!dbKey,
+      note: "keyPrefix shows first 4 chars only \u2014 verify these match your TripJack API key"
+    });
+  } catch (err) {
+    res.status(500).json({ error: err?.message ?? "Diagnostic failed" });
+  }
+});
+var tripjack_diag_default = router33;
+
+// src/routes/index.ts
+var router34 = (0, import_express34.Router)();
+router34.use(health_default);
+router34.use(auth_default);
+router34.use(admin_default);
+router34.use(admin_notify_default);
+router34.use(flights_default);
+router34.use(buses_default);
+router34.use(hotels_default);
+router34.use(packages_default);
+router34.use(bookings_default);
+router34.use("/payments", payments_default);
+router34.use("/tickets", tickets_default);
+router34.use("/send-whatsapp", whatsapp_default);
+router34.use("/itinerary-pdf", itinerary_pdf_default);
+router34.use("/holiday-whatsapp", holiday_whatsapp_default);
+router34.use("/followup", followup_default);
+router34.use(leads_default);
+router34.use(holiday_packages_default);
+router34.use(enquiries_default);
+router34.use(push_default);
+router34.use(currency_default);
+router34.use(marketing_default);
+router34.use(admin_bookings_default);
+router34.use(book_flight_default);
+router34.use(verify_payment_default);
+router34.use(tripjack_default);
+router34.use(tripjackRoutes_default);
+router34.use(tbo_default);
+router34.use(test_comms_default);
+router34.use(users_default);
+router34.use(coupons_default);
+router34.use(settings_default);
+router34.use(upload_default);
+router34.use(tripjack_diag_default);
+var routes_default = router34;
 
 // src/app.ts
-var app2 = (0, import_express34.default)();
+var app2 = (0, import_express35.default)();
 app2.use(
   (0, import_pino_http.default)({
     logger,
@@ -99964,16 +100018,16 @@ app2.use(
   })
 );
 app2.use((0, import_cookie_parser.default)());
-app2.use(import_express34.default.json({ limit: "20mb" }));
-app2.use(import_express34.default.urlencoded({ extended: true, limit: "20mb" }));
-app2.use("/uploads", import_express34.default.static(UPLOADS_DIR, { maxAge: "7d" }));
+app2.use(import_express35.default.json({ limit: "20mb" }));
+app2.use(import_express35.default.urlencoded({ extended: true, limit: "20mb" }));
+app2.use("/uploads", import_express35.default.static(UPLOADS_DIR, { maxAge: "7d" }));
 app2.use("/api", routes_default);
 if (process.env.NODE_ENV === "production") {
   const currentDir = dirname(fileURLToPath2(import.meta.url));
   const staticDir = resolve(currentDir, "../../travel-booking/dist/public");
   if (existsSync(staticDir)) {
     logger.info({ staticDir }, "Serving frontend static files");
-    app2.use(import_express34.default.static(staticDir, { maxAge: "1d", index: false }));
+    app2.use(import_express35.default.static(staticDir, { maxAge: "1d", index: false }));
     app2.use((_req, res) => {
       res.sendFile(join(staticDir, "index.html"));
     });

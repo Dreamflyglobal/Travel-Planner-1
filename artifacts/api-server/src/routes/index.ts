@@ -31,6 +31,7 @@ import usersRouter             from "./users";
 import couponsRouter           from "./coupons";
 import settingsRouter          from "./settings";
 import uploadRouter            from "./upload";
+import tripjackDiagRouter      from "./tripjack-diag";
 
 const router: IRouter = Router();
 
@@ -66,5 +67,6 @@ router.use(usersRouter);
 router.use(couponsRouter);
 router.use(settingsRouter);
 router.use(uploadRouter);
+router.use(tripjackDiagRouter);
 
 export default router;

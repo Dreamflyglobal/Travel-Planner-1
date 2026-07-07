@@ -9,7 +9,7 @@ import {
   GetFlightParams,
   GetFlightResponse,
 } from "@workspace/api-zod";
-import { getTripJackApiKey, getTripJackHeaders } from "../lib/tripjack-auth.js";
+import { getTripJackApiKey, getTripJackHeaders, TRIPJACK_BASE } from "../lib/tripjack-auth.js";
 
 const router: IRouter = Router();
 
@@ -340,7 +340,6 @@ function mapTripJackFlight(item: any, idx: number, fromIata: string, toIata: str
 }
 
 // ── POST /api/flights — TripJack live search ───────────────────────────────
-const TRIPJACK_BASE = process.env.TRIPJACK_BASE_URL || "https://apitest.tripjack.com";
 
 // Map our cabin class values → TripJack cabin class codes
 function resolveCabinClass(raw?: string): string {
