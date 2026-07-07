@@ -427,7 +427,7 @@ export default function FlightResults() {
         (msg.includes("price") || msg.includes("fare chang") || msg.includes("revised") || msg.includes("updated"));
 
       if (isPriceChange) {
-        const resolvedId = data?.data?.bookingId || fareKey;
+        const resolvedId = data?.data?.bookingId || data?.bookingId || fareKey;
         const travelersCount = parseInt(urlParams.get("travelers") || "1", 10);
         const newRawPerPerson = Math.round(tf / travelersCount);
         urlParams.set("price", String(newRawPerPerson));
@@ -490,7 +490,7 @@ export default function FlightResults() {
     }
 
     // ── Success — cache fareQuote result and navigate ─────────────────────
-    const resolvedId = data?.data?.bookingId || fareKey;
+    const resolvedId = data?.data?.bookingId || data?.bookingId || fareKey;
     const tf: number = data?.data?.totalPriceInfo?.totalFareDetail?.fC?.TF ?? 0;
     if (tf > 0) {
       const travelersCount  = parseInt(urlParams.get("travelers") || "1", 10);

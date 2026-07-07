@@ -373,7 +373,7 @@ export default function FlightBooking() {
           const fqData = await fqRes.json().catch(() => ({}));
 
           if (fqRes.ok && fqData?.status !== false) {
-            resolvedBookingId = fqData?.data?.bookingId || fareKey;
+            resolvedBookingId = fqData?.data?.bookingId || fqData?.bookingId || fareKey;
             sessionStorage.setItem("ww_tj_farequote",     JSON.stringify(fqData));
             sessionStorage.setItem("ww_tj_booking_id",    resolvedBookingId);
             sessionStorage.setItem("ww_tj_farequote_key", fareKey);

@@ -99148,6 +99148,17 @@ router24.post("/book-flight", async (req, res) => {
   }
   const priceIdForRefresh = fareData.resultIndex || fareData.bookingId;
   let freshBookingId = fareData.bookingId;
+  const storedIdIsTjSession = fareData.bookingId.startsWith("TJS");
+  logger.info(
+    {
+      paymentId,
+      storedBookingId: fareData.bookingId,
+      storedResultIndex: fareData.resultIndex || "(none)",
+      priceIdForRefresh,
+      storedIdIsTjSession
+    },
+    "[book-flight] STEP 2: session diagnostic \u2014 bookingId format check"
+  );
   if (priceIdForRefresh) {
     try {
       logger.info(
@@ -99160,9 +99171,9 @@ router24.post("/book-flight", async (req, res) => {
         { context: "book-flight/fareQuote-refresh", timeoutMs: 15e3, maxRetries: 1 }
       );
       const refreshedId = typeof reviewData?.bookingId === "string" && reviewData.bookingId.trim() ? reviewData.bookingId.trim() : typeof reviewData?.data?.bookingId === "string" && reviewData.data.bookingId.trim() ? reviewData.data.bookingId.trim() : void 0;
-      freshBookingId = refreshedId ?? priceIdForRefresh;
+      freshBookingId = refreshedId ?? fareData.bookingId;
       logger.info(
-        { paymentId, freshBookingId, source: refreshedId ? "review-response" : "priceId-fallback" },
+        { paymentId, freshBookingId, source: refreshedId ? "review-response" : "stored-bookingId-fallback" },
         "[book-flight] STEP 2: booking session refreshed"
       );
     } catch (err) {

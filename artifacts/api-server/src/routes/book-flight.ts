@@ -374,18 +374,37 @@ router.post("/book-flight", async (req, res): Promise<void> => {
   }
 
   // ── STEP 2: Refresh TripJack fareQuote to get a non-expired bookingId ───────
-  // TripJack booking sessions expire within a few minutes of the /fms/v1/review
-  // call. By the time the user completes Razorpay checkout, the original session
-  // is almost certainly expired. We call /fms/v1/review again immediately after
-  // payment verification — using the same priceId/resultIndex — to create a fresh
-  // session, then call /oms/v1/air/book right after with no delay.
+  // TripJack booking sessions (TJS-prefixed IDs from /fms/v1/review) expire
+  // within ~2-3 min. By the time the user completes Razorpay checkout, the
+  // original session is likely expired. We call /fms/v1/review again immediately
+  // after payment verification — using the raw resultIndex as priceId — to get a
+  // fresh TJS session, then call /oms/v1/air/book with no delay.
   //
-  // priceIdForRefresh: the stable fare identifier. The frontend sends it as
-  //   fareData.resultIndex (when extracted successfully) or fareData.bookingId
-  //   (fallback — the frontend stores the resultIndex there when the review
-  //   response didn't contain a distinct bookingId field).
+  // TripJack's /fms/v1/review response has bookingId at the TOP LEVEL:
+  //   { bookingId: "TJS...", status: {...} }  — NOT nested under "data".
+  // The frontend (fixed) now correctly stores this TJS session ID in
+  // ww_tj_booking_id. The raw resultIndex is kept in ww_tj_farequote_key and
+  // forwarded here as fareData.resultIndex.
+  //
+  // priceIdForRefresh: must be the raw resultIndex (stable fare identifier).
+  //   fareData.resultIndex is authoritative; fareData.bookingId is fallback.
   const priceIdForRefresh: string = fareData.resultIndex || fareData.bookingId;
   let freshBookingId: string = fareData.bookingId;
+
+  // Diagnostic: log whether the stored bookingId looks like a TJS session (good)
+  // or a raw resultIndex (means the frontend fix hasn't propagated yet for this
+  // session). "TJS" prefix = valid TJS session; anything else = raw resultIndex.
+  const storedIdIsTjSession = fareData.bookingId.startsWith("TJS");
+  logger.info(
+    {
+      paymentId,
+      storedBookingId:    fareData.bookingId,
+      storedResultIndex:  fareData.resultIndex || "(none)",
+      priceIdForRefresh,
+      storedIdIsTjSession,
+    },
+    "[book-flight] STEP 2: session diagnostic — bookingId format check",
+  );
 
   if (priceIdForRefresh) {
     try {
@@ -409,9 +428,9 @@ router.post("/book-flight", async (req, res): Promise<void> => {
             ? reviewData.data.bookingId.trim()
             : undefined;
 
-      freshBookingId = refreshedId ?? priceIdForRefresh;
+      freshBookingId = refreshedId ?? fareData.bookingId;
       logger.info(
-        { paymentId, freshBookingId, source: refreshedId ? "review-response" : "priceId-fallback" },
+        { paymentId, freshBookingId, source: refreshedId ? "review-response" : "stored-bookingId-fallback" },
         "[book-flight] STEP 2: booking session refreshed",
       );
     } catch (err: any) {
