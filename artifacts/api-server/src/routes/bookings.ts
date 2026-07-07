@@ -401,6 +401,7 @@ router.get("/invoice/:bookingRef", async (req, res): Promise<void> => {
     tjBookingRef:   (d.tjBookingRef  as string | undefined) || undefined,
     tjPassengers:   (d.tjPassengers  as any[] | undefined)  || undefined,
     ticketNumbers:  (d.ticketNumbers as string[] | undefined) || undefined,
+    tjBookingStatus: (booking.bookingStatus as "confirmed" | "pending" | "failed") || undefined,
     // Flight
     flightAirline:    fi.airline    || undefined,
     flightNumber:     fi.flightNum  || undefined,

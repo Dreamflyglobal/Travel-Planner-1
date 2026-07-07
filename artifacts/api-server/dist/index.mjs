@@ -94709,6 +94709,7 @@ router9.get("/invoice/:bookingRef", async (req, res) => {
     tjBookingRef: d.tjBookingRef || void 0,
     tjPassengers: d.tjPassengers || void 0,
     ticketNumbers: d.ticketNumbers || void 0,
+    tjBookingStatus: booking.bookingStatus || void 0,
     // Flight
     flightAirline: fi.airline || void 0,
     flightNumber: fi.flightNum || void 0,

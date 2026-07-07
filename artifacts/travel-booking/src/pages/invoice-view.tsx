@@ -359,10 +359,13 @@ export default function InvoiceView() {
   const [invoice,     setInvoice]     = useState<BookingInvoice | null>(null);
   const [notFound,    setNotFound]    = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [apiLoaded,   setApiLoaded]   = useState(false);
   const printAreaRef = useRef<HTMLDivElement>(null);
   const { branding } = useBranding();
   const { toast } = useToast();
   const company = { ...COMPANY, name: branding.companyName, brand: branding.companyName };
+
+  const apiBase = (import.meta.env.VITE_API_BASE_URL as string) ?? "";
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -373,28 +376,64 @@ export default function InvoiceView() {
     if (cached) setInvoice(cached);
 
     // 2. Always fetch from the API to get the latest enriched data
-    // (pnr, tjBookingRef may have been updated server-side after AirBook)
-    const apiBase = (import.meta.env.VITE_API_BASE_URL as string) ?? "";
+    // (pnr, tjBookingRef, tjBookingStatus may have been updated server-side after AirBook)
     fetch(`${apiBase}/api/invoice/${encodeURIComponent(bookingId.toUpperCase())}`)
       .then(async (r) => {
         if (!r.ok) {
           if (!cached) setNotFound(true);
+          setApiLoaded(true);
           return;
         }
         const data = await r.json() as BookingInvoice;
         if (!data || !data.bookingId) {
           if (!cached) setNotFound(true);
+          setApiLoaded(true);
           return;
         }
-        // Merge: API data is authoritative for pnr/tjBookingRef;
+        // Merge: API data is authoritative for pnr/tjBookingRef/tjBookingStatus;
         // keep localStorage values for any fields the API doesn't return
         setInvoice(prev => prev
           ? { ...prev, ...Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined && v !== null)) }
           : data
         );
+        setApiLoaded(true);
       })
-      .catch(() => { if (!cached) setNotFound(true); });
-  }, [bookingId]);
+      .catch(() => { if (!cached) setNotFound(true); setApiLoaded(true); });
+  }, [bookingId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 3. Poll booking-status for pending flight bookings until PNR arrives
+  useEffect(() => {
+    if (!bookingId || !invoice) return;
+    const isFlight  = invoice.bookingType === "flight";
+    const isPending = invoice.tjBookingStatus === "pending" || (!invoice.pnr && !invoice.tjPnr && invoice.tjBookingStatus !== "failed");
+    if (!isFlight || !isPending) return;
+
+    const poll = async () => {
+      try {
+        const r = await fetch(`${apiBase}/api/booking-status/${encodeURIComponent(bookingId.toUpperCase())}`);
+        if (!r.ok) return;
+        const data = await r.json() as {
+          bookingStatus: string; pnr: string | null;
+          tjBookingRef?: string; tjPassengers?: BookingInvoice["tjPassengers"]; ticketNumbers?: string[];
+        };
+        setInvoice(prev => {
+          if (!prev) return prev;
+          const updates: Partial<BookingInvoice> = {
+            tjBookingStatus: data.bookingStatus as BookingInvoice["tjBookingStatus"],
+          };
+          if (data.pnr)            { updates.pnr = data.pnr; updates.tjPnr = data.pnr; }
+          if (data.tjBookingRef)     updates.tjBookingRef   = data.tjBookingRef;
+          if (data.tjPassengers?.length) updates.tjPassengers = data.tjPassengers;
+          if (data.ticketNumbers?.length) updates.ticketNumbers = data.ticketNumbers;
+          return { ...prev, ...updates };
+        });
+      } catch { /* ignore — keep polling */ }
+    };
+
+    void poll();
+    const timer = setInterval(() => void poll(), 10_000);
+    return () => clearInterval(timer);
+  }, [bookingId, invoice?.bookingType, invoice?.tjBookingStatus, invoice?.pnr]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handlePrint = () => window.print();
 
@@ -418,14 +457,15 @@ export default function InvoiceView() {
     }
   }, [invoice, toast]);
 
-  // Auto-download when ?download=1 is in the URL (triggered from other pages)
+  // Auto-download when ?download=1 is in the URL (triggered from other pages).
+  // Wait for apiLoaded so the PDF captures the freshest data (pnr, status, etc.)
+  // rather than the stale localStorage snapshot.
   useEffect(() => {
-    if (autoDownload && invoice && printAreaRef.current) {
-      // Small delay to ensure full render + fonts loaded
+    if (autoDownload && invoice && apiLoaded && printAreaRef.current) {
       const t = setTimeout(() => { void handleDownload(); }, 800);
       return () => clearTimeout(t);
     }
-  }, [autoDownload, invoice, handleDownload]);
+  }, [autoDownload, invoice, apiLoaded, handleDownload]);
 
   const handleEmail = () => {
     if (!invoice) return;
@@ -592,16 +632,23 @@ export default function InvoiceView() {
                     <p className="text-blue-300 font-mono text-xs mt-0.5 break-all">{invoice.tjBookingRef}</p>
                   </>
                 )}
-                {pnr ? (
-                  <>
-                    <p className="text-slate-400 text-xs uppercase tracking-wide mt-2">PNR</p>
-                    <p className="text-orange-300 font-mono font-bold text-base mt-0.5">{pnr}</p>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-slate-400 text-xs uppercase tracking-wide mt-2">PNR</p>
-                    <p className="text-amber-400 font-mono text-xs mt-0.5">Awaiting confirmation</p>
-                  </>
+                {invoice.bookingType === "flight" && (
+                  pnr ? (
+                    <>
+                      <p className="text-slate-400 text-xs uppercase tracking-wide mt-2">PNR</p>
+                      <p className="text-orange-300 font-mono font-bold text-base mt-0.5">{pnr}</p>
+                    </>
+                  ) : invoice.tjBookingStatus === "confirmed" ? (
+                    <>
+                      <p className="text-slate-400 text-xs uppercase tracking-wide mt-2">PNR</p>
+                      <p className="text-amber-300 font-mono text-xs mt-0.5">Issued — syncing…</p>
+                    </>
+                  ) : invoice.tjBookingStatus !== "failed" ? (
+                    <>
+                      <p className="text-slate-400 text-xs uppercase tracking-wide mt-2">PNR</p>
+                      <p className="text-amber-400 font-mono text-xs mt-0.5">Awaiting airline confirmation</p>
+                    </>
+                  ) : null
                 )}
               </div>
             </div>
