@@ -94294,6 +94294,9 @@ function extractTickets(dd) {
   const pnrDetails = dd?.pnrDetails || dd?.itemInfos?.AIR?.pnrDetails || [];
   return pnrDetails.map((p) => p.ticketNum || p.eTicketNumber || p.ticket_num).filter(Boolean);
 }
+function dateStr(d) {
+  return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+}
 async function fetchTjBookingDetail(tjBookingRef, context) {
   const strategies = [
     // ── Strategy 1: Official documented OMS booking detail endpoint ──────────
@@ -94382,11 +94385,95 @@ async function fetchTjBookingDetail(tjBookingRef, context) {
       }
     }
   }
+  const today = /* @__PURE__ */ new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const listWindows = [
+    { label: "list-today", fromDate: dateStr(today), toDate: dateStr(today) },
+    { label: "list-2d", fromDate: dateStr(yesterday), toDate: dateStr(today) }
+  ];
+  for (const win of listWindows) {
+    logger.info(
+      {
+        context,
+        tjBookingRef,
+        strategy: win.label,
+        endpoint: "/oms/v1/booking/list",
+        fromDate: win.fromDate,
+        toDate: win.toDate
+      },
+      "[tj-booking-helper] trying booking/list fallback strategy"
+    );
+    try {
+      const raw = await tjPostWithRetry(
+        "/oms/v1/booking/list",
+        { fromDate: win.fromDate, toDate: win.toDate, bookingType: "AIRLINE" },
+        { context: `${context}/${win.label}`, timeoutMs: 15e3, maxRetries: 0 }
+      );
+      const items = raw?.data?.bookings || raw?.bookings || (Array.isArray(raw?.data) ? raw.data : null) || [];
+      logger.info(
+        { context, tjBookingRef, strategy: win.label, totalItems: items.length },
+        "[tj-booking-helper] booking/list returned items"
+      );
+      const dd = items.find(
+        (b) => b.bookingId === tjBookingRef || b.orderId === tjBookingRef || b.tripJackBookingId === tjBookingRef
+      ) ?? null;
+      if (!dd) {
+        logger.info(
+          { context, tjBookingRef, strategy: win.label, totalItems: items.length },
+          "[tj-booking-helper] booking not found in list \u2014 trying wider window"
+        );
+        continue;
+      }
+      const rawStatus = extractStatus(dd);
+      const pnr = extractPnr(dd);
+      const passengers = extractPassengers(dd, pnr);
+      const tickets = extractTickets(dd);
+      logger.info(
+        {
+          context,
+          tjBookingRef,
+          strategy: win.label,
+          endpoint: "/oms/v1/booking/list",
+          rawStatus,
+          pnr,
+          paxCount: passengers.length,
+          ticketCount: tickets.length
+        },
+        "[tj-booking-helper] booking found in list \u2014 status retrieved successfully"
+      );
+      logger.debug(
+        { context, tjBookingRef, strategy: win.label, bookingRecord: dd },
+        "[tj-booking-helper] full list booking record"
+      );
+      return {
+        rawStatus,
+        pnr,
+        tjPassengers: passengers,
+        ticketNumbers: tickets,
+        source: "list",
+        rawResponse: dd
+      };
+    } catch (err) {
+      const httpStatus = err?.tripjackHttpStatus ?? err?.response?.status ?? "?";
+      logger.warn(
+        {
+          context,
+          tjBookingRef,
+          strategy: win.label,
+          endpoint: "/oms/v1/booking/list",
+          httpStatus,
+          err: err?.message
+        },
+        "[tj-booking-helper] booking/list call FAILED"
+      );
+    }
+  }
   logger.warn(
     {
       context,
       tjBookingRef,
-      strategiesTried: strategies.map((s) => s.label)
+      strategiesTried: [...strategies.map((s) => s.label), "list-today", "list-2d"]
     },
     "[tj-booking-helper] all booking status strategies exhausted \u2014 booking remains in its stored state. SANDBOX: this is expected until TripJack whitelists the server IP. PRODUCTION: contact TripJack support if this persists."
   );
@@ -95188,7 +95275,7 @@ var SERVICE_EMOJI = {
 };
 function generalBookingEmailHTML(data) {
   const emoji3 = SERVICE_EMOJI[data.bookingType] ?? "\u{1F4CB}";
-  const dateStr = new Date(data.travelDate).toLocaleDateString("en-IN", {
+  const dateStr2 = new Date(data.travelDate).toLocaleDateString("en-IN", {
     day: "2-digit",
     month: "long",
     year: "numeric"
@@ -95258,7 +95345,7 @@ function generalBookingEmailHTML(data) {
     </div>
     <div class="row">
       <label>Travel Date</label>
-      <span>${dateStr}</span>
+      <span>${dateStr2}</span>
     </div>
     <div class="row">
       <label>${data.bookingType === "hotel" ? "Rooms" : "Passengers"}</label>
@@ -95627,7 +95714,7 @@ function formatPhone3(raw) {
 }
 function buildSmsBody(data) {
   const typeLabel = data.bookingType.charAt(0).toUpperCase() + data.bookingType.slice(1);
-  const dateStr = (() => {
+  const dateStr2 = (() => {
     try {
       return new Date(data.travelDate).toLocaleDateString("en-IN", {
         day: "2-digit",
@@ -95647,7 +95734,7 @@ function buildSmsBody(data) {
   } else if (data.bookingType === "hotel" && data.hotelName) {
     detail = ` | ${data.hotelName}`;
   }
-  return `Your ${typeLabel} booking with ${APP_NAME} is confirmed${detail}. Booking ID: ${data.bookingId} | Date: ${dateStr} | Amount: ${amount}. Support: ${APP_SUPPORT_PHONE}`;
+  return `Your ${typeLabel} booking with ${APP_NAME} is confirmed${detail}. Booking ID: ${data.bookingId} | Date: ${dateStr2} | Amount: ${amount}. Support: ${APP_SUPPORT_PHONE}`;
 }
 async function sendBookingEmail(data) {
   if (!data.passengerEmail) {
@@ -95710,7 +95797,7 @@ async function sendBookingWhatsApp(data) {
     logger.warn(`[notification/whatsapp] No phone number \u2014 skipping (booking: ${data.bookingId})`);
     return { sent: false, reason: "No passenger phone number" };
   }
-  const dateStr = (() => {
+  const dateStr2 = (() => {
     try {
       return new Date(data.travelDate).toLocaleDateString("en-IN", {
         day: "2-digit",
@@ -95728,7 +95815,7 @@ async function sendBookingWhatsApp(data) {
     bookingType: data.bookingType,
     from: data.from || "",
     to: data.to || "",
-    date: dateStr,
+    date: dateStr2,
     amount: data.totalAmount,
     invoiceUrl: data.invoiceUrl,
     airline: data.airline,

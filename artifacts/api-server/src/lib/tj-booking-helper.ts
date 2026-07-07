@@ -51,7 +51,7 @@ export interface TjBookingDetail {
     paxType: string;
   }>;
   ticketNumbers: string[];
-  source: "detail" | "air-detail" | "none";
+  source: "detail" | "air-detail" | "list" | "none";
   rawResponse: any;
 }
 
@@ -115,16 +115,28 @@ function extractTickets(dd: any): string[] {
     .filter(Boolean);
 }
 
+// ── Date helper for list strategies ──────────────────────────────────────────
+
+function dateStr(d: Date): string {
+  return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+}
+
 // ── Main fetch function ───────────────────────────────────────────────────────
 
 /**
- * Attempt to retrieve TripJack booking detail using the official OMS API.
+ * Attempt to retrieve TripJack booking detail using a cascade of strategies.
  *
  * Strategy 1: POST /oms/v1/booking/detail        — standard documented path
  * Strategy 2: POST /oms/v1/air/booking-details   — air-specific path (hotel docs pattern)
+ * Strategy 3: POST /oms/v1/booking/list (today)  — list fallback; scans for bookingId
+ * Strategy 4: POST /oms/v1/booking/list (2 days) — list fallback; wider window for midnight crossings
  *
- * Returns { source: "none" } if both strategies fail (expected in sandbox until
- * TripJack whitelists the server IP for booking management endpoints).
+ * Strategies 1 and 2 are IP-restricted in TripJack sandbox (/oms/v1/booking/* sub-tree)
+ * and both return 404.  Strategies 3 and 4 use /oms/v1/booking/list which IS accessible
+ * in sandbox and returns each booking's status + PNR — used as the working fallback until
+ * TripJack whitelists the detail endpoints.
+ *
+ * Returns { source: "none" } only when all four strategies fail.
  */
 export async function fetchTjBookingDetail(
   tjBookingRef: string,
@@ -245,11 +257,123 @@ export async function fetchTjBookingDetail(
     }
   }
 
+  // ── Strategies 3 + 4: booking/list fallback ────────────────────────────────
+  // /oms/v1/booking/detail and /oms/v1/air/booking-details are IP-restricted in
+  // the TripJack sandbox and both return 404.  /oms/v1/booking/list IS accessible
+  // in sandbox and includes each booking's status + PNR — used here as the working
+  // fallback until TripJack whitelists the detail endpoints for this server IP.
+  const today     = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  const listWindows = [
+    { label: "list-today", fromDate: dateStr(today),     toDate: dateStr(today)     },
+    { label: "list-2d",    fromDate: dateStr(yesterday), toDate: dateStr(today)     },
+  ] as const;
+
+  for (const win of listWindows) {
+    logger.info(
+      {
+        context,
+        tjBookingRef,
+        strategy:  win.label,
+        endpoint:  "/oms/v1/booking/list",
+        fromDate:  win.fromDate,
+        toDate:    win.toDate,
+      },
+      "[tj-booking-helper] trying booking/list fallback strategy",
+    );
+
+    try {
+      const raw = await tjPostWithRetry(
+        "/oms/v1/booking/list",
+        { fromDate: win.fromDate, toDate: win.toDate, bookingType: "AIRLINE" },
+        { context: `${context}/${win.label}`, timeoutMs: 15_000, maxRetries: 0 },
+      );
+
+      // The list response wraps bookings in one of several shapes
+      const items: any[] =
+        raw?.data?.bookings          ||
+        raw?.bookings                ||
+        (Array.isArray(raw?.data) ? raw.data : null) ||
+        [];
+
+      logger.info(
+        { context, tjBookingRef, strategy: win.label, totalItems: items.length },
+        "[tj-booking-helper] booking/list returned items",
+      );
+
+      // Find our booking by bookingId, orderId, or tripJackBookingId
+      const dd = items.find(
+        (b: any) =>
+          b.bookingId         === tjBookingRef ||
+          b.orderId           === tjBookingRef ||
+          b.tripJackBookingId === tjBookingRef,
+      ) ?? null;
+
+      if (!dd) {
+        logger.info(
+          { context, tjBookingRef, strategy: win.label, totalItems: items.length },
+          "[tj-booking-helper] booking not found in list — trying wider window",
+        );
+        continue;
+      }
+
+      // Extract status + PNR using the same helpers as the detail strategies
+      const rawStatus  = extractStatus(dd);
+      const pnr        = extractPnr(dd);
+      const passengers = extractPassengers(dd, pnr);
+      const tickets    = extractTickets(dd);
+
+      logger.info(
+        {
+          context,
+          tjBookingRef,
+          strategy:    win.label,
+          endpoint:    "/oms/v1/booking/list",
+          rawStatus,
+          pnr,
+          paxCount:    passengers.length,
+          ticketCount: tickets.length,
+        },
+        "[tj-booking-helper] booking found in list — status retrieved successfully",
+      );
+
+      logger.debug(
+        { context, tjBookingRef, strategy: win.label, bookingRecord: dd },
+        "[tj-booking-helper] full list booking record",
+      );
+
+      return {
+        rawStatus,
+        pnr,
+        tjPassengers: passengers,
+        ticketNumbers: tickets,
+        source:       "list",
+        rawResponse:  dd,
+      };
+
+    } catch (err: any) {
+      const httpStatus = (err as any)?.tripjackHttpStatus ?? err?.response?.status ?? "?";
+      logger.warn(
+        {
+          context,
+          tjBookingRef,
+          strategy:    win.label,
+          endpoint:    "/oms/v1/booking/list",
+          httpStatus,
+          err:         err?.message,
+        },
+        "[tj-booking-helper] booking/list call FAILED",
+      );
+    }
+  }
+
   logger.warn(
     {
       context,
       tjBookingRef,
-      strategiesTried: strategies.map((s) => s.label),
+      strategiesTried: [...strategies.map((s) => s.label), "list-today", "list-2d"],
     },
     "[tj-booking-helper] all booking status strategies exhausted — " +
     "booking remains in its stored state. " +
