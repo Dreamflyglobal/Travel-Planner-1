@@ -589,8 +589,8 @@ export default function BookingPayment() {
             return t;
           }),
           deliveryInfo: {
-            emails:  [s.passengers[0].email],
-            mobiles: [{ countryCode: "91", number: s.passengers[0].phone }],
+            emails:   [s.passengers[0].email].filter(Boolean),
+            contacts: [s.passengers[0].phone?.replace(/^\+?91/, "").replace(/[\s\-()]/g, "").slice(-10)].filter(Boolean),
           },
         }),
       });

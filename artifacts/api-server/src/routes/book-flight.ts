@@ -31,6 +31,13 @@ function computePassengerAge(p: { dob?: string; age?: string }): number {
   return parseInt(p.age ?? "", 10);
 }
 
+function sanitizeMobile(raw: string | undefined | null): string {
+  if (!raw) return "";
+  const digits = raw.replace(/[\s\-().+]/g, "");
+  if (digits.startsWith("91") && digits.length === 12) return digits.slice(2);
+  return digits.slice(-10);
+}
+
 // ── Razorpay refund (server-side, no admin auth required) ─────────────────
 async function doRazorpayRefund(
   paymentId: string,
@@ -449,8 +456,8 @@ router.post("/book-flight", async (req, res): Promise<void> => {
       return traveller;
     }),
     deliveryInfo: {
-      emails:  [passengers[0]?.email ?? passengerEmail],
-      mobiles: [{ countryCode: "91", number: passengers[0]?.phone ?? passengerPhone }],
+      emails:   [passengers[0]?.email ?? passengerEmail].filter(Boolean),
+      contacts: [sanitizeMobile(passengers[0]?.phone ?? passengerPhone)].filter(Boolean),
     },
   };
 

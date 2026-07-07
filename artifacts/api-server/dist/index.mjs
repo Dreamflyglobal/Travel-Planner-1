@@ -98575,6 +98575,12 @@ function computePassengerAge(p) {
   }
   return parseInt(p.age ?? "", 10);
 }
+function sanitizeMobile(raw) {
+  if (!raw) return "";
+  const digits = raw.replace(/[\s\-().+]/g, "");
+  if (digits.startsWith("91") && digits.length === 12) return digits.slice(2);
+  return digits.slice(-10);
+}
 async function doRazorpayRefund(paymentId, amountINR, bookingId, bookingRef) {
   const keyId = process.env["RAZORPAY_KEY_ID"] ?? "";
   const keySecret = process.env["RAZORPAY_KEY_SECRET"] ?? "";
@@ -98856,8 +98862,8 @@ router24.post("/book-flight", async (req, res) => {
       return traveller;
     }),
     deliveryInfo: {
-      emails: [passengers[0]?.email ?? passengerEmail],
-      mobiles: [{ countryCode: "91", number: passengers[0]?.phone ?? passengerPhone }]
+      emails: [passengers[0]?.email ?? passengerEmail].filter(Boolean),
+      contacts: [sanitizeMobile(passengers[0]?.phone ?? passengerPhone)].filter(Boolean)
     }
   };
   logger.info(
