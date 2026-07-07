@@ -98818,6 +98818,181 @@ var admin_bookings_default = router22;
 var import_express24 = __toESM(require_express2(), 1);
 init_drizzle_orm();
 
+// src/lib/tj-booking-poller.ts
+init_drizzle_orm();
+var POLL_INTERVAL_MS = 6e4;
+var GIVE_UP_HOURS = 24;
+var MAX_BATCH = 20;
+async function pollOnce() {
+  const giveUpBefore = new Date(Date.now() - GIVE_UP_HOURS * 60 * 60 * 1e3);
+  const recentCutoff = new Date(Date.now() - 30 * 60 * 1e3);
+  let candidates = [];
+  try {
+    candidates = await db.select().from(bookingsTable).where(
+      and(
+        eq(bookingsTable.bookingType, "flight"),
+        or(
+          // Pending bookings younger than GIVE_UP_HOURS
+          and(
+            eq(bookingsTable.bookingStatus, "pending"),
+            sql`${bookingsTable.createdAt} > ${giveUpBefore.toISOString()}`
+          ),
+          // Recently created confirmed bookings with no PNR (created in last 30 min)
+          and(
+            eq(bookingsTable.bookingStatus, "confirmed"),
+            sql`${bookingsTable.createdAt} > ${recentCutoff.toISOString()}`,
+            sql`(${bookingsTable.details}->>'pnr') IS NULL OR (${bookingsTable.details}->>'pnr') = 'null'`
+          )
+        )
+      )
+    ).limit(MAX_BATCH);
+  } catch (err) {
+    logger.error({ err: err?.message }, "[tj-poller] DB query failed");
+    return;
+  }
+  const toCheck = candidates.filter((b) => {
+    const d = b.details || {};
+    return !!d.tjBookingRef;
+  });
+  if (toCheck.length === 0) return;
+  logger.info({ count: toCheck.length }, "[tj-poller] checking pending/unconfirmed TripJack bookings");
+  for (const booking of toCheck) {
+    const details = booking.details || {};
+    const tjBookingRef = details.tjBookingRef;
+    const bookingRef = booking.bookingRef ?? "(unknown)";
+    const detail = await fetchTjBookingDetail(
+      tjBookingRef,
+      `tj-poller/${bookingRef}`
+    ).catch((err) => {
+      logger.warn(
+        { bookingRef, tjBookingRef, err: err?.message },
+        "[tj-poller] fetchTjBookingDetail threw \u2014 will retry next cycle"
+      );
+      return null;
+    });
+    if (!detail || detail.source === "none") {
+      logger.info(
+        { bookingRef, tjBookingRef },
+        "[tj-poller] all strategies failed \u2014 will re-check next cycle"
+      );
+    } else {
+      const rawStatus = detail.rawStatus;
+      const refreshedPnr = detail.pnr || details.pnr || null;
+      if (rawStatus === "CONFIRMED") {
+        await db.update(bookingsTable).set({
+          bookingStatus: "confirmed",
+          status: "confirmed",
+          details: {
+            ...details,
+            pnr: refreshedPnr,
+            tjDetailStatus: "CONFIRMED",
+            source: detail.source,
+            ...detail.tjPassengers.length > 0 ? { tjPassengers: detail.tjPassengers } : {},
+            ...detail.ticketNumbers.length > 0 ? { ticketNumbers: detail.ticketNumbers } : {}
+          }
+        }).where(eq(bookingsTable.bookingRef, bookingRef));
+        logger.info(
+          { bookingRef, tjBookingRef, pnr: refreshedPnr, tickets: detail.ticketNumbers.length, source: detail.source },
+          "[tj-poller] booking CONFIRMED by TripJack \u2014 DB updated"
+        );
+      } else if (rawStatus === "FAILED" || rawStatus === "CANCELLED") {
+        await db.update(bookingsTable).set({
+          bookingStatus: "failed",
+          status: "cancelled",
+          failureCode: "tj_failed",
+          failureReason: `TripJack booking ${rawStatus.toLowerCase()}`,
+          details: { ...details, tjDetailStatus: rawStatus }
+        }).where(eq(bookingsTable.bookingRef, bookingRef));
+        logger.warn({ bookingRef, tjBookingRef, rawStatus }, "[tj-poller] booking FAILED/CANCELLED by TripJack \u2014 DB updated");
+      } else {
+        logger.info(
+          { bookingRef, tjBookingRef, rawStatus: rawStatus || "(absent)", source: detail.source },
+          "[tj-poller] booking still pending \u2014 will re-check next cycle"
+        );
+      }
+    }
+    if (booking.bookingStatus === "pending") {
+      const createdAt = booking.createdAt ? new Date(booking.createdAt) : null;
+      if (createdAt && createdAt < giveUpBefore) {
+        await db.update(bookingsTable).set({ bookingStatus: "failed", status: "cancelled", failureCode: "tj_timeout", failureReason: "TripJack did not confirm within 24 hours" }).where(eq(bookingsTable.bookingRef, bookingRef));
+        logger.error({ bookingRef, tjBookingRef }, "[tj-poller] giving up \u2014 booking pending > 24 hours");
+      }
+    }
+  }
+}
+var _pollTimer = null;
+function startTjBookingPoller() {
+  if (_pollTimer) return;
+  logger.info({ intervalMs: POLL_INTERVAL_MS }, "[tj-poller] starting TripJack booking status poller");
+  setTimeout(() => {
+    pollOnce().catch((e) => logger.error({ err: e?.message }, "[tj-poller] initial poll error"));
+  }, 1e4);
+  _pollTimer = setInterval(() => {
+    pollOnce().catch((e) => logger.error({ err: e?.message }, "[tj-poller] poll cycle error"));
+  }, POLL_INTERVAL_MS);
+}
+var _burstActive = /* @__PURE__ */ new Set();
+async function scheduleBookingBurstPoll(bookingRef, tjBookingRef) {
+  if (_burstActive.has(bookingRef)) return;
+  _burstActive.add(bookingRef);
+  const delays = [5e3, 15e3, 3e4, 6e4];
+  try {
+    for (const delay of delays) {
+      await new Promise((resolve2) => setTimeout(resolve2, delay));
+      let row;
+      try {
+        [row] = await db.select().from(bookingsTable).where(eq(bookingsTable.bookingRef, bookingRef)).limit(1);
+      } catch (err) {
+        logger.warn({ bookingRef, err: err?.message }, "[burst-poll] DB read failed \u2014 skipping this interval");
+        continue;
+      }
+      if (!row || row.bookingStatus !== "pending") {
+        logger.info({ bookingRef }, "[burst-poll] booking no longer pending \u2014 stopping burst");
+        break;
+      }
+      const detail = await fetchTjBookingDetail(tjBookingRef, `burst-poll/${bookingRef}`).catch(() => null);
+      if (!detail || detail.source === "none") {
+        logger.info({ bookingRef, tjBookingRef, delay }, "[burst-poll] all strategies failed \u2014 will retry at next interval");
+        continue;
+      }
+      const details = row.details || {};
+      const refreshedPnr = detail.pnr || details.pnr || null;
+      if (detail.rawStatus === "CONFIRMED") {
+        await db.update(bookingsTable).set({
+          bookingStatus: "confirmed",
+          status: "confirmed",
+          details: {
+            ...details,
+            pnr: refreshedPnr,
+            tjDetailStatus: "CONFIRMED",
+            source: detail.source,
+            ...detail.tjPassengers.length > 0 ? { tjPassengers: detail.tjPassengers } : {},
+            ...detail.ticketNumbers.length > 0 ? { ticketNumbers: detail.ticketNumbers } : {}
+          }
+        }).where(eq(bookingsTable.bookingRef, bookingRef));
+        logger.info({ bookingRef, tjBookingRef, pnr: refreshedPnr }, "[burst-poll] booking CONFIRMED \u2014 DB updated");
+        break;
+      } else if (detail.rawStatus === "FAILED" || detail.rawStatus === "CANCELLED") {
+        await db.update(bookingsTable).set({
+          bookingStatus: "failed",
+          status: "cancelled",
+          failureCode: "tj_failed",
+          failureReason: `TripJack booking ${detail.rawStatus.toLowerCase()}`,
+          details: { ...details, tjDetailStatus: detail.rawStatus }
+        }).where(eq(bookingsTable.bookingRef, bookingRef));
+        logger.warn({ bookingRef, tjBookingRef, rawStatus: detail.rawStatus }, "[burst-poll] booking FAILED \u2014 DB updated");
+        break;
+      } else {
+        logger.info({ bookingRef, tjBookingRef, rawStatus: detail.rawStatus || "(absent)" }, "[burst-poll] still pending \u2014 next interval");
+      }
+    }
+  } catch (err) {
+    logger.error({ bookingRef, err: err?.message }, "[burst-poll] unexpected error in burst poll");
+  } finally {
+    _burstActive.delete(bookingRef);
+  }
+}
+
 // src/routes/verify-payment.ts
 var import_express23 = __toESM(require_express2(), 1);
 import crypto4 from "crypto";
@@ -99426,6 +99601,11 @@ ${"#".repeat(80)}`);
       },
       `[book-flight] STEP 4 COMPLETE \u2014 booking updated in DB`
     );
+    if (finalBkSt === "pending" && tjBookingRef) {
+      void scheduleBookingBurstPoll(bookingRef, tjBookingRef).catch(
+        (err) => logger.warn({ bookingRef, err: err?.message }, "[book-flight] burst poll scheduling error")
+      );
+    }
     res.json({
       success: true,
       status: finalBkSt,
@@ -100687,120 +100867,6 @@ async function migrateLogoToFile() {
   } catch (err) {
     logger.warn({ err }, "[migrate-logo] Non-critical: migration failed, will retry on next start");
   }
-}
-
-// src/lib/tj-booking-poller.ts
-init_drizzle_orm();
-var POLL_INTERVAL_MS = 6e4;
-var GIVE_UP_HOURS = 24;
-var MAX_BATCH = 20;
-async function pollOnce() {
-  const giveUpBefore = new Date(Date.now() - GIVE_UP_HOURS * 60 * 60 * 1e3);
-  const recentCutoff = new Date(Date.now() - 30 * 60 * 1e3);
-  let candidates = [];
-  try {
-    candidates = await db.select().from(bookingsTable).where(
-      and(
-        eq(bookingsTable.bookingType, "flight"),
-        or(
-          // Pending bookings younger than GIVE_UP_HOURS
-          and(
-            eq(bookingsTable.bookingStatus, "pending"),
-            sql`${bookingsTable.createdAt} > ${giveUpBefore.toISOString()}`
-          ),
-          // Recently created confirmed bookings with no PNR (created in last 30 min)
-          and(
-            eq(bookingsTable.bookingStatus, "confirmed"),
-            sql`${bookingsTable.createdAt} > ${recentCutoff.toISOString()}`,
-            sql`(${bookingsTable.details}->>'pnr') IS NULL OR (${bookingsTable.details}->>'pnr') = 'null'`
-          )
-        )
-      )
-    ).limit(MAX_BATCH);
-  } catch (err) {
-    logger.error({ err: err?.message }, "[tj-poller] DB query failed");
-    return;
-  }
-  const toCheck = candidates.filter((b) => {
-    const d = b.details || {};
-    return !!d.tjBookingRef;
-  });
-  if (toCheck.length === 0) return;
-  logger.info({ count: toCheck.length }, "[tj-poller] checking pending/unconfirmed TripJack bookings");
-  for (const booking of toCheck) {
-    const details = booking.details || {};
-    const tjBookingRef = details.tjBookingRef;
-    const bookingRef = booking.bookingRef ?? "(unknown)";
-    const detail = await fetchTjBookingDetail(
-      tjBookingRef,
-      `tj-poller/${bookingRef}`
-    ).catch((err) => {
-      logger.warn(
-        { bookingRef, tjBookingRef, err: err?.message },
-        "[tj-poller] fetchTjBookingDetail threw \u2014 will retry next cycle"
-      );
-      return null;
-    });
-    if (!detail || detail.source === "none") {
-      logger.info(
-        { bookingRef, tjBookingRef },
-        "[tj-poller] all strategies failed \u2014 will re-check next cycle"
-      );
-    } else {
-      const rawStatus = detail.rawStatus;
-      const refreshedPnr = detail.pnr || details.pnr || null;
-      if (rawStatus === "CONFIRMED") {
-        await db.update(bookingsTable).set({
-          bookingStatus: "confirmed",
-          status: "confirmed",
-          details: {
-            ...details,
-            pnr: refreshedPnr,
-            tjDetailStatus: "CONFIRMED",
-            source: detail.source,
-            ...detail.tjPassengers.length > 0 ? { tjPassengers: detail.tjPassengers } : {},
-            ...detail.ticketNumbers.length > 0 ? { ticketNumbers: detail.ticketNumbers } : {}
-          }
-        }).where(eq(bookingsTable.bookingRef, bookingRef));
-        logger.info(
-          { bookingRef, tjBookingRef, pnr: refreshedPnr, tickets: detail.ticketNumbers.length, source: detail.source },
-          "[tj-poller] booking CONFIRMED by TripJack \u2014 DB updated"
-        );
-      } else if (rawStatus === "FAILED" || rawStatus === "CANCELLED") {
-        await db.update(bookingsTable).set({
-          bookingStatus: "failed",
-          status: "cancelled",
-          failureCode: "tj_failed",
-          failureReason: `TripJack booking ${rawStatus.toLowerCase()}`,
-          details: { ...details, tjDetailStatus: rawStatus }
-        }).where(eq(bookingsTable.bookingRef, bookingRef));
-        logger.warn({ bookingRef, tjBookingRef, rawStatus }, "[tj-poller] booking FAILED/CANCELLED by TripJack \u2014 DB updated");
-      } else {
-        logger.info(
-          { bookingRef, tjBookingRef, rawStatus: rawStatus || "(absent)", source: detail.source },
-          "[tj-poller] booking still pending \u2014 will re-check next cycle"
-        );
-      }
-    }
-    if (booking.bookingStatus === "pending") {
-      const createdAt = booking.createdAt ? new Date(booking.createdAt) : null;
-      if (createdAt && createdAt < giveUpBefore) {
-        await db.update(bookingsTable).set({ bookingStatus: "failed", status: "cancelled", failureCode: "tj_timeout", failureReason: "TripJack did not confirm within 24 hours" }).where(eq(bookingsTable.bookingRef, bookingRef));
-        logger.error({ bookingRef, tjBookingRef }, "[tj-poller] giving up \u2014 booking pending > 24 hours");
-      }
-    }
-  }
-}
-var _pollTimer = null;
-function startTjBookingPoller() {
-  if (_pollTimer) return;
-  logger.info({ intervalMs: POLL_INTERVAL_MS }, "[tj-poller] starting TripJack booking status poller");
-  setTimeout(() => {
-    pollOnce().catch((e) => logger.error({ err: e?.message }, "[tj-poller] initial poll error"));
-  }, 1e4);
-  _pollTimer = setInterval(() => {
-    pollOnce().catch((e) => logger.error({ err: e?.message }, "[tj-poller] poll cycle error"));
-  }, POLL_INTERVAL_MS);
 }
 
 // src/index.ts

@@ -225,7 +225,8 @@ export default function BookingDetail() {
     fetchBooking();
   }, [id]);
 
-  // Auto-refresh TripJack status once on load for pending flight bookings.
+  // Auto-refresh TripJack status for pending flight bookings.
+  // Fires once 2 s after load, then every 10 s while still pending.
   // Must be BEFORE early returns to satisfy React hooks rules.
   useEffect(() => {
     if (!booking) return;
@@ -236,30 +237,45 @@ export default function BookingDetail() {
     if (!isPend) return;
     const ref = String(booking.bookingRef || booking.bookingId || booking.id || "");
     if (!ref) return;
+
     let cancelled = false;
-    const timer = setTimeout(async () => {
+    async function fetchStatus() {
       if (cancelled) return;
       try {
         const res = await fetch(`/api/booking-status/${encodeURIComponent(ref)}`);
         if (!res.ok || cancelled) return;
         const data = await res.json();
         if (cancelled) return;
-        const dd = (booking.details ?? {}) as Record<string, any>;
-        setBooking(prev => prev ? {
-          ...prev,
-          status: data.bookingStatus === "confirmed" ? "confirmed" : prev.status,
-          details: {
-            ...dd,
-            pnr:           data.pnr          || dd.pnr,
-            tjBookingRef:  data.tjBookingRef  || dd.tjBookingRef,
-            tjPassengers:  data.tjPassengers  || dd.tjPassengers,
-            ticketNumbers: data.ticketNumbers || dd.ticketNumbers,
-          },
-        } : prev);
+        setBooking(prev => {
+          if (!prev) return prev;
+          const dd = (prev.details ?? {}) as Record<string, any>;
+          return {
+            ...prev,
+            bookingStatus: data.bookingStatus,
+            status: data.bookingStatus === "confirmed" ? "confirmed" : prev.status,
+            details: {
+              ...dd,
+              pnr:           data.pnr          || dd.pnr,
+              tjBookingRef:  data.tjBookingRef  || dd.tjBookingRef,
+              tjPassengers:  data.tjPassengers  || dd.tjPassengers,
+              ticketNumbers: data.ticketNumbers || dd.ticketNumbers,
+            },
+          };
+        });
       } catch { /* non-blocking */ }
-    }, 2000);
-    return () => { cancelled = true; clearTimeout(timer); };
-  }, [booking?.bookingRef]); // fires once when booking loads
+    }
+
+    // Initial check after 2 s
+    const initialTimer = setTimeout(fetchStatus, 2_000);
+    // Continuous 10 s interval
+    const intervalTimer = setInterval(fetchStatus, 10_000);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(initialTimer);
+      clearInterval(intervalTimer);
+    };
+  }, [booking?.bookingRef, booking?.bookingStatus]); // restarts when status changes (stops when confirmed)
 
   if (isLoading) {
     return (
@@ -528,10 +544,13 @@ export default function BookingDetail() {
               <Button
                 size="sm"
                 variant="secondary"
-                className="bg-white/20 text-white hover:bg-white/30 border-0"
+                className="bg-white/20 text-white hover:bg-white/30 border-0 disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={handleDownloadPDF}
+                disabled={isFlight && bookingStatus === "pending"}
+                title={isFlight && bookingStatus === "pending" ? "Ticket will be available once the airline confirms your booking" : undefined}
               >
-                <Download className="w-4 h-4 mr-1.5" /> Download PDF
+                <Download className="w-4 h-4 mr-1.5" />
+                {isFlight && bookingStatus === "pending" ? "Awaiting Confirmation…" : "Download PDF"}
               </Button>
               <Button size="sm" variant="secondary" className="bg-white/20 text-white hover:bg-white/30 border-0" asChild>
                 <a href={invoiceUrl} target="_blank" rel="noopener noreferrer">

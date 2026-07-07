@@ -4,6 +4,7 @@ import { db, bookingsTable, bookingRefundsTable } from "@workspace/db";
 import { extractTripJackError } from "../lib/tripjack-auth.js";
 import { tjPostWithRetry } from "../lib/tj-retry.js";
 import { fetchTjBookingDetail } from "../lib/tj-booking-helper.js";
+import { scheduleBookingBurstPoll } from "../lib/tj-booking-poller.js";
 import { logger } from "../lib/logger.js";
 import { verifyRazorpaySignature, checkRazorpayPaymentLive } from "./verify-payment.js";
 import { getProviderConfig } from "../lib/provider-config.js";
@@ -712,6 +713,17 @@ router.post("/book-flight", async (req, res): Promise<void> => {
       },
       `[book-flight] STEP 4 COMPLETE — booking updated in DB`,
     );
+
+    // ── Burst poll for PENDING bookings ─────────────────────────────────────
+    // In production (whitelisted endpoints) this catches TripJack's async
+    // confirmation within seconds (5 s → 15 s → 30 s → 60 s).
+    // In sandbox, the detail endpoint returns 404; the attempts are harmless
+    // and the 60-second steady-state poller keeps retrying until whitelisted.
+    if (finalBkSt === "pending" && tjBookingRef) {
+      void scheduleBookingBurstPoll(bookingRef, tjBookingRef).catch((err: any) =>
+        logger.warn({ bookingRef, err: err?.message }, "[book-flight] burst poll scheduling error"),
+      );
+    }
 
     res.json({
       success:      true,

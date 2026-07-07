@@ -303,14 +303,14 @@ export default function PaymentSuccess() {
     return () => { cancelled = true; clearTimeout(timer); };
   }, [bookingDetails?.bookingId]); // only fire once when bookingId first appears
 
-  // ── 30-second auto-refresh when booking is pending ───────────────────────
+  // ── 10-second auto-refresh when booking is pending ───────────────────────
   useEffect(() => {
     if (!bookingDetails?.bookingId || bookingDetails.bookingType !== "flight") return;
     if (bookingDetails.tjBookingStatus !== "pending") return;
 
     const timer = setInterval(() => {
       void handleRefreshStatus();
-    }, 30_000);
+    }, 10_000);
 
     return () => clearInterval(timer);
   }, [bookingDetails?.bookingId, bookingDetails?.tjBookingStatus, bookingDetails?.bookingType, handleRefreshStatus]);
@@ -663,9 +663,16 @@ export default function PaymentSuccess() {
                     </a>
                   </Button>
                 )}
-                <Button onClick={handleDownloadTicket} size="lg" className="w-full" variant="default">
+                <Button
+                  onClick={handleDownloadTicket}
+                  size="lg"
+                  className="w-full"
+                  variant="default"
+                  disabled={isPending}
+                  title={isPending ? "Ticket will be available once the airline confirms your booking" : undefined}
+                >
                   <Download className="w-5 h-5 mr-2" />
-                  Download PDF
+                  {isPending ? "Awaiting Confirmation…" : "Download PDF"}
                 </Button>
                 <Button onClick={handleEmailTicket} variant="outline" size="lg" className="w-full">
                   <Mail className="w-5 h-5 mr-2" />

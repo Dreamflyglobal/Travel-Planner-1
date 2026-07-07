@@ -176,3 +176,101 @@ export function stopTjBookingPoller(): void {
     logger.info("[tj-poller] stopped");
   }
 }
+
+/**
+ * Schedule aggressive burst polls for a newly-created PENDING booking.
+ *
+ * Called immediately after AirBook returns a PENDING result. In production
+ * (where /oms/v1/booking/detail is whitelisted) TripJack typically confirms
+ * bookings within a few seconds, so we poll at 5 s → 15 s → 30 s → 60 s
+ * to catch the confirmation as quickly as possible.
+ *
+ * Once confirmed or failed the burst stops; the 60-second steady-state
+ * poller then has nothing left to do for this booking.
+ *
+ * Fire-and-forget — do NOT await the returned Promise.
+ */
+const _burstActive = new Set<string>();
+
+export async function scheduleBookingBurstPoll(
+  bookingRef: string,
+  tjBookingRef: string,
+): Promise<void> {
+  if (_burstActive.has(bookingRef)) return; // already scheduled for this booking
+  _burstActive.add(bookingRef);
+
+  const delays = [5_000, 15_000, 30_000, 60_000]; // 5 s, 15 s, 30 s, 60 s
+
+  try {
+    for (const delay of delays) {
+      await new Promise<void>((resolve) => setTimeout(resolve, delay));
+
+      // Re-read DB — another path may have already confirmed/failed this booking
+      let row: typeof bookingsTable.$inferSelect | undefined;
+      try {
+        [row] = await db
+          .select()
+          .from(bookingsTable)
+          .where(eq(bookingsTable.bookingRef, bookingRef))
+          .limit(1);
+      } catch (err: any) {
+        logger.warn({ bookingRef, err: err?.message }, "[burst-poll] DB read failed — skipping this interval");
+        continue;
+      }
+
+      if (!row || row.bookingStatus !== "pending") {
+        logger.info({ bookingRef }, "[burst-poll] booking no longer pending — stopping burst");
+        break;
+      }
+
+      const detail = await fetchTjBookingDetail(tjBookingRef, `burst-poll/${bookingRef}`).catch(() => null);
+      if (!detail || detail.source === "none") {
+        // Endpoint not yet reachable (sandbox 404) — keep trying
+        logger.info({ bookingRef, tjBookingRef, delay }, "[burst-poll] all strategies failed — will retry at next interval");
+        continue;
+      }
+
+      const details      = (row.details as Record<string, any>) || {};
+      const refreshedPnr = detail.pnr || (details.pnr as string | null) || null;
+
+      if (detail.rawStatus === "CONFIRMED") {
+        await db
+          .update(bookingsTable)
+          .set({
+            bookingStatus: "confirmed",
+            status:        "confirmed",
+            details: {
+              ...details,
+              pnr:            refreshedPnr,
+              tjDetailStatus: "CONFIRMED",
+              source:         detail.source,
+              ...(detail.tjPassengers.length  > 0 ? { tjPassengers:  detail.tjPassengers  } : {}),
+              ...(detail.ticketNumbers.length > 0 ? { ticketNumbers: detail.ticketNumbers } : {}),
+            },
+          })
+          .where(eq(bookingsTable.bookingRef, bookingRef));
+        logger.info({ bookingRef, tjBookingRef, pnr: refreshedPnr }, "[burst-poll] booking CONFIRMED — DB updated");
+        break;
+      } else if (detail.rawStatus === "FAILED" || detail.rawStatus === "CANCELLED") {
+        await db
+          .update(bookingsTable)
+          .set({
+            bookingStatus: "failed",
+            status:        "cancelled",
+            failureCode:   "tj_failed",
+            failureReason: `TripJack booking ${detail.rawStatus.toLowerCase()}`,
+            details:       { ...details, tjDetailStatus: detail.rawStatus },
+          })
+          .where(eq(bookingsTable.bookingRef, bookingRef));
+        logger.warn({ bookingRef, tjBookingRef, rawStatus: detail.rawStatus }, "[burst-poll] booking FAILED — DB updated");
+        break;
+      } else {
+        logger.info({ bookingRef, tjBookingRef, rawStatus: detail.rawStatus || "(absent)" }, "[burst-poll] still pending — next interval");
+      }
+    }
+  } catch (err: any) {
+    logger.error({ bookingRef, err: err?.message }, "[burst-poll] unexpected error in burst poll");
+  } finally {
+    _burstActive.delete(bookingRef);
+  }
+}
