@@ -98799,10 +98799,37 @@ router24.post("/book-flight", async (req, res) => {
     );
     return;
   }
+  const priceIdForRefresh = fareData.resultIndex || fareData.bookingId;
+  let freshBookingId = fareData.bookingId;
+  if (priceIdForRefresh) {
+    try {
+      logger.info(
+        { paymentId, priceId: priceIdForRefresh },
+        "[book-flight] STEP 2: refreshing fareQuote session before AirBook"
+      );
+      const reviewData = await tjPostWithRetry(
+        "/fms/v1/review",
+        { priceIds: [priceIdForRefresh] },
+        { context: "book-flight/fareQuote-refresh", timeoutMs: 15e3, maxRetries: 1 }
+      );
+      const refreshedId = typeof reviewData?.bookingId === "string" && reviewData.bookingId.trim() ? reviewData.bookingId.trim() : typeof reviewData?.data?.bookingId === "string" && reviewData.data.bookingId.trim() ? reviewData.data.bookingId.trim() : void 0;
+      freshBookingId = refreshedId ?? priceIdForRefresh;
+      logger.info(
+        { paymentId, freshBookingId, source: refreshedId ? "review-response" : "priceId-fallback" },
+        "[book-flight] STEP 2: booking session refreshed"
+      );
+    } catch (err) {
+      logger.warn(
+        { paymentId, err: err?.message, priceId: priceIdForRefresh },
+        "[book-flight] STEP 2: fareQuote refresh failed \u2014 proceeding with stored bookingId"
+      );
+    }
+  } else {
+    logger.warn({ paymentId }, "[book-flight] STEP 2: no priceId for refresh \u2014 using stored bookingId");
+  }
   const tjPayload = {
-    bookingId: fareData.bookingId,
+    bookingId: freshBookingId,
     ...fareData.traceId && { traceId: fareData.traceId },
-    ...fareData.resultIndex && { resultIndex: fareData.resultIndex },
     paymentInfos: [{
       paymentMode: "ONLINE_PAYMENT",
       amount: totalPrice,

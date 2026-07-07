@@ -555,12 +555,15 @@ export default function BookingPayment() {
       const fqStr = sessionStorage.getItem("ww_tj_farequote");
       if (fqStr) {
         const fq = JSON.parse(fqStr);
-        traceId     = fq?.data?.traceId    ?? fq?.traceId    ?? undefined;
+        traceId     = fq?.data?.traceId ?? fq?.traceId ?? undefined;
         resultIndex = fq?.data?.results?.[0]?.resultIndex
                    ?? fq?.data?.resultIndex
                    ?? undefined;
       }
     } catch { /* use undefined */ }
+    // Authoritative resultIndex stored at fare-selection time
+    const fareKeyStored = sessionStorage.getItem("ww_tj_farequote_key") ?? undefined;
+    if (!resultIndex && fareKeyStored) resultIndex = fareKeyStored;
 
     const apiBase = (import.meta.env.VITE_API_BASE_URL as string) ?? "";
     try {
@@ -572,17 +575,19 @@ export default function BookingPayment() {
           ...(traceId     && { traceId }),
           ...(resultIndex && { resultIndex }),
           paymentInfos: [{ paymentMode: "ONLINE_PAYMENT", amount: totalAfterCoupon, currency: "INR" }],
-          travellerInfo: s.passengers.map((p, idx) => ({
-            fn: p.name.split(" ")[0] || p.name,
-            ln: p.name.split(" ").slice(1).join(" ") || ".",
-            ti: "MR", dob: "", pNum: p.phone, eml: p.email, pt: "ADULT",
-            ssrSeatInfos:    s.selectedSeats[idx]
-              ? [{ key: s.selectedSeats[idx], code: s.selectedSeats[idx] }]
-              : [],
-            ssrBaggageInfos: s.extraBaggageCode
-              ? [{ key: s.extraBaggageCode, code: s.extraBaggageCode }]
-              : [],
-          })),
+          travellerInfo: s.passengers.map((p, idx) => {
+            const t: Record<string, unknown> = {
+              fn: p.name.split(" ")[0] || p.name,
+              ln: p.name.split(" ").slice(1).join(" ") || ".",
+              ti: "MR",
+              pt: "ADULT",
+            };
+            if (p.phone) t.pNum = p.phone;
+            if (p.email) t.eml  = p.email;
+            if (s.selectedSeats[idx])  t.ssrSeatInfos    = [{ key: s.selectedSeats[idx],  code: s.selectedSeats[idx] }];
+            if (s.extraBaggageCode)    t.ssrBaggageInfos = [{ key: s.extraBaggageCode,    code: s.extraBaggageCode }];
+            return t;
+          }),
           deliveryInfo: {
             emails:  [s.passengers[0].email],
             mobiles: [{ countryCode: "91", number: s.passengers[0].phone }],
@@ -936,12 +941,19 @@ export default function BookingPayment() {
             const fqStr = sessionStorage.getItem("ww_tj_farequote");
             if (fqStr) {
               fqData = JSON.parse(fqStr);
-              traceId     = fqData?.data?.traceId ?? fqData?.traceId ?? undefined;
+              traceId = fqData?.data?.traceId ?? fqData?.traceId ?? undefined;
+              // Try several paths for resultIndex in the fareQuote response
               resultIndex = fqData?.data?.results?.[0]?.resultIndex
                          ?? fqData?.data?.resultIndex
                          ?? undefined;
             }
           } catch { /* use undefined */ }
+
+          // ww_tj_farequote_key is the original resultIndex/priceId stored reliably at
+          // fare-selection time — use it as the authoritative resultIndex for the backend's
+          // fareQuote-refresh step (it's the value TripJack needs to re-create the session).
+          const fareKey = sessionStorage.getItem("ww_tj_farequote_key") ?? undefined;
+          if (!resultIndex && fareKey) resultIndex = fareKey;
 
           // bookingId from sessionStorage → fallback to session object → "" for non-TJ fares
           const tjBookingId = sessionStorage.getItem("ww_tj_booking_id")
@@ -953,6 +965,7 @@ export default function BookingPayment() {
             "[book-flight] bookingId:", tjBookingId || "(non-TJ fare)",
             "| traceId:", traceId ?? "(none)",
             "| resultIndex:", resultIndex ?? "(none)",
+            "| fareKey:", fareKey ?? "(none)",
             "| isTjFare:", isTjFare,
           );
 

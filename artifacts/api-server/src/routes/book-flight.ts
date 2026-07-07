@@ -365,10 +365,61 @@ router.post("/book-flight", async (req, res): Promise<void> => {
     return;
   }
 
+  // ── STEP 2: Refresh TripJack fareQuote to get a non-expired bookingId ───────
+  // TripJack booking sessions expire within a few minutes of the /fms/v1/review
+  // call. By the time the user completes Razorpay checkout, the original session
+  // is almost certainly expired. We call /fms/v1/review again immediately after
+  // payment verification — using the same priceId/resultIndex — to create a fresh
+  // session, then call /oms/v1/air/book right after with no delay.
+  //
+  // priceIdForRefresh: the stable fare identifier. The frontend sends it as
+  //   fareData.resultIndex (when extracted successfully) or fareData.bookingId
+  //   (fallback — the frontend stores the resultIndex there when the review
+  //   response didn't contain a distinct bookingId field).
+  const priceIdForRefresh: string = fareData.resultIndex || fareData.bookingId;
+  let freshBookingId: string = fareData.bookingId;
+
+  if (priceIdForRefresh) {
+    try {
+      logger.info(
+        { paymentId, priceId: priceIdForRefresh },
+        "[book-flight] STEP 2: refreshing fareQuote session before AirBook",
+      );
+      const reviewData = await tjPostWithRetry(
+        "/fms/v1/review",
+        { priceIds: [priceIdForRefresh] },
+        { context: "book-flight/fareQuote-refresh", timeoutMs: 15_000, maxRetries: 1 },
+      );
+
+      // TripJack review response: bookingId may be at top level or inside data.
+      // In many sandbox responses it equals the priceId — what matters is that
+      // calling review again resets the session TTL on the server side.
+      const refreshedId: string | undefined =
+        (typeof reviewData?.bookingId      === "string" && reviewData.bookingId.trim())
+          ? reviewData.bookingId.trim()
+          : (typeof reviewData?.data?.bookingId === "string" && reviewData.data.bookingId.trim())
+            ? reviewData.data.bookingId.trim()
+            : undefined;
+
+      freshBookingId = refreshedId ?? priceIdForRefresh;
+      logger.info(
+        { paymentId, freshBookingId, source: refreshedId ? "review-response" : "priceId-fallback" },
+        "[book-flight] STEP 2: booking session refreshed",
+      );
+    } catch (err: any) {
+      logger.warn(
+        { paymentId, err: err?.message, priceId: priceIdForRefresh },
+        "[book-flight] STEP 2: fareQuote refresh failed — proceeding with stored bookingId",
+      );
+      // Do NOT abort — payment is already verified. Fall back to stored ID.
+    }
+  } else {
+    logger.warn({ paymentId }, "[book-flight] STEP 2: no priceId for refresh — using stored bookingId");
+  }
+
   const tjPayload = {
-    bookingId: fareData.bookingId,
-    ...(fareData.traceId     && { traceId:     fareData.traceId }),
-    ...(fareData.resultIndex && { resultIndex: fareData.resultIndex }),
+    bookingId: freshBookingId,
+    ...(fareData.traceId && { traceId: fareData.traceId }),
     paymentInfos: [{
       paymentMode: "ONLINE_PAYMENT",
       amount:      totalPrice,
