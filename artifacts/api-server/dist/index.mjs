@@ -94533,6 +94533,43 @@ router9.patch("/bookings/ref/:bookingRef/tj-update", async (req, res) => {
     res.status(500).json({ error: err?.message || "Update failed" });
   }
 });
+router9.post("/bookings/ref/:bookingRef/force-confirm", requireAdmin, async (req, res) => {
+  const { bookingRef } = req.params;
+  const { pnr, tjBookingRef, ticketNumbers } = req.body ?? {};
+  if (!pnr?.trim()) {
+    res.status(400).json({ error: "pnr is required" });
+    return;
+  }
+  try {
+    const [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.bookingRef, bookingRef)).limit(1);
+    if (!booking) {
+      res.status(404).json({ error: "Booking not found" });
+      return;
+    }
+    const existingDetails = booking.details ?? {};
+    const patchDetails = {
+      ...existingDetails,
+      pnr: pnr.trim().toUpperCase(),
+      tjDetailStatus: "CONFIRMED",
+      forceConfirmedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      forceConfirmedBy: "admin"
+    };
+    if (tjBookingRef?.trim()) patchDetails.tjBookingRef = tjBookingRef.trim();
+    if (Array.isArray(ticketNumbers) && ticketNumbers.length > 0) {
+      patchDetails.ticketNumbers = ticketNumbers.map((t) => t.trim()).filter(Boolean);
+    }
+    await db.update(bookingsTable).set({
+      bookingStatus: "confirmed",
+      status: "confirmed",
+      details: patchDetails
+    }).where(eq(bookingsTable.bookingRef, bookingRef));
+    logger.info({ bookingRef, pnr: pnr.trim().toUpperCase() }, "[bookings] force-confirm: booking confirmed by admin with PNR");
+    res.json({ success: true, bookingRef, pnr: pnr.trim().toUpperCase() });
+  } catch (err) {
+    logger.error({ err: err?.message, bookingRef }, "[bookings] force-confirm failed");
+    res.status(500).json({ error: err?.message || "Failed to confirm booking" });
+  }
+});
 var bookings_default = router9;
 
 // src/routes/payments.ts
@@ -99187,7 +99224,8 @@ router24.get("/booking-status/:bookingRef", async (req, res) => {
   let currentPnr = details.pnr || null;
   let tjPassengers = details.tjPassengers || [];
   let ticketNumbers = details.ticketNumbers || [];
-  if (currentStatus === "pending" && storedTjRef) {
+  const shouldFetchFromTj = storedTjRef && (currentStatus === "pending" || currentStatus === "confirmed" && !currentPnr);
+  if (shouldFetchFromTj) {
     try {
       const tjData = await tjPostWithRetry(
         "/oms/v1/booking/detail",

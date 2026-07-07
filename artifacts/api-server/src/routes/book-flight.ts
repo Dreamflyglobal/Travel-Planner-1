@@ -791,8 +791,15 @@ router.get("/booking-status/:bookingRef", async (req, res): Promise<void> => {
   let   tjPassengers  = (details.tjPassengers  as Array<{ name: string; pnr: string; ticketNum: string; paxType: string }>) || [];
   let   ticketNumbers = (details.ticketNumbers as string[]) || [];
 
-  // Only hit TripJack when status is pending and we have a TJ booking reference
-  if (currentStatus === "pending" && storedTjRef) {
+  // Call TripJack when:
+  //  (a) status is "pending" — always poll until confirmed/failed
+  //  (b) status is "confirmed" but PNR is missing — booking may have been stored
+  //      as confirmed (old bug) without ever fetching the PNR from TripJack
+  const shouldFetchFromTj = storedTjRef && (
+    currentStatus === "pending" ||
+    (currentStatus === "confirmed" && !currentPnr)
+  );
+  if (shouldFetchFromTj) {
     try {
       const tjData = await tjPostWithRetry(
         "/oms/v1/booking/detail",

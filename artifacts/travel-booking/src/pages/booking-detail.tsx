@@ -25,6 +25,7 @@ import {
   BedDouble,
   Loader2,
   Send,
+  RefreshCw,
 } from "lucide-react";
 import { sanitizeLocation, formatRoute } from "@/lib/location-utils";
 import { useBranding } from "@/contexts/branding-context";
@@ -121,6 +122,7 @@ export default function BookingDetail() {
   const [, setLocation] = useLocation();
   const [booking, setBooking] = useState<BookingDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [refreshingTj, setRefreshingTj] = useState(false);
   const [resending, setResending] = useState<string | null>(null);
   const { toast } = useToast();
   const { branding } = useBranding();
@@ -222,6 +224,42 @@ export default function BookingDetail() {
     };
     fetchBooking();
   }, [id]);
+
+  // Auto-refresh TripJack status once on load for pending flight bookings.
+  // Must be BEFORE early returns to satisfy React hooks rules.
+  useEffect(() => {
+    if (!booking) return;
+    if ((booking.bookingType || booking.type) !== "flight") return;
+    const d = (booking.details ?? {}) as Record<string, any>;
+    const isPend = (booking.bookingStatus || booking.status || "") === "pending" ||
+                   (d.tjDetailStatus || "").toUpperCase() === "PENDING";
+    if (!isPend) return;
+    const ref = String(booking.bookingRef || booking.bookingId || booking.id || "");
+    if (!ref) return;
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      if (cancelled) return;
+      try {
+        const res = await fetch(`/api/booking-status/${encodeURIComponent(ref)}`);
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (cancelled) return;
+        const dd = (booking.details ?? {}) as Record<string, any>;
+        setBooking(prev => prev ? {
+          ...prev,
+          status: data.bookingStatus === "confirmed" ? "confirmed" : prev.status,
+          details: {
+            ...dd,
+            pnr:           data.pnr          || dd.pnr,
+            tjBookingRef:  data.tjBookingRef  || dd.tjBookingRef,
+            tjPassengers:  data.tjPassengers  || dd.tjPassengers,
+            ticketNumbers: data.ticketNumbers || dd.ticketNumbers,
+          },
+        } : prev);
+      } catch { /* non-blocking */ }
+    }, 2000);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [booking?.bookingRef]); // fires once when booking loads
 
   if (isLoading) {
     return (
@@ -366,6 +404,48 @@ export default function BookingDetail() {
     }
   };
 
+  // ── TripJack status refresh (regular function — after early returns is fine) ──
+  async function handleRefreshTjStatus() {
+    if (!booking || refreshingTj) return;
+    const ref = String(booking.bookingRef || booking.bookingId || booking.id || "");
+    if (!ref) return;
+    setRefreshingTj(true);
+    try {
+      const res = await fetch(`/api/booking-status/${encodeURIComponent(ref)}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const d = (booking.details ?? {}) as Record<string, any>;
+      setBooking(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          status:      data.bookingStatus === "confirmed" ? "confirmed" : prev.status,
+          details: {
+            ...d,
+            pnr:          data.pnr          || d.pnr,
+            tjBookingRef: data.tjBookingRef  || d.tjBookingRef,
+            tjPassengers: data.tjPassengers  || d.tjPassengers,
+            ticketNumbers:data.ticketNumbers || d.ticketNumbers,
+          },
+        };
+      });
+      if (data.bookingStatus === "confirmed") {
+        toast({
+          title: "Booking Confirmed!",
+          description: data.pnr ? `Your PNR is ${data.pnr}` : "Your booking is now confirmed by the airline.",
+        });
+      } else if (data.bookingStatus === "failed") {
+        toast({ variant: "destructive", title: "Booking Failed", description: "Please contact support for a refund." });
+      } else {
+        toast({ title: "Still Pending", description: "Booking is still awaiting airline confirmation." });
+      }
+    } catch {
+      toast({ variant: "destructive", title: "Could not refresh", description: "Please try again." });
+    } finally {
+      setRefreshingTj(false);
+    }
+  }
+
   const invoiceUrl = `/invoice/${bookingId}`;
   const dateStr = (d: string) => {
     try { return format(new Date(d), "dd MMM yyyy"); } catch { return d; }
@@ -388,20 +468,32 @@ export default function BookingDetail() {
                 {getIcon()}
               </div>
               <div>
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
                   <span className="text-white/70 text-xs font-bold uppercase tracking-widest">
                     {bookingType} Booking
                   </span>
-                  {!isCancelled && (
-                    <span className="bg-green-400/20 text-green-100 border border-green-400/40 text-xs font-bold px-2 py-0.5 rounded-full">
-                      Confirmed
-                    </span>
-                  )}
-                  {isCancelled && (
-                    <span className="bg-red-400/20 text-red-100 border border-red-400/40 text-xs font-bold px-2 py-0.5 rounded-full">
-                      Cancelled
-                    </span>
-                  )}
+                  {(() => {
+                    const d = (booking.details ?? {}) as Record<string, any>;
+                    const isPending = isFlight && (
+                      bookingStatus === "pending" ||
+                      (d.tjDetailStatus || "").toUpperCase() === "PENDING"
+                    );
+                    if (isPending) return (
+                      <span className="bg-amber-400/20 text-amber-100 border border-amber-400/40 text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <Clock className="w-3 h-3" /> Pending
+                      </span>
+                    );
+                    if (isCancelled) return (
+                      <span className="bg-red-400/20 text-red-100 border border-red-400/40 text-xs font-bold px-2 py-0.5 rounded-full">
+                        Cancelled
+                      </span>
+                    );
+                    return (
+                      <span className="bg-green-400/20 text-green-100 border border-green-400/40 text-xs font-bold px-2 py-0.5 rounded-full">
+                        Confirmed
+                      </span>
+                    );
+                  })()}
                 </div>
                 <h1 className="text-xl md:text-2xl font-extrabold">
                   {booking.title || booking.details?.title || `${bookingType} Booking`}
@@ -414,6 +506,25 @@ export default function BookingDetail() {
 
             {/* Action buttons */}
             <div className="flex flex-wrap gap-2">
+              {isFlight && (() => {
+                const d = (booking.details ?? {}) as Record<string, any>;
+                const isPending = bookingStatus === "pending" ||
+                  (d.tjDetailStatus || "").toUpperCase() === "PENDING" ||
+                  (!d.pnr && d.tjBookingRef);
+                if (!isPending) return null;
+                return (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="bg-amber-500/30 text-white hover:bg-amber-500/50 border border-amber-400/40"
+                    onClick={handleRefreshTjStatus}
+                    disabled={refreshingTj}
+                  >
+                    <RefreshCw className={`w-4 h-4 mr-1.5 ${refreshingTj ? "animate-spin" : ""}`} />
+                    {refreshingTj ? "Checking…" : "Check Airline Status"}
+                  </Button>
+                );
+              })()}
               <Button
                 size="sm"
                 variant="secondary"

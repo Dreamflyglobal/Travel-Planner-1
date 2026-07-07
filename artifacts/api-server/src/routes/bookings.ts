@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { logger } from "../lib/logger.js";
+import { requireAdmin } from "../lib/admin-auth.js";
 import { eq, desc, or } from "drizzle-orm";
 import { db, bookingsTable, usersTable } from "@workspace/db";
 import { nextBookingRef } from "../lib/booking-id.js";
@@ -651,6 +652,61 @@ router.patch("/bookings/ref/:bookingRef/tj-update", async (req, res): Promise<vo
   } catch (err: any) {
     logger.error({ err: err?.message, bookingRef }, "[bookings] tj-update failed");
     res.status(500).json({ error: err?.message || "Update failed" });
+  }
+});
+
+// ── POST /api/bookings/ref/:bookingRef/force-confirm ───────────────────────────
+// Admin-only endpoint: manually confirm a booking and record the PNR.
+// Used when TripJack has confirmed the booking in their portal but the detail
+// API is inaccessible (e.g. sandbox IP restrictions prevent programmatic polling).
+router.post("/bookings/ref/:bookingRef/force-confirm", requireAdmin, async (req, res): Promise<void> => {
+  const { bookingRef } = req.params;
+  const { pnr, tjBookingRef, ticketNumbers } = req.body ?? {};
+
+  if (!pnr?.trim()) {
+    res.status(400).json({ error: "pnr is required" });
+    return;
+  }
+
+  try {
+    const [booking] = await db
+      .select()
+      .from(bookingsTable)
+      .where(eq(bookingsTable.bookingRef, bookingRef))
+      .limit(1);
+
+    if (!booking) {
+      res.status(404).json({ error: "Booking not found" });
+      return;
+    }
+
+    const existingDetails = (booking.details as Record<string, any>) ?? {};
+    const patchDetails: Record<string, any> = {
+      ...existingDetails,
+      pnr:              pnr.trim().toUpperCase(),
+      tjDetailStatus:   "CONFIRMED",
+      forceConfirmedAt: new Date().toISOString(),
+      forceConfirmedBy: "admin",
+    };
+    if (tjBookingRef?.trim()) patchDetails.tjBookingRef  = tjBookingRef.trim();
+    if (Array.isArray(ticketNumbers) && ticketNumbers.length > 0) {
+      patchDetails.ticketNumbers = ticketNumbers.map((t: string) => t.trim()).filter(Boolean);
+    }
+
+    await db
+      .update(bookingsTable)
+      .set({
+        bookingStatus: "confirmed",
+        status:        "confirmed",
+        details:       patchDetails,
+      })
+      .where(eq(bookingsTable.bookingRef, bookingRef));
+
+    logger.info({ bookingRef, pnr: pnr.trim().toUpperCase() }, "[bookings] force-confirm: booking confirmed by admin with PNR");
+    res.json({ success: true, bookingRef, pnr: pnr.trim().toUpperCase() });
+  } catch (err: any) {
+    logger.error({ err: err?.message, bookingRef }, "[bookings] force-confirm failed");
+    res.status(500).json({ error: err?.message || "Failed to confirm booking" });
   }
 });
 

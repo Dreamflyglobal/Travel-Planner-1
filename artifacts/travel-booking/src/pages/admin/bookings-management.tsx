@@ -548,6 +548,10 @@ function BookingDetailSheet({
   const [markingFailed, setMarkingFailed] = useState(false);
   const [failureReasonInput, setFailureReasonInput] = useState("");
   const [showMarkFailedForm, setShowMarkFailedForm] = useState(false);
+  const [showForceConfirm, setShowForceConfirm] = useState(false);
+  const [forceConfirmPnr, setForceConfirmPnr] = useState("");
+  const [forceConfirmTjRef, setForceConfirmTjRef] = useState("");
+  const [forcingConfirm, setForcingConfirm] = useState(false);
 
   if (!booking) return null;
 
@@ -654,6 +658,52 @@ function BookingDetailSheet({
     && booking.bookingStatus !== "failed"
     && booking.status !== "refunded"
     && booking.status !== "booking_failed";
+
+  async function handleForceConfirm() {
+    if (!forceConfirmPnr.trim()) {
+      toast({ title: "PNR required", description: "Please enter the PNR from TripJack portal.", variant: "destructive" });
+      return;
+    }
+    const ref = booking!.bookingRef;
+    if (!ref) {
+      toast({ title: "No booking ref", description: "This booking has no booking reference.", variant: "destructive" });
+      return;
+    }
+    setForcingConfirm(true);
+    try {
+      const res = await fetch(`/api/bookings/ref/${ref}/force-confirm`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...getAuthHeader() },
+        body: JSON.stringify({
+          pnr: forceConfirmPnr.trim().toUpperCase(),
+          tjBookingRef: forceConfirmTjRef.trim() || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error || "Failed");
+      onBookingUpdated({
+        ...booking!,
+        bookingStatus: "confirmed",
+        status:        "confirmed",
+        details: {
+          ...(booking!.details as Record<string, any>),
+          pnr:          json.pnr,
+          tjBookingRef: forceConfirmTjRef.trim() || (booking!.details as Record<string, any>)?.tjBookingRef,
+          tjDetailStatus: "CONFIRMED",
+        },
+      });
+      setShowForceConfirm(false);
+      setForceConfirmPnr("");
+      setForceConfirmTjRef("");
+      toast({
+        title: "Booking Confirmed",
+        description: `PNR ${json.pnr} saved. Booking marked as confirmed.`,
+      });
+    } catch (e) {
+      toast({ title: "Failed", description: String(e instanceof Error ? e.message : e), variant: "destructive" });
+    } finally { setForcingConfirm(false); }
+  }
 
   async function handleMarkFailed() {
     if (!failureReasonInput.trim()) {
@@ -931,6 +981,56 @@ function BookingDetailSheet({
                     </Button>
                   )}
                 </div>
+
+                {/* Force Confirm inline form — for flight bookings confirmed in TripJack but not yet synced */}
+                {booking.serviceType === "flight" && booking.bookingStatus !== "confirmed" && (
+                  <Button size="sm" variant="outline"
+                    className="gap-1.5 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                    onClick={() => setShowForceConfirm(v => !v)} disabled={forcingConfirm}>
+                    <CheckCheck className="w-3.5 h-3.5" /> Enter PNR &amp; Confirm
+                  </Button>
+                )}
+
+                {showForceConfirm && (
+                  <div className="mt-4 p-4 rounded-xl border border-emerald-200 bg-emerald-50 space-y-3">
+                    <p className="text-xs font-semibold text-emerald-800 uppercase tracking-wide flex items-center gap-1.5">
+                      <CheckCheck className="w-3.5 h-3.5" /> Confirm Booking with TripJack PNR
+                    </p>
+                    <p className="text-xs text-emerald-700">
+                      Use when TripJack portal shows the booking as <strong>Confirmed/Success</strong> but Dream Fly hasn't synced yet.
+                      Enter the PNR shown in TripJack's portal and save.
+                    </p>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold text-emerald-800">PNR (Airline Booking Code) *</Label>
+                      <Input
+                        placeholder="e.g. ABC123"
+                        value={forceConfirmPnr}
+                        onChange={(e) => setForceConfirmPnr(e.target.value.toUpperCase())}
+                        className="font-mono uppercase border-emerald-300 focus:border-emerald-500"
+                        maxLength={12}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold text-emerald-800">TripJack Booking ID (optional)</Label>
+                      <Input
+                        placeholder="e.g. TJS107302567085"
+                        value={forceConfirmTjRef}
+                        onChange={(e) => setForceConfirmTjRef(e.target.value)}
+                        className="font-mono border-emerald-300 focus:border-emerald-500"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
+                        onClick={handleForceConfirm} disabled={forcingConfirm || !forceConfirmPnr.trim()}>
+                        {forcingConfirm ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCheck className="w-3.5 h-3.5" />}
+                        Save PNR &amp; Confirm Booking
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => { setShowForceConfirm(false); setForceConfirmPnr(""); setForceConfirmTjRef(""); }}>
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Mark Failed inline form */}
                 {showMarkFailedForm && (

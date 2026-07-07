@@ -267,6 +267,42 @@ export default function PaymentSuccess() {
     return () => clearInterval(interval);
   }, []);
 
+  // ── Immediate auto-refresh on page load for pending flight bookings ─────────
+  // Fires once (1.5 s after the bookingId first appears in state) so the user
+  // doesn't have to wait a full 30 seconds for the first TripJack status check.
+  useEffect(() => {
+    if (!bookingDetails?.bookingId) return;
+    if (bookingDetails.bookingType !== "flight") return;
+    if (bookingDetails.tjBookingStatus !== "pending") return;
+
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      if (cancelled) return;
+      try {
+        const res = await fetch(`/api/booking-status/${encodeURIComponent(bookingDetails.bookingId)}`);
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (cancelled) return;
+        setBookingDetails(prev => {
+          if (!prev) return prev;
+          const updated: BookingDetails = {
+            ...prev,
+            tjBookingStatus: data.bookingStatus as "confirmed" | "pending" | "failed",
+            tjPnr:           data.pnr           || prev.tjPnr,
+            tjBookingRef:    data.tjBookingRef   || prev.tjBookingRef,
+            tjPassengers:    data.tjPassengers   || prev.tjPassengers,
+            ticketNumbers:   data.ticketNumbers  || prev.ticketNumbers,
+          };
+          if (data.pnr) (updated as any).pnr = data.pnr;
+          localStorage.setItem("lastSuccessfulBooking", JSON.stringify(updated));
+          return updated;
+        });
+      } catch { /* non-blocking */ }
+    }, 1500);
+
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [bookingDetails?.bookingId]); // only fire once when bookingId first appears
+
   // ── 30-second auto-refresh when booking is pending ───────────────────────
   useEffect(() => {
     if (!bookingDetails?.bookingId || bookingDetails.bookingType !== "flight") return;
