@@ -93031,16 +93031,16 @@ function mapTripJackFlight(item, idx, fromIata, toIata, traceId = "") {
     const nRF = adultFd?.nRF === true || adultFd?.nRF === 1;
     const refundable = rTNum === 1 || rTNum === 2 || rTStr === "FULL_REFUNDABLE" || rTStr === "PARTIAL_REFUNDABLE" || rTStr === "REFUNDABLE" ? true : rTNum === 0 || rTStr === "NON_REFUNDABLE" ? false : !nRF;
     const FARE_SOURCE_LABEL = {
-      PUBLISHED: "Regular",
-      NDC_VALUE: "Airline Direct",
-      CORPORATE: "Corporate",
-      SME: "SME",
-      SPECIAL: "Special",
-      OFFER: "Offer",
-      GOVERNMENT: "Government",
-      STUDENT: "Student",
-      SENIOR: "Senior",
-      ARMED_FORCE: "Armed Forces"
+      PUBLISHED: "Regular Fare",
+      NDC_VALUE: "NDC Fare",
+      CORPORATE: "Corporate Fare",
+      SME: "SME Fare",
+      SPECIAL: "Special Fare",
+      OFFER: "Offer Fare",
+      GOVERNMENT: "Government Fare",
+      STUDENT: "Student Fare",
+      SENIOR: "Senior Fare",
+      ARMED_FORCE: "Armed Forces Fare"
     };
     const rawFareId = (pl.fareIdentifier || pl.fn || adultFd?.fareIdentifier || "").trim();
     const apiLabel = FARE_SOURCE_LABEL[rawFareId] || rawFareId;

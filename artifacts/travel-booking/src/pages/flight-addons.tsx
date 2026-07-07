@@ -257,6 +257,14 @@ export default function FlightAddons() {
     .sort(([a], [b]) => Number(a) - Number(b))
     .map(([, s]) => s);
 
+  // Strip TripJack API formatting artifacts from policy text
+  function cleanPolicyText(text: string): string {
+    return text
+      .replace(/__nls__/gi, "\n")   // newline marker
+      .replace(/\s{2,}/g, " ")      // collapse extra whitespace
+      .trim();
+  }
+
   // Build policy rows for a TFR policy array
   function TfrPolicyRows({ policies, colorClass }: { policies: TfrPolicy[]; colorClass: string }) {
     return (
@@ -264,6 +272,7 @@ export default function FlightAddons() {
         {policies.map((p, i) => {
           const window = formatHourWindow(p.st, p.et);
           const totalFee = (p.amount ?? 0) + (p.additionalFee ?? 0);
+          const policyText = p.policyInfo ? cleanPolicyText(p.policyInfo) : "";
           return (
             <div key={i} className={cn("rounded-lg p-3 text-xs", colorClass)}>
               {window && <p className="font-semibold mb-0.5">{window}</p>}
@@ -274,7 +283,9 @@ export default function FlightAddons() {
                 </p>
               )}
               {totalFee === 0 && p.amount === 0 && <p>No charge</p>}
-              {p.policyInfo && <p className="mt-0.5 text-slate-500">{p.policyInfo}</p>}
+              {policyText && (
+                <p className="mt-1 text-slate-500 whitespace-pre-line leading-relaxed">{policyText}</p>
+              )}
             </div>
           );
         })}
@@ -420,51 +431,45 @@ export default function FlightAddons() {
               </Card>
 
               {/* ── Meal Preference (from ssrInfo.MEAL) ── */}
-              {meals.length > 0 && (
+              {meals.length > 0 ? (
                 <Card className="shadow-sm border">
                   <CardHeader className="pb-3 pt-5 px-5">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0">
                         <UtensilsCrossed className="w-4 h-4" />
                       </div>
-                      <div>
+                      <div className="flex-1 min-w-0">
                         <CardTitle className="text-base">Meal Preference</CardTitle>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          Optional · {meals.some(m => m.amount === 0) ? "free options available" : "charged per person"}
+                          {meals.some(m => m.amount === 0)
+                            ? "Complimentary meal available · select your preference"
+                            : `Optional · charged per person`}
                         </p>
                       </div>
                       {selectedMeal && (
-                        <Badge className="ml-auto bg-emerald-100 text-emerald-700 border-0 text-xs max-w-[140px] truncate">
-                          {selectedMeal.desc}
+                        <Badge className="ml-auto bg-emerald-100 text-emerald-700 border-0 text-xs max-w-[160px] truncate shrink-0">
+                          ✓ {selectedMeal.desc}
                         </Badge>
                       )}
                     </div>
                   </CardHeader>
                   <CardContent className="px-5 pb-5">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {/* No meal option */}
-                      <button
-                        onClick={() => setSelectedMeal(null)}
-                        className={cn(
-                          "flex items-center justify-between p-3 rounded-xl border-2 text-left transition-all",
-                          selectedMeal === null
-                            ? "border-emerald-500 bg-emerald-50"
-                            : "border-slate-200 bg-white hover:border-emerald-300"
-                        )}
-                      >
-                        <span className={cn("text-sm font-medium", selectedMeal === null ? "text-emerald-700" : "text-slate-600")}>
-                          No Meal
-                        </span>
-                        <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">Skip</span>
-                        {selectedMeal === null && <CheckCircle2 className="w-4 h-4 text-emerald-500 ml-1" />}
-                      </button>
+                    {/* Complimentary meal notice */}
+                    {meals.some(m => m.amount === 0) && (
+                      <div className="flex items-center gap-2 mb-3 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span className="font-semibold">Complimentary meal included</span>
+                        <span className="text-emerald-600">— select your preference below</span>
+                      </div>
+                    )}
 
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {meals.map((m) => {
                         const selected = selectedMeal?.code === m.code;
                         return (
                           <button
                             key={m.code}
-                            onClick={() => setSelectedMeal(m)}
+                            onClick={() => setSelectedMeal(selected ? null : m)}
                             className={cn(
                               "flex items-center justify-between p-3 rounded-xl border-2 text-left transition-all",
                               selected
@@ -486,14 +491,30 @@ export default function FlightAddons() {
                         );
                       })}
                     </div>
-                    {selectedMeal && selectedMeal.amount > 0 && (
-                      <p className="text-xs text-muted-foreground mt-2">
-                        Meal charged per person · {travelers} passenger{travelers > 1 ? "s" : ""} = +₹{mealAddOn.toLocaleString("en-IN")}
+
+                    {/* Selected meal summary + clear */}
+                    {selectedMeal ? (
+                      <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
+                        <span>
+                          {selectedMeal.amount > 0
+                            ? `Meal (${selectedMeal.desc}) · ${travelers} passenger${travelers > 1 ? "s" : ""} = +₹${mealAddOn.toLocaleString("en-IN")}`
+                            : `${selectedMeal.desc} · complimentary`}
+                        </span>
+                        <button
+                          onClick={() => setSelectedMeal(null)}
+                          className="ml-3 text-slate-400 hover:text-red-500 underline underline-offset-2 shrink-0"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="mt-3 text-xs text-muted-foreground">
+                        No meal selected · you can skip or pick a preference above
                       </p>
                     )}
                   </CardContent>
                 </Card>
-              )}
+              ) : null}
 
               {/* ── Seat Selection ── */}
               {seatSelectionAvailable ? (

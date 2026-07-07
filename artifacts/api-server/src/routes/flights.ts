@@ -231,16 +231,16 @@ function mapTripJackFlight(item: any, idx: number, fromIata: string, toIata: str
 
       // Fare label — map TripJack internal fareIdentifier values to user-friendly names
       const FARE_SOURCE_LABEL: Record<string, string> = {
-        PUBLISHED:   "Regular",
-        NDC_VALUE:   "Airline Direct",
-        CORPORATE:   "Corporate",
-        SME:         "SME",
-        SPECIAL:     "Special",
-        OFFER:       "Offer",
-        GOVERNMENT:  "Government",
-        STUDENT:     "Student",
-        SENIOR:      "Senior",
-        ARMED_FORCE: "Armed Forces",
+        PUBLISHED:   "Regular Fare",
+        NDC_VALUE:   "NDC Fare",
+        CORPORATE:   "Corporate Fare",
+        SME:         "SME Fare",
+        SPECIAL:     "Special Fare",
+        OFFER:       "Offer Fare",
+        GOVERNMENT:  "Government Fare",
+        STUDENT:     "Student Fare",
+        SENIOR:      "Senior Fare",
+        ARMED_FORCE: "Armed Forces Fare",
       };
       const rawFareId: string = (pl.fareIdentifier || pl.fn || adultFd?.fareIdentifier || "").trim();
       const apiLabel: string = FARE_SOURCE_LABEL[rawFareId] || rawFareId;
