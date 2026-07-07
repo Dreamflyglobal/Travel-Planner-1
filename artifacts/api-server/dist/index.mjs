@@ -98813,17 +98813,20 @@ router24.post("/book-flight", async (req, res) => {
       const gender = (p.gender ?? "").toLowerCase();
       const title = gender === "female" ? "MS" : "MR";
       const pt = !isNaN(age) && age < 12 ? age < 2 ? "INFANT" : "CHILD" : "ADULT";
-      return {
+      const traveller = {
         fn: (p.name ?? "").split(" ")[0] || p.name || "Guest",
         ln: (p.name ?? "").split(" ").slice(1).join(" ") || ".",
         ti: title,
-        dob: p.dob ?? "",
-        pNum: p.phone ?? "",
-        eml: p.email ?? "",
-        pt,
-        ssrSeatInfos: p.seatCode ? [{ key: p.seatCode, code: p.seatCode }] : [],
-        ssrBaggageInfos: p.baggageCode ? [{ key: p.baggageCode, code: p.baggageCode }] : []
+        pt
       };
+      if (p.dob && typeof p.dob === "string" && p.dob.trim()) {
+        traveller.dob = p.dob.trim();
+      }
+      if (p.phone && String(p.phone).trim()) traveller.pNum = String(p.phone).trim();
+      if (p.email && String(p.email).trim()) traveller.eml = String(p.email).trim();
+      if (p.seatCode) traveller.ssrSeatInfos = [{ key: p.seatCode, code: p.seatCode }];
+      if (p.baggageCode) traveller.ssrBaggageInfos = [{ key: p.baggageCode, code: p.baggageCode }];
+      return traveller;
     }),
     deliveryInfo: {
       emails: [passengers[0]?.email ?? passengerEmail],
