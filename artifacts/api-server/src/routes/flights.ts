@@ -446,6 +446,8 @@ router.post("/flights", async (req, res): Promise<void> => {
 
   const logLabel = resolvedRoutes.map((r) => `${r.fromIata}→${r.toIata} on ${r.travelDate}`).join(" | ");
 
+  console.log(`[flights/tripjack] search body: ${JSON.stringify(searchBody)}`);
+
   try {
     const searchHeaders = await getTripJackHeaders();
     const apiRes = await fetch(`${TRIPJACK_BASE}/fms/v1/air-search-all`, {
@@ -457,10 +459,27 @@ router.post("/flights", async (req, res): Promise<void> => {
 
     const data: any = await apiRes.json().catch(() => ({}));
 
-    if (!apiRes.ok || data?.errors?.length) {
+    console.log(
+      `[flights/tripjack] raw response | status:${apiRes.status} | ` +
+      `top-keys:[${Object.keys(data || {}).join(",")}] | ` +
+      `errors:${JSON.stringify(data?.errors ?? null)} | ` +
+      `searchResult-keys:[${Object.keys(data?.searchResult || {}).join(",")}]`
+    );
+
+    if (!apiRes.ok) {
       const reason = data?.errors?.[0]?.message || `HTTP ${apiRes.status}`;
-      logger.error(`[flights/tripjack] Search error: ${reason}`);
-      res.status(apiRes.ok ? 400 : apiRes.status).json({ error: reason });
+      logger.error(`[flights/tripjack] Search HTTP error: ${reason}`);
+      res.status(apiRes.status).json({ error: reason });
+      return;
+    }
+
+    // TripJack returns HTTP 200 with a non-empty errors array when the route
+    // has no availability ("No flight search results found.").
+    // Treat this as an empty result set, not a hard failure.
+    if (data?.errors?.length) {
+      const reason = data.errors[0]?.message ?? "No results";
+      logger.warn(`[flights/tripjack] ${logLabel}: no availability — "${reason}"`);
+      res.json({ flights: [], total: 0, source: "tripjack", traceId: "" });
       return;
     }
 

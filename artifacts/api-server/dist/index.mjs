@@ -93182,6 +93182,7 @@ router5.post("/flights", async (req, res) => {
     }
   };
   const logLabel = resolvedRoutes.map((r) => `${r.fromIata}\u2192${r.toIata} on ${r.travelDate}`).join(" | ");
+  console.log(`[flights/tripjack] search body: ${JSON.stringify(searchBody)}`);
   try {
     const searchHeaders = await getTripJackHeaders();
     const apiRes = await fetch(`${TRIPJACK_BASE}/fms/v1/air-search-all`, {
@@ -93191,10 +93192,19 @@ router5.post("/flights", async (req, res) => {
       signal: AbortSignal.timeout(2e4)
     });
     const data = await apiRes.json().catch(() => ({}));
-    if (!apiRes.ok || data?.errors?.length) {
+    console.log(
+      `[flights/tripjack] raw response | status:${apiRes.status} | top-keys:[${Object.keys(data || {}).join(",")}] | errors:${JSON.stringify(data?.errors ?? null)} | searchResult-keys:[${Object.keys(data?.searchResult || {}).join(",")}]`
+    );
+    if (!apiRes.ok) {
       const reason = data?.errors?.[0]?.message || `HTTP ${apiRes.status}`;
-      logger.error(`[flights/tripjack] Search error: ${reason}`);
-      res.status(apiRes.ok ? 400 : apiRes.status).json({ error: reason });
+      logger.error(`[flights/tripjack] Search HTTP error: ${reason}`);
+      res.status(apiRes.status).json({ error: reason });
+      return;
+    }
+    if (data?.errors?.length) {
+      const reason = data.errors[0]?.message ?? "No results";
+      logger.warn(`[flights/tripjack] ${logLabel}: no availability \u2014 "${reason}"`);
+      res.json({ flights: [], total: 0, source: "tripjack", traceId: "" });
       return;
     }
     const { fromIata: f0, toIata: t0 } = resolvedRoutes[0];
