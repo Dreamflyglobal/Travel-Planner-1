@@ -94330,6 +94330,8 @@ router9.get("/invoice/:bookingRef", async (req, res) => {
     discount: d.discountAmount || void 0,
     roomType: hi.room_type || void 0,
     pnr: d.pnr || d.pnrNumber || fi.pnr || void 0,
+    tjPnr: d.pnr || d.pnrNumber || fi.pnr || void 0,
+    tjBookingRef: d.tjBookingRef || void 0,
     tjPassengers: d.tjPassengers || void 0,
     ticketNumbers: d.ticketNumbers || void 0,
     // Flight
@@ -98931,20 +98933,20 @@ router24.post("/book-flight", async (req, res) => {
       timeoutMs: 3e4,
       maxRetries: 2
     });
-    const tjBookingStatus = (data?.data?.status?.booking ?? "").toUpperCase();
-    console.log("[book-flight] TripJack AirBook raw status:", tjBookingStatus, "| errors:", JSON.stringify(data?.errors ?? null));
+    const tjBookingStatus = (data?.status?.booking ?? data?.data?.status?.booking ?? "").toUpperCase();
+    console.log("[book-flight] TripJack AirBook raw status:", tjBookingStatus, "| bookingId:", data?.bookingId, "| errors:", JSON.stringify(data?.errors ?? null));
     if (data?.status?.success === false || (data?.errors?.length ?? 0) > 0) {
       tjError = extractTripJackError(data, "TripJack booking failed");
       logger.warn({ paymentId, tjError }, "[book-flight] TripJack returned failure in body");
     } else if (tjBookingStatus === "PENDING" || tjBookingStatus === "PROCESSING") {
       tjPending = true;
-      pnr = data?.data?.pnr || void 0;
-      tjBookingRef = data?.data?.bookingId || void 0;
+      pnr = data?.pnr || data?.data?.pnr || void 0;
+      tjBookingRef = data?.bookingId || data?.data?.bookingId || void 0;
       logger.info({ paymentId, pnr, tjBookingRef, tjBookingStatus }, "[book-flight] TripJack AirBook PENDING");
     } else {
       tjSuccess = true;
-      pnr = data?.data?.pnr || void 0;
-      tjBookingRef = data?.data?.bookingId || void 0;
+      pnr = data?.pnr || data?.data?.pnr || void 0;
+      tjBookingRef = data?.bookingId || data?.data?.bookingId || void 0;
       logger.info({ paymentId, pnr, tjBookingRef, tjBookingStatus }, "[book-flight] TripJack AirBook SUCCESS");
     }
   } catch (err) {
@@ -98994,7 +98996,7 @@ router24.post("/book-flight", async (req, res) => {
           { bookingId: tjBookingRef },
           { context: "book-flight/detail", timeoutMs: 15e3, maxRetries: 1 }
         );
-        const dd = detailRes?.data || {};
+        const dd = detailRes || {};
         detailPnr = dd.pnr || dd.pnrDetails?.[0]?.pnr || pnr;
         tjDetailStatus = (dd.status?.booking || tjDetailStatus).toUpperCase();
         tjPassengers = (dd.pnrDetails || []).map((p) => ({
@@ -99134,8 +99136,8 @@ router24.get("/booking-status/:bookingRef", async (req, res) => {
         { bookingId: storedTjRef },
         { context: "booking-status-check", timeoutMs: 15e3, maxRetries: 1 }
       );
-      const dd = tjData?.data || {};
-      const tjBookingStatus = (dd.status?.booking || tjData?.status?.booking || "").toUpperCase();
+      const dd = tjData || {};
+      const tjBookingStatus = (dd.status?.booking || "").toUpperCase();
       const refreshedPnr = dd.pnr || dd.pnrDetails?.[0]?.pnr || currentPnr;
       const refreshedPassengers = (dd.pnrDetails || []).map((p) => ({
         name: (p.paxName || p.name || "").trim(),

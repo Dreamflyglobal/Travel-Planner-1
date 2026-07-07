@@ -719,7 +719,10 @@ export default function BookingPayment() {
       toast({ variant: "destructive", title: "Booking Failed", description: wTjResult.error, duration: 8000 });
       return;
     }
-    if (wTjResult?.pnr)          (wLastSuccessful as any).tjPnr        = wTjResult.pnr;
+    if (wTjResult?.pnr) {
+      (wLastSuccessful as any).pnr   = wTjResult.pnr;
+      (wLastSuccessful as any).tjPnr = wTjResult.pnr;
+    }
     if (wTjResult?.tjBookingRef) (wLastSuccessful as any).tjBookingRef = wTjResult.tjBookingRef;
     localStorage.setItem("lastSuccessfulBooking", JSON.stringify(wLastSuccessful));
     paymentDoneRef.current = true;
@@ -845,7 +848,10 @@ export default function BookingPayment() {
         toast({ variant: "destructive", title: "Booking Failed", description: cTjResult.error, duration: 8000 });
         return;
       }
-      if (cTjResult?.pnr)          (cLastSuccessful as any).tjPnr        = cTjResult.pnr;
+      if (cTjResult?.pnr) {
+        (cLastSuccessful as any).pnr   = cTjResult.pnr;
+        (cLastSuccessful as any).tjPnr = cTjResult.pnr;
+      }
       if (cTjResult?.tjBookingRef) (cLastSuccessful as any).tjBookingRef = cTjResult.tjBookingRef;
       localStorage.setItem("lastSuccessfulBooking", JSON.stringify(cLastSuccessful));
       paymentDoneRef.current = true;
@@ -1209,7 +1215,10 @@ export default function BookingPayment() {
           flightBaggageCost:session.type === "flight" ? (session as FlightBookingSession).extraBaggageCost : undefined,
         };
         // PNR, TJ booking ref, status, and passenger details from the backend response (flight only)
-        if (flightBookResult?.pnr)          (lastSuccessful as any).tjPnr          = flightBookResult.pnr;
+        if (flightBookResult?.pnr) {
+          (lastSuccessful as any).pnr    = flightBookResult.pnr;  // Primary — read by invoice-view
+          (lastSuccessful as any).tjPnr  = flightBookResult.pnr;  // Compat — read by payment-success
+        }
         if (flightBookResult?.tjBookingRef) (lastSuccessful as any).tjBookingRef   = flightBookResult.tjBookingRef;
         if (flightBookResult?.status)       (lastSuccessful as any).tjBookingStatus = flightBookResult.status;
         if (flightBookResult?.tjPassengers) (lastSuccessful as any).tjPassengers   = flightBookResult.tjPassengers;

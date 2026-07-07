@@ -489,22 +489,28 @@ router.post("/book-flight", async (req, res): Promise<void> => {
       maxRetries: 2,
     });
 
-    const tjBookingStatus = (data?.data?.status?.booking ?? "").toUpperCase();
-    console.log("[book-flight] TripJack AirBook raw status:", tjBookingStatus, "| errors:", JSON.stringify(data?.errors ?? null));
+    // tjPostWithRetry returns resp.data directly, so `data` IS the TripJack body.
+    // Shape: { bookingId, status: { success, httpStatus, booking? }, pnrDetails?, pnr? }
+    const tjBookingStatus = (
+      data?.status?.booking ??
+      data?.data?.status?.booking ??
+      ""
+    ).toUpperCase();
+    console.log("[book-flight] TripJack AirBook raw status:", tjBookingStatus, "| bookingId:", data?.bookingId, "| errors:", JSON.stringify(data?.errors ?? null));
 
     if (data?.status?.success === false || (data?.errors?.length ?? 0) > 0) {
       tjError = extractTripJackError(data, "TripJack booking failed");
       logger.warn({ paymentId, tjError }, "[book-flight] TripJack returned failure in body");
     } else if (tjBookingStatus === "PENDING" || tjBookingStatus === "PROCESSING") {
       tjPending    = true;
-      pnr          = data?.data?.pnr      || undefined;
-      tjBookingRef = data?.data?.bookingId || undefined;
+      pnr          = data?.pnr      || data?.data?.pnr      || undefined;
+      tjBookingRef = data?.bookingId || data?.data?.bookingId || undefined;
       logger.info({ paymentId, pnr, tjBookingRef, tjBookingStatus }, "[book-flight] TripJack AirBook PENDING");
     } else {
       // CONFIRMED or no explicit status (treat as confirmed if no error)
       tjSuccess    = true;
-      pnr          = data?.data?.pnr      || undefined;
-      tjBookingRef = data?.data?.bookingId || undefined;
+      pnr          = data?.pnr      || data?.data?.pnr      || undefined;
+      tjBookingRef = data?.bookingId || data?.data?.bookingId || undefined;
       logger.info({ paymentId, pnr, tjBookingRef, tjBookingStatus }, "[book-flight] TripJack AirBook SUCCESS");
     }
   } catch (err: any) {
@@ -568,7 +574,8 @@ router.post("/book-flight", async (req, res): Promise<void> => {
           { bookingId: tjBookingRef },
           { context: "book-flight/detail", timeoutMs: 15_000, maxRetries: 1 },
         );
-        const dd         = detailRes?.data || {};
+        // tjPostWithRetry returns resp.data directly — no extra .data wrapper
+        const dd         = detailRes || {};
         detailPnr        = dd.pnr || (dd.pnrDetails?.[0]?.pnr) || pnr;
         tjDetailStatus   = ((dd.status?.booking as string) || tjDetailStatus).toUpperCase();
 
@@ -754,8 +761,9 @@ router.get("/booking-status/:bookingRef", async (req, res): Promise<void> => {
         { context: "booking-status-check", timeoutMs: 15_000, maxRetries: 1 },
       );
 
-      const dd              = tjData?.data || {};
-      const tjBookingStatus = ((dd.status?.booking || tjData?.status?.booking || "")).toUpperCase();
+      // tjPostWithRetry returns resp.data directly — no extra .data wrapper
+      const dd              = tjData || {};
+      const tjBookingStatus = ((dd.status?.booking || "")).toUpperCase();
 
       const refreshedPnr = dd.pnr || dd.pnrDetails?.[0]?.pnr || currentPnr;
 

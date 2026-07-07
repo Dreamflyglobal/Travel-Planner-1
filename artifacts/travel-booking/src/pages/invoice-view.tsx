@@ -46,6 +46,8 @@ interface BookingInvoice {
   generatedAt?: string;
   discount?: number;
   pnr?: string;
+  tjPnr?: string;
+  tjBookingRef?: string;
   // Hotel
   hotelName?: string;
   hotelCity?: string;
@@ -200,15 +202,17 @@ function findInvoice(bookingId: string): BookingInvoice | null {
     if (found) return found;
   } catch {}
 
+  // Check lastSuccessfulBooking FIRST — it has the enriched PNR/TripJack data
+  // (travel_bookings might be stale from before AirBook completed)
+  try {
+    const last = JSON.parse(localStorage.getItem("lastSuccessfulBooking") || "null") as BookingInvoice | null;
+    if (last && last.bookingId.toUpperCase() === id) return last;
+  } catch {}
+
   try {
     const bookings = JSON.parse(localStorage.getItem("travel_bookings") || "[]") as BookingInvoice[];
     const found = bookings.find((b) => b.bookingId.toUpperCase() === id);
     if (found) return found;
-  } catch {}
-
-  try {
-    const last = JSON.parse(localStorage.getItem("lastSuccessfulBooking") || "null") as BookingInvoice | null;
-    if (last && last.bookingId.toUpperCase() === id) return last;
   } catch {}
 
   try {
@@ -364,20 +368,32 @@ export default function InvoiceView() {
     window.scrollTo(0, 0);
     if (!bookingId) { setNotFound(true); return; }
 
-    // 1. Try all localStorage sources first (instant, offline-capable)
+    // 1. Show localStorage data immediately for instant render (offline-capable)
     const cached = findInvoice(bookingId);
-    if (cached) { setInvoice(cached); return; }
+    if (cached) setInvoice(cached);
 
-    // 2. Fall back to the database via API — works cross-device / after cache clear
+    // 2. Always fetch from the API to get the latest enriched data
+    // (pnr, tjBookingRef may have been updated server-side after AirBook)
     const apiBase = (import.meta.env.VITE_API_BASE_URL as string) ?? "";
     fetch(`${apiBase}/api/invoice/${encodeURIComponent(bookingId.toUpperCase())}`)
       .then(async (r) => {
-        if (!r.ok) { setNotFound(true); return; }
+        if (!r.ok) {
+          if (!cached) setNotFound(true);
+          return;
+        }
         const data = await r.json() as BookingInvoice;
-        if (!data || !data.bookingId) { setNotFound(true); return; }
-        setInvoice(data);
+        if (!data || !data.bookingId) {
+          if (!cached) setNotFound(true);
+          return;
+        }
+        // Merge: API data is authoritative for pnr/tjBookingRef;
+        // keep localStorage values for any fields the API doesn't return
+        setInvoice(prev => prev
+          ? { ...prev, ...Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined && v !== null)) }
+          : data
+        );
       })
-      .catch(() => setNotFound(true));
+      .catch(() => { if (!cached) setNotFound(true); });
   }, [bookingId]);
 
   const handlePrint = () => window.print();
@@ -461,8 +477,8 @@ export default function InvoiceView() {
   const baggageCost = (invoice.flightBaggageKg ?? 0) > 0 ? (invoice.flightBaggageCost ?? 0) : 0;
   const discount    = invoice.discount || 0;
 
-  // PNR: use real API PNR only — never derive a fake one
-  const pnr = invoice.pnr || undefined;
+  // PNR: prefer DB pnr, fall back to tjPnr stored by payment handler
+  const pnr = invoice.pnr || invoice.tjPnr || undefined;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-100 to-slate-200 print:bg-white">
@@ -567,13 +583,24 @@ export default function InvoiceView() {
                   <p className="text-slate-400 text-xs">Your booking has been confirmed</p>
                 </div>
               </div>
-              <div className="border-l border-white border-opacity-10 px-5 py-4 text-right min-w-0 max-w-[180px]">
-                <p className="text-slate-400 text-xs uppercase tracking-wide">Booking ID</p>
-                <p className="text-white font-mono font-bold text-sm mt-0.5 break-all leading-snug">{invoice.bookingId}</p>
-                {pnr && (
+              <div className="border-l border-white border-opacity-10 px-5 py-4 text-right min-w-0 max-w-[230px]">
+                <p className="text-slate-400 text-xs uppercase tracking-wide">Dream Fly Booking ID</p>
+                <p className="text-white font-mono font-bold text-sm mt-0.5 break-all leading-snug">{invoice.bookingId || "—"}</p>
+                {invoice.tjBookingRef && (
                   <>
-                    <p className="text-slate-400 text-xs uppercase tracking-wide mt-2">PNR / Ref</p>
-                    <p className="text-orange-300 font-mono font-bold text-base">{pnr}</p>
+                    <p className="text-slate-400 text-xs uppercase tracking-wide mt-2">TripJack Booking ID</p>
+                    <p className="text-blue-300 font-mono text-xs mt-0.5 break-all">{invoice.tjBookingRef}</p>
+                  </>
+                )}
+                {pnr ? (
+                  <>
+                    <p className="text-slate-400 text-xs uppercase tracking-wide mt-2">PNR</p>
+                    <p className="text-orange-300 font-mono font-bold text-base mt-0.5">{pnr}</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-slate-400 text-xs uppercase tracking-wide mt-2">PNR</p>
+                    <p className="text-amber-400 font-mono text-xs mt-0.5">Awaiting confirmation</p>
                   </>
                 )}
               </div>

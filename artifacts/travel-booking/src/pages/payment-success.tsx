@@ -180,6 +180,8 @@ export default function PaymentSuccess() {
         tjPassengers:    data.tjPassengers   || bookingDetails.tjPassengers,
         ticketNumbers:   data.ticketNumbers  || bookingDetails.ticketNumbers,
       };
+      // Also update pnr key so invoice-view reads it correctly
+      if (data.pnr) (updatedDetails as any).pnr = data.pnr;
       setBookingDetails(updatedDetails);
       // Persist updated status to localStorage so it survives a refresh
       localStorage.setItem("lastSuccessfulBooking", JSON.stringify(updatedDetails));
