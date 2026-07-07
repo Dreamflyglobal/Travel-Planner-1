@@ -98891,6 +98891,7 @@ router24.post("/book-flight", async (req, res) => {
   );
   console.log("[book-flight] TripJack AirBook payload:", JSON.stringify(tjPayload, null, 2));
   let tjSuccess = false;
+  let tjPending = false;
   let pnr;
   let tjBookingRef;
   let tjError;
@@ -98900,14 +98901,21 @@ router24.post("/book-flight", async (req, res) => {
       timeoutMs: 3e4,
       maxRetries: 2
     });
+    const tjBookingStatus = (data?.data?.status?.booking ?? "").toUpperCase();
+    console.log("[book-flight] TripJack AirBook raw status:", tjBookingStatus, "| errors:", JSON.stringify(data?.errors ?? null));
     if (data?.status?.success === false || (data?.errors?.length ?? 0) > 0) {
       tjError = extractTripJackError(data, "TripJack booking failed");
       logger.warn({ paymentId, tjError }, "[book-flight] TripJack returned failure in body");
+    } else if (tjBookingStatus === "PENDING" || tjBookingStatus === "PROCESSING") {
+      tjPending = true;
+      pnr = data?.data?.pnr || void 0;
+      tjBookingRef = data?.data?.bookingId || void 0;
+      logger.info({ paymentId, pnr, tjBookingRef, tjBookingStatus }, "[book-flight] TripJack AirBook PENDING");
     } else {
       tjSuccess = true;
       pnr = data?.data?.pnr || void 0;
       tjBookingRef = data?.data?.bookingId || void 0;
-      logger.info({ paymentId, pnr, tjBookingRef }, "[book-flight] TripJack AirBook SUCCESS");
+      logger.info({ paymentId, pnr, tjBookingRef, tjBookingStatus }, "[book-flight] TripJack AirBook SUCCESS");
     }
   } catch (err) {
     const errBody = err?.response?.data;
@@ -98920,8 +98928,10 @@ router24.post("/book-flight", async (req, res) => {
     tjBookingRef: tjBookingRef ?? null,
     paymentId,
     bookingRef,
-    ...tjSuccess ? {} : { tjBookingFailed: tjError ?? "unknown" }
+    ...!tjSuccess && !tjPending ? { tjBookingFailed: tjError ?? "unknown" } : {}
   };
+  const resolvedDbStatus = tjSuccess ? "confirmed" : tjPending ? "pending" : "cancelled";
+  const resolvedBookingSt = tjSuccess ? "confirmed" : tjPending ? "pending" : "failed";
   const [savedBooking] = await db.insert(bookingsTable).values({
     bookingRef,
     bookingType: "flight",
@@ -98931,23 +98941,31 @@ router24.post("/book-flight", async (req, res) => {
     travelDate,
     totalPrice: String(totalPrice),
     passengers: passengers.length,
-    status: tjSuccess ? "confirmed" : "cancelled",
+    status: resolvedDbStatus,
     paymentStatus: "paid",
     paymentId,
-    bookingStatus: tjSuccess ? "confirmed" : "failed",
-    failureReason: tjSuccess ? void 0 : tjError ?? "Ticket booking failed",
-    failureCode: tjSuccess ? void 0 : "api_error",
+    bookingStatus: resolvedBookingSt,
+    failureReason: !tjSuccess && !tjPending ? tjError ?? "Ticket booking failed" : void 0,
+    failureCode: !tjSuccess && !tjPending ? "api_error" : void 0,
     baseFare: _baseFareVal,
     markupAmount: _markupVal,
     convenienceFee: _convFeeVal,
     details: bookingDetails
   }).returning();
-  if (tjSuccess) {
+  if (tjSuccess || tjPending) {
+    const statusLabel = tjSuccess ? "CONFIRMED" : "PENDING";
     logger.info(
-      { paymentId, pnr, bookingRef, bookingId: savedBooking.id },
-      "[book-flight] STEP 4: booking CONFIRMED"
+      { paymentId, pnr, bookingRef, bookingId: savedBooking.id, statusLabel },
+      `[book-flight] STEP 4: booking ${statusLabel}`
     );
-    res.json({ success: true, pnr, tjBookingRef, bookingRef, bookingId: savedBooking.id });
+    res.json({
+      success: true,
+      status: tjSuccess ? "confirmed" : "pending",
+      pnr,
+      tjBookingRef,
+      bookingRef,
+      bookingId: savedBooking.id
+    });
     const __domain = process.env.REPLIT_DOMAINS?.split(",")[0] || process.env.REPLIT_DEV_DOMAIN || "";
     const __base = __domain ? `https://${__domain}` : "https://dreamflyglobal.in";
     const __details = typeof bookingMeta?.details === "object" && bookingMeta?.details !== null ? bookingMeta.details : {};
@@ -99016,6 +99034,54 @@ router24.post("/book-flight", async (req, res) => {
     refundInitiated: refundResult.initiated,
     refundId: refundResult.refundId,
     bookingRef
+  });
+});
+router24.get("/booking-status/:bookingRef", async (req, res) => {
+  const { bookingRef } = req.params;
+  const [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.bookingRef, bookingRef)).limit(1);
+  if (!booking) {
+    res.status(404).json({ error: "Booking not found" });
+    return;
+  }
+  const details = booking.details || {};
+  const storedTjRef = details.tjBookingRef || null;
+  let currentStatus = booking.bookingStatus || "confirmed";
+  let currentPnr = details.pnr || null;
+  if (currentStatus === "pending" && storedTjRef) {
+    try {
+      const tjData = await tjPostWithRetry(
+        "/oms/v1/booking/detail",
+        { bookingId: storedTjRef },
+        { context: "booking-status-check", timeoutMs: 15e3, maxRetries: 1 }
+      );
+      const tjBookingStatus = (tjData?.data?.status?.booking || tjData?.status?.booking || "").toUpperCase();
+      const refreshedPnr = tjData?.data?.pnr || tjData?.data?.pnrDetails?.[0]?.pnr || currentPnr;
+      logger.info({ bookingRef, tjBookingStatus, refreshedPnr }, "[booking-status] TripJack status refresh");
+      if (tjBookingStatus === "CONFIRMED") {
+        currentStatus = "confirmed";
+        if (refreshedPnr) currentPnr = refreshedPnr;
+        await db.update(bookingsTable).set({
+          bookingStatus: "confirmed",
+          status: "confirmed",
+          details: { ...details, pnr: currentPnr }
+        }).where(eq(bookingsTable.bookingRef, bookingRef));
+      } else if (tjBookingStatus === "FAILED" || tjBookingStatus === "CANCELLED") {
+        currentStatus = "failed";
+        await db.update(bookingsTable).set({ bookingStatus: "failed", status: "cancelled", failureCode: "api_error" }).where(eq(bookingsTable.bookingRef, bookingRef));
+      }
+    } catch (err) {
+      logger.warn({ bookingRef, err: err?.message }, "[booking-status] TripJack refresh failed \u2014 returning stored status");
+    }
+  }
+  res.json({
+    bookingRef,
+    bookingStatus: currentStatus,
+    pnr: currentPnr,
+    tjBookingRef: storedTjRef,
+    passengerName: booking.passengerName,
+    travelDate: booking.travelDate,
+    totalPrice: booking.totalPrice,
+    bookingType: booking.bookingType
   });
 });
 var book_flight_default = router24;

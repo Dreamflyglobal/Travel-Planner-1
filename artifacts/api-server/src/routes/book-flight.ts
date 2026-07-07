@@ -477,6 +477,7 @@ router.post("/book-flight", async (req, res): Promise<void> => {
   console.log("[book-flight] TripJack AirBook payload:", JSON.stringify(tjPayload, null, 2));
 
   let tjSuccess    = false;
+  let tjPending    = false;
   let pnr: string | undefined;
   let tjBookingRef: string | undefined;
   let tjError: string | undefined;
@@ -488,14 +489,23 @@ router.post("/book-flight", async (req, res): Promise<void> => {
       maxRetries: 2,
     });
 
+    const tjBookingStatus = (data?.data?.status?.booking ?? "").toUpperCase();
+    console.log("[book-flight] TripJack AirBook raw status:", tjBookingStatus, "| errors:", JSON.stringify(data?.errors ?? null));
+
     if (data?.status?.success === false || (data?.errors?.length ?? 0) > 0) {
       tjError = extractTripJackError(data, "TripJack booking failed");
       logger.warn({ paymentId, tjError }, "[book-flight] TripJack returned failure in body");
+    } else if (tjBookingStatus === "PENDING" || tjBookingStatus === "PROCESSING") {
+      tjPending    = true;
+      pnr          = data?.data?.pnr      || undefined;
+      tjBookingRef = data?.data?.bookingId || undefined;
+      logger.info({ paymentId, pnr, tjBookingRef, tjBookingStatus }, "[book-flight] TripJack AirBook PENDING");
     } else {
+      // CONFIRMED or no explicit status (treat as confirmed if no error)
       tjSuccess    = true;
       pnr          = data?.data?.pnr      || undefined;
       tjBookingRef = data?.data?.bookingId || undefined;
-      logger.info({ paymentId, pnr, tjBookingRef }, "[book-flight] TripJack AirBook SUCCESS");
+      logger.info({ paymentId, pnr, tjBookingRef, tjBookingStatus }, "[book-flight] TripJack AirBook SUCCESS");
     }
   } catch (err: any) {
     const errBody = err?.response?.data;
@@ -514,8 +524,11 @@ router.post("/book-flight", async (req, res): Promise<void> => {
     tjBookingRef: tjBookingRef ?? null,
     paymentId,
     bookingRef,
-    ...(tjSuccess ? {} : { tjBookingFailed: tjError ?? "unknown" }),
+    ...(!tjSuccess && !tjPending ? { tjBookingFailed: tjError ?? "unknown" } : {}),
   };
+
+  const resolvedDbStatus  = tjSuccess ? "confirmed" : tjPending ? "pending" : "cancelled";
+  const resolvedBookingSt = tjSuccess ? "confirmed" : tjPending ? "pending" : "failed";
 
   const [savedBooking] = await db
     .insert(bookingsTable)
@@ -528,12 +541,12 @@ router.post("/book-flight", async (req, res): Promise<void> => {
       travelDate,
       totalPrice:    String(totalPrice),
       passengers:    passengers.length,
-      status:        tjSuccess ? "confirmed" : "cancelled",
+      status:        resolvedDbStatus,
       paymentStatus: "paid",
       paymentId,
-      bookingStatus: tjSuccess ? "confirmed" : "failed",
-      failureReason: tjSuccess ? undefined : (tjError ?? "Ticket booking failed"),
-      failureCode:   tjSuccess ? undefined : "api_error",
+      bookingStatus: resolvedBookingSt,
+      failureReason: (!tjSuccess && !tjPending) ? (tjError ?? "Ticket booking failed") : undefined,
+      failureCode:   (!tjSuccess && !tjPending) ? "api_error" : undefined,
       baseFare:       _baseFareVal,
       markupAmount:   _markupVal,
       convenienceFee: _convFeeVal,
@@ -541,12 +554,20 @@ router.post("/book-flight", async (req, res): Promise<void> => {
     } as any)
     .returning();
 
-  if (tjSuccess) {
+  if (tjSuccess || tjPending) {
+    const statusLabel = tjSuccess ? "CONFIRMED" : "PENDING";
     logger.info(
-      { paymentId, pnr, bookingRef, bookingId: savedBooking.id },
-      "[book-flight] STEP 4: booking CONFIRMED",
+      { paymentId, pnr, bookingRef, bookingId: savedBooking.id, statusLabel },
+      `[book-flight] STEP 4: booking ${statusLabel}`,
     );
-    res.json({ success: true, pnr, tjBookingRef, bookingRef, bookingId: savedBooking.id });
+    res.json({
+      success:       true,
+      status:        tjSuccess ? "confirmed" : "pending",
+      pnr,
+      tjBookingRef,
+      bookingRef,
+      bookingId:     savedBooking.id,
+    });
 
     // Fire-and-forget notifications — do not await, never block the response
     const __domain = process.env.REPLIT_DOMAINS?.split(",")[0] || process.env.REPLIT_DEV_DOMAIN || "";
@@ -628,6 +649,86 @@ router.post("/book-flight", async (req, res): Promise<void> => {
     refundInitiated: refundResult.initiated,
     refundId:        refundResult.refundId,
     bookingRef,
+  });
+});
+
+// ── GET /api/booking-status/:bookingRef ────────────────────────────────────
+// Check/refresh booking status from TripJack. If stored status is "pending",
+// calls TripJack /oms/v1/booking/detail and updates DB if status changed.
+router.get("/booking-status/:bookingRef", async (req, res): Promise<void> => {
+  const { bookingRef } = req.params;
+
+  const [booking] = await db
+    .select()
+    .from(bookingsTable)
+    .where(eq(bookingsTable.bookingRef, bookingRef))
+    .limit(1);
+
+  if (!booking) {
+    res.status(404).json({ error: "Booking not found" });
+    return;
+  }
+
+  const details        = (booking.details as Record<string, any>) || {};
+  const storedTjRef    = (details.tjBookingRef as string | null) || null;
+  let   currentStatus  = booking.bookingStatus || "confirmed";
+  let   currentPnr     = (details.pnr as string | null) || null;
+
+  // Only hit TripJack when status is pending and we have a TJ booking reference
+  if (currentStatus === "pending" && storedTjRef) {
+    try {
+      const tjData = await tjPostWithRetry(
+        "/oms/v1/booking/detail",
+        { bookingId: storedTjRef },
+        { context: "booking-status-check", timeoutMs: 15_000, maxRetries: 1 },
+      );
+
+      const tjBookingStatus = (
+        tjData?.data?.status?.booking ||
+        tjData?.status?.booking       ||
+        ""
+      ).toUpperCase();
+
+      const refreshedPnr =
+        tjData?.data?.pnr ||
+        tjData?.data?.pnrDetails?.[0]?.pnr ||
+        currentPnr;
+
+      logger.info({ bookingRef, tjBookingStatus, refreshedPnr }, "[booking-status] TripJack status refresh");
+
+      if (tjBookingStatus === "CONFIRMED") {
+        currentStatus = "confirmed";
+        if (refreshedPnr) currentPnr = refreshedPnr;
+        await db
+          .update(bookingsTable)
+          .set({
+            bookingStatus: "confirmed",
+            status:        "confirmed",
+            details:       { ...details, pnr: currentPnr },
+          })
+          .where(eq(bookingsTable.bookingRef, bookingRef));
+      } else if (tjBookingStatus === "FAILED" || tjBookingStatus === "CANCELLED") {
+        currentStatus = "failed";
+        await db
+          .update(bookingsTable)
+          .set({ bookingStatus: "failed", status: "cancelled", failureCode: "api_error" })
+          .where(eq(bookingsTable.bookingRef, bookingRef));
+      }
+      // PENDING → no update, keep polling
+    } catch (err: any) {
+      logger.warn({ bookingRef, err: err?.message }, "[booking-status] TripJack refresh failed — returning stored status");
+    }
+  }
+
+  res.json({
+    bookingRef,
+    bookingStatus: currentStatus,
+    pnr:           currentPnr,
+    tjBookingRef:  storedTjRef,
+    passengerName: booking.passengerName,
+    travelDate:    booking.travelDate,
+    totalPrice:    booking.totalPrice,
+    bookingType:   booking.bookingType,
   });
 });
 

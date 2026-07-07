@@ -1,10 +1,10 @@
 import { APP_NAME } from "@/lib/app-config";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useLocation, Link } from "wouter";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, Download, Mail, Calendar, CreditCard, User, Phone, MapPin, Plane, Building2, Bus, Map, Gift, MessageCircle, ExternalLink } from "lucide-react";
+import { CheckCircle, Download, Mail, Calendar, CreditCard, User, Phone, MapPin, Plane, Building2, Bus, Map, Gift, MessageCircle, ExternalLink, Clock, AlertCircle, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/auth-context";
@@ -55,12 +55,14 @@ interface BookingDetails {
   tjPnr?: string;
   tjBookingRef?: string;
   tjBookingError?: string;
+  tjBookingStatus?: "confirmed" | "pending" | "failed";
 }
 
 export default function PaymentSuccess() {
   const [, params] = useLocation();
   const [bookingDetails, setBookingDetails] = useState<BookingDetails | null>(null);
   const [invoiceUrl, setInvoiceUrl] = useState<string>("");
+  const [refreshing, setRefreshing] = useState(false);
   const notifySentRef = useRef(false);
   const { toast } = useToast();
   const { refreshUser } = useAuth();
@@ -159,6 +161,53 @@ export default function PaymentSuccess() {
     }
   }
 
+  // ── Refresh booking status from backend (TripJack poll) ──────────────────
+  const handleRefreshStatus = useCallback(async () => {
+    if (!bookingDetails?.bookingId || refreshing) return;
+    setRefreshing(true);
+    try {
+      const res = await fetch(`/api/booking-status/${encodeURIComponent(bookingDetails.bookingId)}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      const updatedDetails: BookingDetails = {
+        ...bookingDetails,
+        tjBookingStatus: data.bookingStatus as "confirmed" | "pending" | "failed",
+        tjPnr:           data.pnr           || bookingDetails.tjPnr,
+        tjBookingRef:    data.tjBookingRef   || bookingDetails.tjBookingRef,
+      };
+      setBookingDetails(updatedDetails);
+      // Persist updated status to localStorage so it survives a refresh
+      localStorage.setItem("lastSuccessfulBooking", JSON.stringify(updatedDetails));
+
+      if (data.bookingStatus === "confirmed") {
+        toast({
+          title: "Booking Confirmed!",
+          description: data.pnr ? `Your PNR is ${data.pnr}` : "Your booking is now confirmed by the airline.",
+        });
+      } else if (data.bookingStatus === "failed") {
+        toast({
+          variant: "destructive",
+          title: "Booking Failed",
+          description: "The airline could not confirm your booking. Please contact support — a refund will be initiated.",
+        });
+      } else {
+        toast({
+          title: "Still Pending",
+          description: "Your booking is still awaiting airline confirmation. Please check again in a few minutes.",
+        });
+      }
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Could not refresh",
+        description: "Unable to reach the server. Please try again.",
+      });
+    } finally {
+      setRefreshing(false);
+    }
+  }, [bookingDetails, refreshing, toast]);
+
   useEffect(() => {
     // Simple celebration animation without external dependencies
     const duration = 3 * 1000;
@@ -211,6 +260,7 @@ export default function PaymentSuccess() {
 
     return () => clearInterval(interval);
   }, []);
+
   // Simple particle effect function
   const createParticle = () => {
     const colors = ["#f97316", "#fb923c", "#fdba74", "#ef4444", "#fbbf24"];
@@ -239,7 +289,9 @@ export default function PaymentSuccess() {
       default:
         return <Calendar className="w-8 h-8" />;
     }
-  };  const handleDownloadTicket = () => {
+  };
+
+  const handleDownloadTicket = () => {
     if (!bookingDetails) return;
     window.open(`/invoice/${encodeURIComponent(bookingDetails.bookingId)}?download=1`, "_blank");
   };
@@ -269,57 +321,121 @@ export default function PaymentSuccess() {
     );
   }
 
+  // ── Determine flight-specific booking status ──────────────────────────────
+  const isFlight = bookingDetails.bookingType === "flight";
+  const tjStatus = bookingDetails.tjBookingStatus ?? (bookingDetails.tjPnr ? "confirmed" : undefined);
+  const isPending  = isFlight && tjStatus === "pending";
+  const isFailed   = isFlight && tjStatus === "failed";
+  const isConfirmed = isFlight && (tjStatus === "confirmed" || !!bookingDetails.tjPnr);
+
+  // Header colors: green = confirmed/non-flight, amber = pending, red = failed
+  const headerBg = isPending ? "from-amber-500 to-yellow-500"
+                 : isFailed  ? "from-red-500 to-rose-600"
+                 : "from-green-500 to-emerald-600";
+  const headerPageBg = isPending ? "from-amber-50 to-yellow-50"
+                     : isFailed  ? "from-red-50 to-rose-50"
+                     : "from-green-50 to-emerald-50";
+
   return (
     <Layout>
-      <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 py-12">
+      <div className={`min-h-screen bg-gradient-to-br ${headerPageBg} py-12`}>
         <div className="container mx-auto px-4">
-          {/* Success Header */}
+
+          {/* ── Status Header ── */}
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-green-500 text-white mb-6 animate-bounce">
-              <CheckCircle className="w-16 h-16" />
-            </div>
-            <h1 className="text-4xl md:text-5xl font-extrabold text-green-700 mb-4">
-              Payment Successful! 🎉
-            </h1>
-            <p className="text-xl text-gray-600 mb-2">
-              Your booking has been confirmed
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Booking ID: <span className="font-mono font-bold text-primary">{bookingDetails.bookingId}</span>
-            </p>
-            {bookingDetails.bookingType === "flight" && (
-              bookingDetails.tjPnr ? (
-                <div className="mt-3 inline-flex items-center gap-2 bg-green-100 border border-green-300 text-green-800 px-5 py-2 rounded-full text-sm font-semibold">
-                  <CheckCircle className="w-4 h-4 flex-shrink-0" />
-                  Airline PNR:&nbsp;
-                  <span className="font-mono font-bold text-green-900 text-base tracking-widest">
-                    {bookingDetails.tjPnr}
-                  </span>
+            {isPending ? (
+              <>
+                <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-amber-500 text-white mb-6">
+                  <Clock className="w-14 h-14" />
                 </div>
-              ) : bookingDetails.tjBookingRef ? (
-                <div className="mt-3 inline-flex items-center gap-2 bg-blue-50 border border-blue-200 text-blue-800 px-5 py-2 rounded-full text-sm font-semibold">
-                  <CheckCircle className="w-4 h-4 flex-shrink-0" />
-                  Airline Booking Ref:&nbsp;
-                  <span className="font-mono font-bold text-blue-900 text-base">
-                    {bookingDetails.tjBookingRef}
-                  </span>
-                </div>
-              ) : bookingDetails.tjBookingError ? (
-                <p className="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 max-w-md mx-auto">
-                  Airline confirmation is being processed. Your payment is received — quote your Booking ID to support if needed.
+                <h1 className="text-4xl md:text-5xl font-extrabold text-amber-700 mb-4">
+                  Booking Submitted ✓
+                </h1>
+                <p className="text-xl text-gray-600 mb-2">
+                  Payment received — awaiting airline confirmation
                 </p>
-              ) : null
+                <p className="text-sm text-muted-foreground mb-4">
+                  Booking ID: <span className="font-mono font-bold text-primary">{bookingDetails.bookingId}</span>
+                </p>
+                <div className="inline-flex flex-col items-center gap-3 bg-amber-50 border border-amber-300 text-amber-800 px-6 py-4 rounded-xl text-sm max-w-md mx-auto">
+                  <Clock className="w-5 h-5" />
+                  <p className="font-semibold">Your booking is being processed by the airline.</p>
+                  <p className="text-xs text-amber-700">Your PNR will be confirmed within a few minutes. Use the button below to check the latest status.</p>
+                  <Button
+                    onClick={handleRefreshStatus}
+                    disabled={refreshing}
+                    size="sm"
+                    className="mt-1 bg-amber-600 hover:bg-amber-700 text-white"
+                  >
+                    <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
+                    {refreshing ? "Checking…" : "Refresh Booking Status"}
+                  </Button>
+                </div>
+              </>
+            ) : isFailed ? (
+              <>
+                <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-red-500 text-white mb-6">
+                  <AlertCircle className="w-14 h-14" />
+                </div>
+                <h1 className="text-4xl md:text-5xl font-extrabold text-red-700 mb-4">
+                  Booking Not Confirmed
+                </h1>
+                <p className="text-xl text-gray-600 mb-2">
+                  Payment received — airline could not confirm the booking
+                </p>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Booking ID: <span className="font-mono font-bold text-primary">{bookingDetails.bookingId}</span>
+                </p>
+                <div className="inline-flex items-center gap-2 bg-red-50 border border-red-200 text-red-800 px-5 py-3 rounded-xl text-sm max-w-md mx-auto">
+                  <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                  <p>A refund will be initiated to your original payment method within 5–7 business days. Payment ID: <span className="font-mono">{bookingDetails.paymentId}</span></p>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-green-500 text-white mb-6 animate-bounce">
+                  <CheckCircle className="w-16 h-16" />
+                </div>
+                <h1 className="text-4xl md:text-5xl font-extrabold text-green-700 mb-4">
+                  Payment Successful! 🎉
+                </h1>
+                <p className="text-xl text-gray-600 mb-2">
+                  Your booking has been confirmed
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Booking ID: <span className="font-mono font-bold text-primary">{bookingDetails.bookingId}</span>
+                </p>
+                {isFlight && (
+                  bookingDetails.tjPnr ? (
+                    <div className="mt-3 inline-flex items-center gap-2 bg-green-100 border border-green-300 text-green-800 px-5 py-2 rounded-full text-sm font-semibold">
+                      <CheckCircle className="w-4 h-4 flex-shrink-0" />
+                      Airline PNR:&nbsp;
+                      <span className="font-mono font-bold text-green-900 text-base tracking-widest">
+                        {bookingDetails.tjPnr}
+                      </span>
+                    </div>
+                  ) : bookingDetails.tjBookingRef ? (
+                    <div className="mt-3 inline-flex items-center gap-2 bg-blue-50 border border-blue-200 text-blue-800 px-5 py-2 rounded-full text-sm font-semibold">
+                      <CheckCircle className="w-4 h-4 flex-shrink-0" />
+                      Airline Booking Ref:&nbsp;
+                      <span className="font-mono font-bold text-blue-900 text-base">
+                        {bookingDetails.tjBookingRef}
+                      </span>
+                    </div>
+                  ) : null
+                )}
+              </>
             )}
           </div>
 
-          {/* Booking Details Card */}
-          <Card className="max-w-4xl mx-auto shadow-2xl border-2 border-green-200">
-            <CardHeader className="bg-gradient-to-r from-green-500 to-emerald-600 text-white">
+          {/* ── Booking Details Card ── */}
+          <Card className={`max-w-4xl mx-auto shadow-2xl border-2 ${isPending ? "border-amber-200" : isFailed ? "border-red-200" : "border-green-200"}`}>
+            <CardHeader className={`bg-gradient-to-r ${headerBg} text-white`}>
               <CardTitle className="flex items-center gap-3 text-2xl">
                 {getBookingIcon()}
                 <span>{bookingDetails.title}</span>
-                <Badge variant="secondary" className="ml-auto bg-white text-green-700 font-bold">
-                  {bookingDetails.paymentStatus.toUpperCase()}
+                <Badge variant="secondary" className={`ml-auto font-bold ${isPending ? "bg-white text-amber-700" : isFailed ? "bg-white text-red-700" : "bg-white text-green-700"}`}>
+                  {isPending ? "PENDING" : isFailed ? "FAILED" : bookingDetails.paymentStatus.toUpperCase()}
                 </Badge>
               </CardTitle>
             </CardHeader>
@@ -412,7 +528,7 @@ export default function PaymentSuccess() {
               </div>
 
               {/* Payment Details */}
-              <div className="bg-green-50 rounded-lg p-6 border-2 border-green-200">
+              <div className={`rounded-lg p-6 border-2 ${isPending ? "bg-amber-50 border-amber-200" : isFailed ? "bg-red-50 border-red-200" : "bg-green-50 border-green-200"}`}>
                 <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
                   <CreditCard className="w-5 h-5" />
                   Payment Details
@@ -432,13 +548,27 @@ export default function PaymentSuccess() {
                   </div>
                   <div>
                     <p className="text-xs text-gray-500">Amount Paid</p>
-                    <p className="font-bold text-2xl text-green-600">₹{bookingDetails.totalAmount.toFixed(2)}</p>
+                    <p className={`font-bold text-2xl ${isPending ? "text-amber-600" : isFailed ? "text-red-600" : "text-green-600"}`}>
+                      ₹{bookingDetails.totalAmount.toFixed(2)}
+                    </p>
                   </div>
                 </div>
               </div>
 
               {/* Action Buttons */}
               <div className="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mt-8">
+                {/* Refresh Status button — visible when booking is pending */}
+                {isPending && (
+                  <Button
+                    onClick={handleRefreshStatus}
+                    disabled={refreshing}
+                    size="lg"
+                    className="w-full col-span-full sm:col-span-2 bg-amber-500 hover:bg-amber-600 text-white"
+                  >
+                    <RefreshCw className={`w-5 h-5 mr-2 ${refreshing ? "animate-spin" : ""}`} />
+                    {refreshing ? "Checking Status…" : "Refresh Booking Status"}
+                  </Button>
+                )}
                 {invoiceUrl && (
                   <Button asChild size="lg" className="w-full bg-orange-500 hover:bg-orange-600 col-span-full sm:col-span-1">
                     <a href={invoiceUrl} target="_blank" rel="noopener noreferrer">
@@ -465,15 +595,29 @@ export default function PaymentSuccess() {
               </div>
 
               {/* Important Notice */}
-              <div className="mt-8 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                <h4 className="font-bold text-blue-900 mb-2">📧 Important</h4>
-                <ul className="text-sm text-blue-800 space-y-1">
-                  <li>• A confirmation email has been sent to <strong>{bookingDetails.passengerEmail}</strong></li>
-                  <li>• Please carry a valid ID proof during your journey</li>
-                  <li>• Check-in opens 2 hours before {bookingDetails.bookingType === "flight" ? "departure" : "journey"}</li>
-                  <li>• For any queries, contact our 24/7 support</li>
-                </ul>
-              </div>
+              {!isFailed && (
+                <div className="mt-8 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <h4 className="font-bold text-blue-900 mb-2">📧 Important</h4>
+                  <ul className="text-sm text-blue-800 space-y-1">
+                    <li>• A confirmation email has been sent to <strong>{bookingDetails.passengerEmail}</strong></li>
+                    {isPending && <li>• Your PNR will be emailed to you as soon as the airline confirms the booking</li>}
+                    <li>• Please carry a valid ID proof during your journey</li>
+                    <li>• Check-in opens 2 hours before {bookingDetails.bookingType === "flight" ? "departure" : "journey"}</li>
+                    <li>• For any queries, contact our 24/7 support</li>
+                  </ul>
+                </div>
+              )}
+              {isFailed && (
+                <div className="mt-8 p-4 bg-red-50 rounded-lg border border-red-200">
+                  <h4 className="font-bold text-red-900 mb-2">⚠️ What happens next?</h4>
+                  <ul className="text-sm text-red-800 space-y-1">
+                    <li>• Your payment has been received but the airline could not confirm the seat</li>
+                    <li>• A full refund will be processed within 5–7 business days</li>
+                    <li>• Quote your Booking ID <strong>{bookingDetails.bookingId}</strong> or Payment ID when contacting support</li>
+                    <li>• You can search for alternative flights and book again</li>
+                  </ul>
+                </div>
+              )}
             </CardContent>
           </Card>
 
