@@ -5,6 +5,7 @@ import { recoverPendingFollowUps } from "./lib/followup-scheduler.js";
 import { seedPackagesIfEmpty } from "./routes/holiday-packages.js";
 import { startDailyOfferCron } from "./lib/marketing-scheduler.js";
 import { migrateLogoToFile } from "./lib/migrate-logo.js";
+import { startTjBookingPoller } from "./lib/tj-booking-poller.js";
 
 const rawPort = process.env["PORT"] || "3000";
 
@@ -31,6 +32,10 @@ app.listen(port, (err) => {
   );
 
   startDailyOfferCron();
+
+  // Start background TripJack booking status poller — updates pending bookings
+  // to CONFIRMED and writes PNR/ticket numbers once TripJack confirms them.
+  startTjBookingPoller();
 
   // One-time migration: convert any data-URL logos stored in the DB to files
   // so the branding API response is small and the logo URL can be cached.

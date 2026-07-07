@@ -496,22 +496,34 @@ router.post("/book-flight", async (req, res): Promise<void> => {
       data?.data?.status?.booking ??
       ""
     ).toUpperCase();
-    console.log("[book-flight] TripJack AirBook raw status:", tjBookingStatus, "| bookingId:", data?.bookingId, "| errors:", JSON.stringify(data?.errors ?? null));
+    console.log(
+      "[book-flight] TripJack AirBook raw response:",
+      JSON.stringify({ bookingId: data?.bookingId, statusBooking: data?.status?.booking ?? "(absent)", statusSuccess: data?.status?.success, pnr: data?.pnr ?? null, pnrDetails: data?.pnrDetails ?? null, errors: data?.errors ?? null }, null, 2),
+    );
 
     if (data?.status?.success === false || (data?.errors?.length ?? 0) > 0) {
       tjError = extractTripJackError(data, "TripJack booking failed");
       logger.warn({ paymentId, tjError }, "[book-flight] TripJack returned failure in body");
-    } else if (tjBookingStatus === "PENDING" || tjBookingStatus === "PROCESSING") {
-      tjPending    = true;
-      pnr          = data?.pnr || data?.pnrDetails?.[0]?.pnr || data?.data?.pnr || undefined;
-      tjBookingRef = data?.bookingId || data?.data?.bookingId || undefined;
-      logger.info({ paymentId, pnr, tjBookingRef, tjBookingStatus }, "[book-flight] TripJack AirBook PENDING");
-    } else {
-      // CONFIRMED or no explicit status (treat as confirmed if no error)
+    } else if (tjBookingStatus === "CONFIRMED") {
+      // Explicitly confirmed by TripJack
       tjSuccess    = true;
       pnr          = data?.pnr || data?.pnrDetails?.[0]?.pnr || data?.data?.pnr || undefined;
       tjBookingRef = data?.bookingId || data?.data?.bookingId || undefined;
-      logger.info({ paymentId, pnr, tjBookingRef, tjBookingStatus }, "[book-flight] TripJack AirBook SUCCESS");
+      logger.info({ paymentId, pnr, tjBookingRef }, "[book-flight] TripJack AirBook CONFIRMED immediately");
+    } else if (tjBookingStatus === "PENDING" || tjBookingStatus === "PROCESSING" || tjBookingStatus === "") {
+      // PENDING / PROCESSING / absent status.booking — booking created, TripJack is processing it.
+      // Do NOT treat absence of status.booking as confirmation; the booking requires polling until
+      // TripJack transitions it to CONFIRMED and generates a PNR.
+      tjPending    = true;
+      pnr          = data?.pnr || data?.pnrDetails?.[0]?.pnr || data?.data?.pnr || undefined;
+      tjBookingRef = data?.bookingId || data?.data?.bookingId || undefined;
+      logger.info({ paymentId, pnr, tjBookingRef, tjBookingStatus: tjBookingStatus || "(absent)" }, "[book-flight] TripJack AirBook PENDING — will poll for confirmation");
+    } else {
+      // Any other non-failure status — treat as pending to be safe
+      tjPending    = true;
+      pnr          = data?.pnr || data?.pnrDetails?.[0]?.pnr || data?.data?.pnr || undefined;
+      tjBookingRef = data?.bookingId || data?.data?.bookingId || undefined;
+      logger.warn({ paymentId, pnr, tjBookingRef, tjBookingStatus }, "[book-flight] TripJack AirBook unknown status — treating as pending");
     }
   } catch (err: any) {
     const errBody = err?.response?.data;
@@ -561,45 +573,72 @@ router.post("/book-flight", async (req, res): Promise<void> => {
     .returning();
 
   if (tjSuccess || tjPending) {
-    // ── STEP 4.5: Immediately fetch booking detail for enriched PNR/ticket data ──
+    // ── STEP 4.5: Fetch booking detail to get enriched PNR/ticket/status ─────────
+    // TripJack typically returns the booking in PENDING state from AirBook; the
+    // detail endpoint reflects the real confirmed status once TripJack processes it.
+    // We try immediately then once more after a short delay to handle propagation lag.
     let detailPnr      = pnr;
     let tjDetailStatus = tjSuccess ? "CONFIRMED" : "PENDING";
     let tjPassengers: Array<{ name: string; pnr: string; ticketNum: string; paxType: string }> = [];
     let ticketNumbers: string[] = [];
+    let detailFetched  = false;
 
     if (tjBookingRef) {
-      try {
-        const detailRes = await tjPostWithRetry(
-          "/oms/v1/booking/detail",
-          { bookingId: tjBookingRef },
-          { context: "book-flight/detail", timeoutMs: 15_000, maxRetries: 1 },
-        );
-        // tjPostWithRetry returns resp.data directly — no extra .data wrapper
-        const dd         = detailRes || {};
-        detailPnr        = dd.pnr || (dd.pnrDetails?.[0]?.pnr) || pnr;
-        tjDetailStatus   = ((dd.status?.booking as string) || tjDetailStatus).toUpperCase();
+      for (let detailAttempt = 1; detailAttempt <= 3 && !detailFetched; detailAttempt++) {
+        if (detailAttempt > 1) {
+          const delayMs = detailAttempt === 2 ? 5_000 : 10_000;
+          logger.info({ paymentId, tjBookingRef, delayMs }, `[book-flight] STEP 4.5: retrying detail (attempt ${detailAttempt}) after ${delayMs}ms`);
+          await new Promise((r) => setTimeout(r, delayMs));
+        }
+        try {
+          const detailRes = await tjPostWithRetry(
+            "/oms/v1/booking/detail",
+            { bookingId: tjBookingRef },
+            { context: `book-flight/detail-a${detailAttempt}`, timeoutMs: 15_000, maxRetries: 0 },
+          );
+          // tjPostWithRetry returns resp.data directly — no extra .data wrapper
+          const dd       = detailRes || {};
+          const rawStatus = ((dd.status?.booking as string) || "").toUpperCase();
 
-        tjPassengers = ((dd.pnrDetails || []) as any[])
-          .map((p: any) => ({
-            name:      (p.paxName || p.name || "").trim(),
-            pnr:       p.pnr    || detailPnr || "",
-            ticketNum: p.ticketNum || p.eTicketNumber || p.ticket_num || "",
-            paxType:   (p.paxType   || "ADULT").toUpperCase(),
-          }))
-          .filter((p) => p.name.length > 0);
+          console.log(
+            `[book-flight] STEP 4.5 attempt ${detailAttempt} — TripJack detail response:`,
+            JSON.stringify({ tjBookingRef, rawStatus, pnr: dd.pnr ?? null, pnrDetailsCount: (dd.pnrDetails ?? []).length, pnrDetailsSample: (dd.pnrDetails ?? [])[0] ?? null }, null, 2),
+          );
 
-        ticketNumbers = ((dd.pnrDetails || []) as any[])
-          .map((p: any) => p.ticketNum || p.eTicketNumber || p.ticket_num)
-          .filter(Boolean);
+          detailPnr      = dd.pnr || (dd.pnrDetails?.[0]?.pnr) || pnr;
+          tjDetailStatus = rawStatus || tjDetailStatus;
 
-        logger.info(
-          { paymentId, detailPnr, tjDetailStatus, paxCount: tjPassengers.length, ticketCount: ticketNumbers.length },
-          "[book-flight] STEP 4.5: booking detail enriched",
-        );
-      } catch (detailErr: any) {
+          tjPassengers = ((dd.pnrDetails || []) as any[])
+            .map((p: any) => ({
+              name:      (p.paxName || p.name || "").trim(),
+              pnr:       p.pnr    || detailPnr || "",
+              ticketNum: p.ticketNum || p.eTicketNumber || p.ticket_num || "",
+              paxType:   (p.paxType   || "ADULT").toUpperCase(),
+            }))
+            .filter((p) => p.name.length > 0);
+
+          ticketNumbers = ((dd.pnrDetails || []) as any[])
+            .map((p: any) => p.ticketNum || p.eTicketNumber || p.ticket_num)
+            .filter(Boolean);
+
+          logger.info(
+            { paymentId, tjBookingRef, detailPnr, tjDetailStatus, paxCount: tjPassengers.length, ticketCount: ticketNumbers.length, attempt: detailAttempt },
+            "[book-flight] STEP 4.5: booking detail enriched",
+          );
+          detailFetched = true;
+        } catch (detailErr: any) {
+          const httpStatus = (detailErr as any)?.tripjackHttpStatus ?? detailErr?.response?.status ?? "?";
+          logger.warn(
+            { paymentId, tjBookingRef, attempt: detailAttempt, httpStatus, err: detailErr?.message },
+            "[book-flight] STEP 4.5: detail attempt failed — will retry or defer to background poller",
+          );
+        }
+      }
+
+      if (!detailFetched) {
         logger.warn(
-          { paymentId, err: detailErr?.message },
-          "[book-flight] STEP 4.5: booking detail fetch failed — using AirBook data",
+          { paymentId, tjBookingRef },
+          "[book-flight] STEP 4.5: all detail attempts failed — booking stored as pending, background poller will update",
         );
       }
     }

@@ -39694,8 +39694,8 @@ var require_lt = __commonJS({
   "../../node_modules/.pnpm/semver@7.7.4/node_modules/semver/functions/lt.js"(exports, module) {
     "use strict";
     var compare2 = require_compare();
-    var lt2 = (a, b, loose) => compare2(a, b, loose) < 0;
-    module.exports = lt2;
+    var lt3 = (a, b, loose) => compare2(a, b, loose) < 0;
+    module.exports = lt3;
   }
 });
 
@@ -39747,7 +39747,7 @@ var require_cmp = __commonJS({
     var neq = require_neq();
     var gt2 = require_gt();
     var gte2 = require_gte();
-    var lt2 = require_lt();
+    var lt3 = require_lt();
     var lte2 = require_lte();
     var cmp = (a, op, b, loose) => {
       switch (op) {
@@ -39778,7 +39778,7 @@ var require_cmp = __commonJS({
         case ">=":
           return gte2(a, b, loose);
         case "<":
-          return lt2(a, b, loose);
+          return lt3(a, b, loose);
         case "<=":
           return lte2(a, b, loose);
         default:
@@ -40533,7 +40533,7 @@ var require_outside = __commonJS({
     var Range = require_range2();
     var satisfies = require_satisfies();
     var gt2 = require_gt();
-    var lt2 = require_lt();
+    var lt3 = require_lt();
     var lte2 = require_lte();
     var gte2 = require_gte();
     var outside = (version3, range, hilo, options) => {
@@ -40544,12 +40544,12 @@ var require_outside = __commonJS({
         case ">":
           gtfn = gt2;
           ltefn = lte2;
-          ltfn = lt2;
+          ltfn = lt3;
           comp = ">";
           ecomp = ">=";
           break;
         case "<":
-          gtfn = lt2;
+          gtfn = lt3;
           ltefn = gte2;
           ltfn = gt2;
           comp = "<";
@@ -40729,12 +40729,12 @@ var require_subset = __commonJS({
         }
       }
       const eqSet = /* @__PURE__ */ new Set();
-      let gt2, lt2;
+      let gt2, lt3;
       for (const c of sub) {
         if (c.operator === ">" || c.operator === ">=") {
           gt2 = higherGT(gt2, c, options);
         } else if (c.operator === "<" || c.operator === "<=") {
-          lt2 = lowerLT(lt2, c, options);
+          lt3 = lowerLT(lt3, c, options);
         } else {
           eqSet.add(c.semver);
         }
@@ -40743,11 +40743,11 @@ var require_subset = __commonJS({
         return null;
       }
       let gtltComp;
-      if (gt2 && lt2) {
-        gtltComp = compare2(gt2.semver, lt2.semver, options);
+      if (gt2 && lt3) {
+        gtltComp = compare2(gt2.semver, lt3.semver, options);
         if (gtltComp > 0) {
           return null;
-        } else if (gtltComp === 0 && (gt2.operator !== ">=" || lt2.operator !== "<=")) {
+        } else if (gtltComp === 0 && (gt2.operator !== ">=" || lt3.operator !== "<=")) {
           return null;
         }
       }
@@ -40755,7 +40755,7 @@ var require_subset = __commonJS({
         if (gt2 && !satisfies(eq2, String(gt2), options)) {
           return null;
         }
-        if (lt2 && !satisfies(eq2, String(lt2), options)) {
+        if (lt3 && !satisfies(eq2, String(lt3), options)) {
           return null;
         }
         for (const c of dom) {
@@ -40767,9 +40767,9 @@ var require_subset = __commonJS({
       }
       let higher, lower;
       let hasDomLT, hasDomGT;
-      let needDomLTPre = lt2 && !options.includePrerelease && lt2.semver.prerelease.length ? lt2.semver : false;
+      let needDomLTPre = lt3 && !options.includePrerelease && lt3.semver.prerelease.length ? lt3.semver : false;
       let needDomGTPre = gt2 && !options.includePrerelease && gt2.semver.prerelease.length ? gt2.semver : false;
-      if (needDomLTPre && needDomLTPre.prerelease.length === 1 && lt2.operator === "<" && needDomLTPre.prerelease[0] === 0) {
+      if (needDomLTPre && needDomLTPre.prerelease.length === 1 && lt3.operator === "<" && needDomLTPre.prerelease[0] === 0) {
         needDomLTPre = false;
       }
       for (const c of dom) {
@@ -40790,29 +40790,29 @@ var require_subset = __commonJS({
             return false;
           }
         }
-        if (lt2) {
+        if (lt3) {
           if (needDomLTPre) {
             if (c.semver.prerelease && c.semver.prerelease.length && c.semver.major === needDomLTPre.major && c.semver.minor === needDomLTPre.minor && c.semver.patch === needDomLTPre.patch) {
               needDomLTPre = false;
             }
           }
           if (c.operator === "<" || c.operator === "<=") {
-            lower = lowerLT(lt2, c, options);
-            if (lower === c && lower !== lt2) {
+            lower = lowerLT(lt3, c, options);
+            if (lower === c && lower !== lt3) {
               return false;
             }
-          } else if (lt2.operator === "<=" && !satisfies(lt2.semver, String(c), options)) {
+          } else if (lt3.operator === "<=" && !satisfies(lt3.semver, String(c), options)) {
             return false;
           }
         }
-        if (!c.operator && (lt2 || gt2) && gtltComp !== 0) {
+        if (!c.operator && (lt3 || gt2) && gtltComp !== 0) {
           return false;
         }
       }
-      if (gt2 && hasDomLT && !lt2 && gtltComp !== 0) {
+      if (gt2 && hasDomLT && !lt3 && gtltComp !== 0) {
         return false;
       }
-      if (lt2 && hasDomGT && !gt2 && gtltComp !== 0) {
+      if (lt3 && hasDomGT && !gt2 && gtltComp !== 0) {
         return false;
       }
       if (needDomGTPre || needDomLTPre) {
@@ -40862,7 +40862,7 @@ var require_semver2 = __commonJS({
     var sort = require_sort();
     var rsort = require_rsort();
     var gt2 = require_gt();
-    var lt2 = require_lt();
+    var lt3 = require_lt();
     var eq2 = require_eq();
     var neq = require_neq();
     var gte2 = require_gte();
@@ -40900,7 +40900,7 @@ var require_semver2 = __commonJS({
       sort,
       rsort,
       gt: gt2,
-      lt: lt2,
+      lt: lt3,
       eq: eq2,
       neq,
       gte: gte2,
@@ -98963,20 +98963,28 @@ router24.post("/book-flight", async (req, res) => {
       maxRetries: 2
     });
     const tjBookingStatus = (data?.status?.booking ?? data?.data?.status?.booking ?? "").toUpperCase();
-    console.log("[book-flight] TripJack AirBook raw status:", tjBookingStatus, "| bookingId:", data?.bookingId, "| errors:", JSON.stringify(data?.errors ?? null));
+    console.log(
+      "[book-flight] TripJack AirBook raw response:",
+      JSON.stringify({ bookingId: data?.bookingId, statusBooking: data?.status?.booking ?? "(absent)", statusSuccess: data?.status?.success, pnr: data?.pnr ?? null, pnrDetails: data?.pnrDetails ?? null, errors: data?.errors ?? null }, null, 2)
+    );
     if (data?.status?.success === false || (data?.errors?.length ?? 0) > 0) {
       tjError = extractTripJackError(data, "TripJack booking failed");
       logger.warn({ paymentId, tjError }, "[book-flight] TripJack returned failure in body");
-    } else if (tjBookingStatus === "PENDING" || tjBookingStatus === "PROCESSING") {
-      tjPending = true;
-      pnr = data?.pnr || data?.pnrDetails?.[0]?.pnr || data?.data?.pnr || void 0;
-      tjBookingRef = data?.bookingId || data?.data?.bookingId || void 0;
-      logger.info({ paymentId, pnr, tjBookingRef, tjBookingStatus }, "[book-flight] TripJack AirBook PENDING");
-    } else {
+    } else if (tjBookingStatus === "CONFIRMED") {
       tjSuccess = true;
       pnr = data?.pnr || data?.pnrDetails?.[0]?.pnr || data?.data?.pnr || void 0;
       tjBookingRef = data?.bookingId || data?.data?.bookingId || void 0;
-      logger.info({ paymentId, pnr, tjBookingRef, tjBookingStatus }, "[book-flight] TripJack AirBook SUCCESS");
+      logger.info({ paymentId, pnr, tjBookingRef }, "[book-flight] TripJack AirBook CONFIRMED immediately");
+    } else if (tjBookingStatus === "PENDING" || tjBookingStatus === "PROCESSING" || tjBookingStatus === "") {
+      tjPending = true;
+      pnr = data?.pnr || data?.pnrDetails?.[0]?.pnr || data?.data?.pnr || void 0;
+      tjBookingRef = data?.bookingId || data?.data?.bookingId || void 0;
+      logger.info({ paymentId, pnr, tjBookingRef, tjBookingStatus: tjBookingStatus || "(absent)" }, "[book-flight] TripJack AirBook PENDING \u2014 will poll for confirmation");
+    } else {
+      tjPending = true;
+      pnr = data?.pnr || data?.pnrDetails?.[0]?.pnr || data?.data?.pnr || void 0;
+      tjBookingRef = data?.bookingId || data?.data?.bookingId || void 0;
+      logger.warn({ paymentId, pnr, tjBookingRef, tjBookingStatus }, "[book-flight] TripJack AirBook unknown status \u2014 treating as pending");
     }
   } catch (err) {
     const errBody = err?.response?.data;
@@ -99018,31 +99026,52 @@ router24.post("/book-flight", async (req, res) => {
     let tjDetailStatus = tjSuccess ? "CONFIRMED" : "PENDING";
     let tjPassengers = [];
     let ticketNumbers = [];
+    let detailFetched = false;
     if (tjBookingRef) {
-      try {
-        const detailRes = await tjPostWithRetry(
-          "/oms/v1/booking/detail",
-          { bookingId: tjBookingRef },
-          { context: "book-flight/detail", timeoutMs: 15e3, maxRetries: 1 }
-        );
-        const dd = detailRes || {};
-        detailPnr = dd.pnr || dd.pnrDetails?.[0]?.pnr || pnr;
-        tjDetailStatus = (dd.status?.booking || tjDetailStatus).toUpperCase();
-        tjPassengers = (dd.pnrDetails || []).map((p) => ({
-          name: (p.paxName || p.name || "").trim(),
-          pnr: p.pnr || detailPnr || "",
-          ticketNum: p.ticketNum || p.eTicketNumber || p.ticket_num || "",
-          paxType: (p.paxType || "ADULT").toUpperCase()
-        })).filter((p) => p.name.length > 0);
-        ticketNumbers = (dd.pnrDetails || []).map((p) => p.ticketNum || p.eTicketNumber || p.ticket_num).filter(Boolean);
-        logger.info(
-          { paymentId, detailPnr, tjDetailStatus, paxCount: tjPassengers.length, ticketCount: ticketNumbers.length },
-          "[book-flight] STEP 4.5: booking detail enriched"
-        );
-      } catch (detailErr) {
+      for (let detailAttempt = 1; detailAttempt <= 3 && !detailFetched; detailAttempt++) {
+        if (detailAttempt > 1) {
+          const delayMs = detailAttempt === 2 ? 5e3 : 1e4;
+          logger.info({ paymentId, tjBookingRef, delayMs }, `[book-flight] STEP 4.5: retrying detail (attempt ${detailAttempt}) after ${delayMs}ms`);
+          await new Promise((r) => setTimeout(r, delayMs));
+        }
+        try {
+          const detailRes = await tjPostWithRetry(
+            "/oms/v1/booking/detail",
+            { bookingId: tjBookingRef },
+            { context: `book-flight/detail-a${detailAttempt}`, timeoutMs: 15e3, maxRetries: 0 }
+          );
+          const dd = detailRes || {};
+          const rawStatus = (dd.status?.booking || "").toUpperCase();
+          console.log(
+            `[book-flight] STEP 4.5 attempt ${detailAttempt} \u2014 TripJack detail response:`,
+            JSON.stringify({ tjBookingRef, rawStatus, pnr: dd.pnr ?? null, pnrDetailsCount: (dd.pnrDetails ?? []).length, pnrDetailsSample: (dd.pnrDetails ?? [])[0] ?? null }, null, 2)
+          );
+          detailPnr = dd.pnr || dd.pnrDetails?.[0]?.pnr || pnr;
+          tjDetailStatus = rawStatus || tjDetailStatus;
+          tjPassengers = (dd.pnrDetails || []).map((p) => ({
+            name: (p.paxName || p.name || "").trim(),
+            pnr: p.pnr || detailPnr || "",
+            ticketNum: p.ticketNum || p.eTicketNumber || p.ticket_num || "",
+            paxType: (p.paxType || "ADULT").toUpperCase()
+          })).filter((p) => p.name.length > 0);
+          ticketNumbers = (dd.pnrDetails || []).map((p) => p.ticketNum || p.eTicketNumber || p.ticket_num).filter(Boolean);
+          logger.info(
+            { paymentId, tjBookingRef, detailPnr, tjDetailStatus, paxCount: tjPassengers.length, ticketCount: ticketNumbers.length, attempt: detailAttempt },
+            "[book-flight] STEP 4.5: booking detail enriched"
+          );
+          detailFetched = true;
+        } catch (detailErr) {
+          const httpStatus = detailErr?.tripjackHttpStatus ?? detailErr?.response?.status ?? "?";
+          logger.warn(
+            { paymentId, tjBookingRef, attempt: detailAttempt, httpStatus, err: detailErr?.message },
+            "[book-flight] STEP 4.5: detail attempt failed \u2014 will retry or defer to background poller"
+          );
+        }
+      }
+      if (!detailFetched) {
         logger.warn(
-          { paymentId, err: detailErr?.message },
-          "[book-flight] STEP 4.5: booking detail fetch failed \u2014 using AirBook data"
+          { paymentId, tjBookingRef },
+          "[book-flight] STEP 4.5: all detail attempts failed \u2014 booking stored as pending, background poller will update"
         );
       }
     }
@@ -100336,6 +100365,135 @@ async function migrateLogoToFile() {
   }
 }
 
+// src/lib/tj-booking-poller.ts
+init_drizzle_orm();
+var POLL_INTERVAL_MS = 6e4;
+var GIVE_UP_HOURS = 24;
+var MAX_BATCH = 20;
+function extractPnr(dd, fallback) {
+  return dd?.pnr || dd?.pnrDetails?.[0]?.pnr || fallback || null;
+}
+function extractPassengers(dd, pnr) {
+  return (dd?.pnrDetails || []).map((p) => ({
+    name: (p.paxName || p.name || "").trim(),
+    pnr: p.pnr || pnr || "",
+    ticketNum: p.ticketNum || p.eTicketNumber || p.ticket_num || "",
+    paxType: (p.paxType || "ADULT").toUpperCase()
+  })).filter((p) => p.name.length > 0);
+}
+function extractTickets(dd) {
+  return (dd?.pnrDetails || []).map((p) => p.ticketNum || p.eTicketNumber || p.ticket_num).filter(Boolean);
+}
+async function pollOnce() {
+  const giveUpBefore = new Date(Date.now() - GIVE_UP_HOURS * 60 * 60 * 1e3);
+  const recentCutoff = new Date(Date.now() - 30 * 60 * 1e3);
+  let candidates = [];
+  try {
+    candidates = await db.select().from(bookingsTable).where(
+      and(
+        eq(bookingsTable.bookingType, "flight"),
+        or(
+          // Pending bookings younger than GIVE_UP_HOURS
+          and(
+            eq(bookingsTable.bookingStatus, "pending"),
+            sql`${bookingsTable.createdAt} > ${giveUpBefore.toISOString()}`
+          ),
+          // Recently created confirmed bookings with no PNR (created in last 30 min)
+          and(
+            eq(bookingsTable.bookingStatus, "confirmed"),
+            sql`${bookingsTable.createdAt} > ${recentCutoff.toISOString()}`,
+            sql`(${bookingsTable.details}->>'pnr') IS NULL OR (${bookingsTable.details}->>'pnr') = 'null'`
+          )
+        )
+      )
+    ).limit(MAX_BATCH);
+  } catch (err) {
+    logger.error({ err: err?.message }, "[tj-poller] DB query failed");
+    return;
+  }
+  const toCheck = candidates.filter((b) => {
+    const d = b.details || {};
+    return !!d.tjBookingRef;
+  });
+  if (toCheck.length === 0) return;
+  logger.info({ count: toCheck.length }, "[tj-poller] checking pending/unconfirmed TripJack bookings");
+  for (const booking of toCheck) {
+    const details = booking.details || {};
+    const tjBookingRef = details.tjBookingRef;
+    const bookingRef = booking.bookingRef ?? "(unknown)";
+    try {
+      const dd = await tjPostWithRetry(
+        "/oms/v1/booking/detail",
+        { bookingId: tjBookingRef },
+        { context: `tj-poller/${bookingRef}`, timeoutMs: 15e3, maxRetries: 1 }
+      );
+      const rawStatus = (dd?.status?.booking || "").toUpperCase();
+      const refreshedPnr = extractPnr(dd, details.pnr);
+      const passengers = extractPassengers(dd, refreshedPnr);
+      const tickets = extractTickets(dd);
+      console.log(
+        `[tj-poller] ${bookingRef} / ${tjBookingRef} \u2014 detail response:`,
+        JSON.stringify({ rawStatus, pnr: refreshedPnr, pnrDetailsCount: (dd?.pnrDetails ?? []).length, pnrDetailsSample: (dd?.pnrDetails ?? [])[0] ?? null }, null, 2)
+      );
+      if (rawStatus === "CONFIRMED") {
+        await db.update(bookingsTable).set({
+          bookingStatus: "confirmed",
+          status: "confirmed",
+          details: {
+            ...details,
+            pnr: refreshedPnr,
+            tjDetailStatus: "CONFIRMED",
+            ...passengers.length > 0 ? { tjPassengers: passengers } : {},
+            ...tickets.length > 0 ? { ticketNumbers: tickets } : {}
+          }
+        }).where(eq(bookingsTable.bookingRef, bookingRef));
+        logger.info(
+          { bookingRef, tjBookingRef, pnr: refreshedPnr, tickets: tickets.length },
+          "[tj-poller] booking CONFIRMED by TripJack \u2014 DB updated"
+        );
+      } else if (rawStatus === "FAILED" || rawStatus === "CANCELLED") {
+        await db.update(bookingsTable).set({
+          bookingStatus: "failed",
+          status: "cancelled",
+          failureCode: "tj_failed",
+          failureReason: `TripJack booking ${rawStatus.toLowerCase()}`,
+          details: { ...details, tjDetailStatus: rawStatus }
+        }).where(eq(bookingsTable.bookingRef, bookingRef));
+        logger.warn({ bookingRef, tjBookingRef, rawStatus }, "[tj-poller] booking FAILED/CANCELLED by TripJack \u2014 DB updated");
+      } else {
+        logger.info(
+          { bookingRef, tjBookingRef, rawStatus: rawStatus || "(absent)" },
+          "[tj-poller] booking still pending \u2014 will re-check next cycle"
+        );
+      }
+    } catch (err) {
+      const httpStatus = err?.tripjackHttpStatus ?? err?.response?.status;
+      logger.warn(
+        { bookingRef, tjBookingRef, httpStatus, err: err?.message },
+        "[tj-poller] detail call failed \u2014 will retry next cycle"
+      );
+    }
+    if (booking.bookingStatus === "pending") {
+      const createdAt = booking.createdAt ? new Date(booking.createdAt) : null;
+      if (createdAt && createdAt < giveUpBefore) {
+        await db.update(bookingsTable).set({ bookingStatus: "failed", status: "cancelled", failureCode: "tj_timeout", failureReason: "TripJack did not confirm within 24 hours" }).where(eq(bookingsTable.bookingRef, bookingRef));
+        logger.error({ bookingRef, tjBookingRef }, "[tj-poller] giving up \u2014 booking pending > 24 hours");
+      }
+    }
+  }
+}
+var _pollTimer = null;
+function startTjBookingPoller() {
+  if (_pollTimer) return;
+  logger.info({ intervalMs: POLL_INTERVAL_MS }, "[tj-poller] starting TripJack booking status poller");
+  setTimeout(() => {
+    pollOnce().catch((e) => logger.error({ err: e?.message }, "[tj-poller] initial poll error"));
+  }, 1e4);
+  _pollTimer = setInterval(() => {
+    pollOnce().catch((e) => logger.error({ err: e?.message }, "[tj-poller] poll cycle error"));
+  }, POLL_INTERVAL_MS);
+}
+
 // src/index.ts
 var rawPort = process.env["PORT"] || "3000";
 var port = Number(rawPort);
@@ -100355,6 +100513,7 @@ app_default.listen(port, (err) => {
     (e) => logger.error({ err: e }, "Package seed failed")
   );
   startDailyOfferCron();
+  startTjBookingPoller();
   migrateLogoToFile().catch(
     (e) => logger.warn({ err: e }, "Logo migration failed (non-critical)")
   );
