@@ -99433,9 +99433,9 @@ router24.post("/book-flight", async (req, res) => {
     );
     return;
   }
-  const priceIdForRefresh = fareData.resultIndex || fareData.bookingId;
-  let freshBookingId = fareData.bookingId;
   const storedIdIsTjSession = fareData.bookingId.startsWith("TJS");
+  const priceIdForRefresh = storedIdIsTjSession ? fareData.bookingId : fareData.resultIndex || fareData.bookingId;
+  let freshBookingId = fareData.bookingId;
   logger.info(
     {
       paymentId,
@@ -99474,8 +99474,17 @@ ${"#".repeat(80)}`);
       const refreshedId = typeof reviewData?.bookingId === "string" && reviewData.bookingId.trim() ? reviewData.bookingId.trim() : typeof reviewData?.data?.bookingId === "string" && reviewData.data.bookingId.trim() ? reviewData.data.bookingId.trim() : void 0;
       freshBookingId = refreshedId ?? fareData.bookingId;
       logger.info(
-        { paymentId, freshBookingId, source: refreshedId ? "review-response" : "stored-bookingId-fallback" },
-        "[book-flight] STEP 2: booking session refreshed"
+        {
+          paymentId,
+          priceIdUsed: priceIdForRefresh,
+          freshBookingId,
+          source: refreshedId ? "review-response" : "stored-bookingId-fallback",
+          reviewTopKeys: reviewData ? Object.keys(reviewData) : [],
+          reviewBookingId: reviewData?.bookingId ?? reviewData?.data?.bookingId ?? null,
+          reviewStatus: reviewData?.status ?? null,
+          reviewFullBody: reviewData
+        },
+        "[book-flight] STEP 2: booking session refreshed \u2014 full review response"
       );
     } catch (err) {
       logger.warn(
@@ -99533,6 +99542,14 @@ ${"#".repeat(80)}`);
     },
     "[book-flight] STEP 2+3: calling TripJack /oms/v1/air/book (with retry)"
   );
+  logger.info(
+    {
+      paymentId,
+      bookingRef,
+      airBookRequestBody: tjPayload
+    },
+    "[book-flight] AIRBOOK REQUEST full payload"
+  );
   console.log(`
 ${"#".repeat(80)}`);
   console.log(`[book-flight] AIRBOOK REQUEST \u2014 bookingRef: ${bookingRef} | paymentId: ${paymentId}`);
@@ -99568,8 +99585,12 @@ ${"#".repeat(80)}`);
       },
       "[book-flight] AIRBOOK RESPONSE received"
     );
-    logger.debug(
-      { paymentId, bookingRef, airBookResponse: data },
+    logger.info(
+      {
+        paymentId,
+        bookingRef,
+        airBookFullResponse: data
+      },
       "[book-flight] AIRBOOK full response body"
     );
     if (data?.status?.success === false || (data?.errors?.length ?? 0) > 0) {

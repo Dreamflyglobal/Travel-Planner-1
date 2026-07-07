@@ -387,15 +387,18 @@ router.post("/book-flight", async (req, res): Promise<void> => {
   // ww_tj_booking_id. The raw resultIndex is kept in ww_tj_farequote_key and
   // forwarded here as fareData.resultIndex.
   //
-  // priceIdForRefresh: must be the raw resultIndex (stable fare identifier).
-  //   fareData.resultIndex is authoritative; fareData.bookingId is fallback.
-  const priceIdForRefresh: string = fareData.resultIndex || fareData.bookingId;
-  let freshBookingId: string = fareData.bookingId;
-
-  // Diagnostic: log whether the stored bookingId looks like a TJS session (good)
-  // or a raw resultIndex (means the frontend fix hasn't propagated yet for this
-  // session). "TJS" prefix = valid TJS session; anything else = raw resultIndex.
+  // priceIdForRefresh: prefer the existing TJS session when available.
+  //   If fareData.bookingId is a TJS session (prefix "TJS"), use it — calling
+  //   /fms/v1/review with the existing session ID simply refreshes the TTL
+  //   on the SAME session, so TripJack books synchronously → CONFIRMED.
+  //   Using the raw resultIndex creates a BRAND-NEW session which TripJack
+  //   may process asynchronously → PENDING status on AirBook.
+  //   Fall back to raw resultIndex only when no TJS session is available.
   const storedIdIsTjSession = fareData.bookingId.startsWith("TJS");
+  const priceIdForRefresh: string = storedIdIsTjSession
+    ? fareData.bookingId                              // refresh existing TJS session TTL
+    : (fareData.resultIndex || fareData.bookingId);   // no TJS session — use resultIndex
+  let freshBookingId: string = fareData.bookingId;
   logger.info(
     {
       paymentId,
@@ -441,8 +444,17 @@ router.post("/book-flight", async (req, res): Promise<void> => {
 
       freshBookingId = refreshedId ?? fareData.bookingId;
       logger.info(
-        { paymentId, freshBookingId, source: refreshedId ? "review-response" : "stored-bookingId-fallback" },
-        "[book-flight] STEP 2: booking session refreshed",
+        {
+          paymentId,
+          priceIdUsed:    priceIdForRefresh,
+          freshBookingId,
+          source:         refreshedId ? "review-response" : "stored-bookingId-fallback",
+          reviewTopKeys:  reviewData ? Object.keys(reviewData) : [],
+          reviewBookingId: reviewData?.bookingId ?? reviewData?.data?.bookingId ?? null,
+          reviewStatus:   reviewData?.status ?? null,
+          reviewFullBody: reviewData,
+        },
+        "[book-flight] STEP 2: booking session refreshed — full review response",
       );
     } catch (err: any) {
       logger.warn(
@@ -506,6 +518,14 @@ router.post("/book-flight", async (req, res): Promise<void> => {
     },
     "[book-flight] STEP 2+3: calling TripJack /oms/v1/air/book (with retry)",
   );
+  logger.info(
+    {
+      paymentId,
+      bookingRef,
+      airBookRequestBody: tjPayload,
+    },
+    "[book-flight] AIRBOOK REQUEST full payload",
+  );
   console.log(`\n${"#".repeat(80)}`);
   console.log(`[book-flight] AIRBOOK REQUEST — bookingRef: ${bookingRef} | paymentId: ${paymentId}`);
   console.log(`${"#".repeat(80)}`);
@@ -563,8 +583,12 @@ router.post("/book-flight", async (req, res): Promise<void> => {
       },
       "[book-flight] AIRBOOK RESPONSE received",
     );
-    logger.debug(
-      { paymentId, bookingRef, airBookResponse: data },
+    logger.info(
+      {
+        paymentId,
+        bookingRef,
+        airBookFullResponse: data,
+      },
       "[book-flight] AIRBOOK full response body",
     );
 
