@@ -139,7 +139,7 @@ export async function tjPostWithRetry(
       data = resp.data;
       console.log(
         `[tj-retry] ${context} — full response:`,
-        JSON.stringify({ status: resp.status, data }, null, 2).slice(0, 4000),
+        JSON.stringify({ status: resp.status, data }, null, 2),
       );
     } catch (err: any) {
       const httpStatus = err.response?.status;
@@ -164,7 +164,7 @@ export async function tjPostWithRetry(
           },
           null,
           2,
-        ).slice(0, 4000),
+        ),
       );
 
       // 401 / 403 / 405 → hard auth/access rejection from HTTP layer.

@@ -94090,7 +94090,7 @@ async function tjPostWithRetry(path4, body, options = {}) {
       data = resp.data;
       console.log(
         `[tj-retry] ${context} \u2014 full response:`,
-        JSON.stringify({ status: resp.status, data }, null, 2).slice(0, 4e3)
+        JSON.stringify({ status: resp.status, data }, null, 2)
       );
     } catch (err) {
       const httpStatus = err.response?.status;
@@ -94113,7 +94113,7 @@ async function tjPostWithRetry(path4, body, options = {}) {
           },
           null,
           2
-        ).slice(0, 4e3)
+        )
       );
       if (httpStatus === 401 || httpStatus === 403 || httpStatus === 405) {
         if (!tokenRefreshUsed) {
