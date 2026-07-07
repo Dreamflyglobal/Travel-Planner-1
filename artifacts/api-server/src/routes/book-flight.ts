@@ -412,11 +412,21 @@ router.post("/book-flight", async (req, res): Promise<void> => {
         { paymentId, priceId: priceIdForRefresh },
         "[book-flight] STEP 2: refreshing fareQuote session before AirBook",
       );
+      console.log(`\n${"#".repeat(80)}`);
+      console.log(`[book-flight] STEP 2 REVIEW REQUEST — paymentId: ${paymentId}`);
+      console.log(`${"#".repeat(80)}`);
+      console.log("[book-flight] REVIEW REQUEST BODY:\n" + JSON.stringify({ priceIds: [priceIdForRefresh] }, null, 2));
+      console.log(`${"#".repeat(80)}\n`);
       const reviewData = await tjPostWithRetry(
         "/fms/v1/review",
         { priceIds: [priceIdForRefresh] },
         { context: "book-flight/fareQuote-refresh", timeoutMs: 15_000, maxRetries: 1 },
       );
+      console.log(`\n${"#".repeat(80)}`);
+      console.log(`[book-flight] STEP 2 REVIEW RESPONSE — paymentId: ${paymentId}`);
+      console.log(`${"#".repeat(80)}`);
+      console.log("[book-flight] FULL REVIEW RESPONSE BODY:\n" + JSON.stringify(reviewData, null, 2));
+      console.log(`${"#".repeat(80)}\n`);
 
       // TripJack review response: bookingId may be at top level or inside data.
       // In many sandbox responses it equals the priceId — what matters is that
@@ -494,7 +504,11 @@ router.post("/book-flight", async (req, res): Promise<void> => {
     },
     "[book-flight] STEP 2+3: calling TripJack /oms/v1/air/book (with retry)",
   );
-  console.log("[book-flight] TripJack AirBook payload:", JSON.stringify(tjPayload, null, 2));
+  console.log(`\n${"#".repeat(80)}`);
+  console.log(`[book-flight] AIRBOOK REQUEST — bookingRef: ${bookingRef} | paymentId: ${paymentId}`);
+  console.log(`${"#".repeat(80)}`);
+  console.log("[book-flight] FULL AIRBOOK REQUEST BODY:\n" + JSON.stringify(tjPayload, null, 2));
+  console.log(`${"#".repeat(80)}\n`);
 
   let tjSuccess    = false;
   let tjPending    = false;
@@ -516,10 +530,11 @@ router.post("/book-flight", async (req, res): Promise<void> => {
       data?.data?.status?.booking ??
       ""
     ).toUpperCase();
-    console.log(
-      "[book-flight] TripJack AirBook raw response:",
-      JSON.stringify({ bookingId: data?.bookingId, statusBooking: data?.status?.booking ?? "(absent)", statusSuccess: data?.status?.success, pnr: data?.pnr ?? null, pnrDetails: data?.pnrDetails ?? null, errors: data?.errors ?? null }, null, 2),
-    );
+    console.log(`\n${"#".repeat(80)}`);
+    console.log(`[book-flight] AIRBOOK RESPONSE — bookingRef: ${bookingRef} | paymentId: ${paymentId}`);
+    console.log(`${"#".repeat(80)}`);
+    console.log("[book-flight] FULL AIRBOOK RESPONSE BODY:\n" + JSON.stringify(data, null, 2));
+    console.log(`${"#".repeat(80)}\n`);
 
     if (data?.status?.success === false || (data?.errors?.length ?? 0) > 0) {
       tjError = extractTripJackError(data, "TripJack booking failed");

@@ -138,9 +138,12 @@ export async function tjPostWithRetry(
       const resp = await axios.post(url, body, { headers, timeout: timeoutMs });
       data = resp.data;
       console.log(
-        `[tj-retry] ${context} — full response:`,
-        JSON.stringify({ status: resp.status, data }, null, 2),
+        `\n${"=".repeat(80)}\n[tj-retry] ${context} — FULL RAW RESPONSE\n${"=".repeat(80)}`,
       );
+      console.log(`HTTP STATUS: ${resp.status} ${resp.statusText}`);
+      console.log(`RESPONSE HEADERS:\n${JSON.stringify(resp.headers, null, 2)}`);
+      console.log(`RESPONSE BODY:\n${JSON.stringify(data, null, 2)}`);
+      console.log(`${"=".repeat(80)}\n`);
     } catch (err: any) {
       const httpStatus = err.response?.status;
       const errCode    = err.code ?? "?";

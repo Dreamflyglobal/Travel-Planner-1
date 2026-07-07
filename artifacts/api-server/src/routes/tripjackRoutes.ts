@@ -66,9 +66,8 @@ async function handleFareQuote(req: any, res: any): Promise<void> {
       maxRetries: 2,
     });
 
-    logger.info("FareQuote Response:", JSON.stringify(data).slice(0, 800));
-    console.log("[fareQuote] === Success response from TripJack ===");
-    console.log("[fareQuote] response:", JSON.stringify(data).slice(0, 2000));
+    console.log("[fareQuote] === FULL Success response from TripJack ===");
+    console.log("[fareQuote] response:", JSON.stringify(data, null, 2));
     res.json(data);
   } catch (err: any) {
     console.error(
@@ -117,8 +116,8 @@ router.post("/tj-farerules", async (req, res): Promise<void> => {
       timeoutMs:  15_000,
       maxRetries: 2,
     });
-    console.log("[fareRules] === Success response from TripJack ===");
-    console.log("[fareRules] response:", JSON.stringify(data).slice(0, 2000));
+    console.log("[fareRules] === FULL Success response from TripJack ===");
+    console.log("[fareRules] response:", JSON.stringify(data, null, 2));
     res.json(data);
   } catch (err: any) {
     console.error(
@@ -185,7 +184,7 @@ router.post("/tj-book", async (req, res): Promise<void> => {
       timeoutMs:  30_000,
       maxRetries: 2,
     });
-    console.log("[tj-book] === Success response from TripJack ===", JSON.stringify(data).slice(0, 2000));
+    console.log("[tj-book] === FULL Success response from TripJack ===", JSON.stringify(data, null, 2));
     res.json(data);
   } catch (err: any) {
     console.error(

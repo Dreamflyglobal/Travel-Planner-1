@@ -94089,9 +94089,18 @@ async function tjPostWithRetry(path4, body, options = {}) {
       const resp = await axios_default.post(url3, body, { headers, timeout: timeoutMs });
       data = resp.data;
       console.log(
-        `[tj-retry] ${context} \u2014 full response:`,
-        JSON.stringify({ status: resp.status, data }, null, 2)
+        `
+${"=".repeat(80)}
+[tj-retry] ${context} \u2014 FULL RAW RESPONSE
+${"=".repeat(80)}`
       );
+      console.log(`HTTP STATUS: ${resp.status} ${resp.statusText}`);
+      console.log(`RESPONSE HEADERS:
+${JSON.stringify(resp.headers, null, 2)}`);
+      console.log(`RESPONSE BODY:
+${JSON.stringify(data, null, 2)}`);
+      console.log(`${"=".repeat(80)}
+`);
     } catch (err) {
       const httpStatus = err.response?.status;
       const errCode = err.code ?? "?";
@@ -99165,11 +99174,25 @@ router24.post("/book-flight", async (req, res) => {
         { paymentId, priceId: priceIdForRefresh },
         "[book-flight] STEP 2: refreshing fareQuote session before AirBook"
       );
+      console.log(`
+${"#".repeat(80)}`);
+      console.log(`[book-flight] STEP 2 REVIEW REQUEST \u2014 paymentId: ${paymentId}`);
+      console.log(`${"#".repeat(80)}`);
+      console.log("[book-flight] REVIEW REQUEST BODY:\n" + JSON.stringify({ priceIds: [priceIdForRefresh] }, null, 2));
+      console.log(`${"#".repeat(80)}
+`);
       const reviewData = await tjPostWithRetry(
         "/fms/v1/review",
         { priceIds: [priceIdForRefresh] },
         { context: "book-flight/fareQuote-refresh", timeoutMs: 15e3, maxRetries: 1 }
       );
+      console.log(`
+${"#".repeat(80)}`);
+      console.log(`[book-flight] STEP 2 REVIEW RESPONSE \u2014 paymentId: ${paymentId}`);
+      console.log(`${"#".repeat(80)}`);
+      console.log("[book-flight] FULL REVIEW RESPONSE BODY:\n" + JSON.stringify(reviewData, null, 2));
+      console.log(`${"#".repeat(80)}
+`);
       const refreshedId = typeof reviewData?.bookingId === "string" && reviewData.bookingId.trim() ? reviewData.bookingId.trim() : typeof reviewData?.data?.bookingId === "string" && reviewData.data.bookingId.trim() ? reviewData.data.bookingId.trim() : void 0;
       freshBookingId = refreshedId ?? fareData.bookingId;
       logger.info(
@@ -99231,7 +99254,13 @@ router24.post("/book-flight", async (req, res) => {
     },
     "[book-flight] STEP 2+3: calling TripJack /oms/v1/air/book (with retry)"
   );
-  console.log("[book-flight] TripJack AirBook payload:", JSON.stringify(tjPayload, null, 2));
+  console.log(`
+${"#".repeat(80)}`);
+  console.log(`[book-flight] AIRBOOK REQUEST \u2014 bookingRef: ${bookingRef} | paymentId: ${paymentId}`);
+  console.log(`${"#".repeat(80)}`);
+  console.log("[book-flight] FULL AIRBOOK REQUEST BODY:\n" + JSON.stringify(tjPayload, null, 2));
+  console.log(`${"#".repeat(80)}
+`);
   let tjSuccess = false;
   let tjPending = false;
   let pnr;
@@ -99244,10 +99273,13 @@ router24.post("/book-flight", async (req, res) => {
       maxRetries: 2
     });
     const tjBookingStatus = (data?.status?.booking ?? data?.data?.status?.booking ?? "").toUpperCase();
-    console.log(
-      "[book-flight] TripJack AirBook raw response:",
-      JSON.stringify({ bookingId: data?.bookingId, statusBooking: data?.status?.booking ?? "(absent)", statusSuccess: data?.status?.success, pnr: data?.pnr ?? null, pnrDetails: data?.pnrDetails ?? null, errors: data?.errors ?? null }, null, 2)
-    );
+    console.log(`
+${"#".repeat(80)}`);
+    console.log(`[book-flight] AIRBOOK RESPONSE \u2014 bookingRef: ${bookingRef} | paymentId: ${paymentId}`);
+    console.log(`${"#".repeat(80)}`);
+    console.log("[book-flight] FULL AIRBOOK RESPONSE BODY:\n" + JSON.stringify(data, null, 2));
+    console.log(`${"#".repeat(80)}
+`);
     if (data?.status?.success === false || (data?.errors?.length ?? 0) > 0) {
       tjError = extractTripJackError(data, "TripJack booking failed");
       logger.warn({ paymentId, tjError }, "[book-flight] TripJack returned failure in body");
@@ -99605,9 +99637,8 @@ async function handleFareQuote(req, res) {
       timeoutMs: 15e3,
       maxRetries: 2
     });
-    logger.info("FareQuote Response:", JSON.stringify(data).slice(0, 800));
-    console.log("[fareQuote] === Success response from TripJack ===");
-    console.log("[fareQuote] response:", JSON.stringify(data).slice(0, 2e3));
+    console.log("[fareQuote] === FULL Success response from TripJack ===");
+    console.log("[fareQuote] response:", JSON.stringify(data, null, 2));
     res.json(data);
   } catch (err) {
     console.error(
@@ -99643,8 +99674,8 @@ router26.post("/tj-farerules", async (req, res) => {
       timeoutMs: 15e3,
       maxRetries: 2
     });
-    console.log("[fareRules] === Success response from TripJack ===");
-    console.log("[fareRules] response:", JSON.stringify(data).slice(0, 2e3));
+    console.log("[fareRules] === FULL Success response from TripJack ===");
+    console.log("[fareRules] response:", JSON.stringify(data, null, 2));
     res.json(data);
   } catch (err) {
     console.error(
@@ -99701,7 +99732,7 @@ router26.post("/tj-book", async (req, res) => {
       timeoutMs: 3e4,
       maxRetries: 2
     });
-    console.log("[tj-book] === Success response from TripJack ===", JSON.stringify(data).slice(0, 2e3));
+    console.log("[tj-book] === FULL Success response from TripJack ===", JSON.stringify(data, null, 2));
     res.json(data);
   } catch (err) {
     console.error(
