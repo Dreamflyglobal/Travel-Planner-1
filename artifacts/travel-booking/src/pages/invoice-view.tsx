@@ -76,6 +76,9 @@ interface BookingInvoice {
   flightConvFee?: number;
   flightBaggageKg?: number;
   flightBaggageCost?: number;
+  tjBookingStatus?: "confirmed" | "pending" | "failed";
+  tjPassengers?: Array<{ name: string; pnr: string; ticketNum: string; paxType: string }>;
+  ticketNumbers?: string[];
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -668,6 +671,38 @@ export default function InvoiceView() {
                 <Row label="Duration" value={invoice.flightDuration} icon={<Clock className="w-3.5 h-3.5" />} />
               )}
             </div>
+
+            {/* Per-passenger ticket details from TripJack */}
+            {invoice.tjPassengers && invoice.tjPassengers.length > 0 && (
+              <div className="mt-5 border border-blue-100 rounded-xl overflow-hidden">
+                <div className="bg-blue-50 px-4 py-2.5 flex items-center gap-2 border-b border-blue-100">
+                  <Plane className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                  <span className="text-xs font-bold text-blue-700 uppercase tracking-widest">Passenger Ticket Details</span>
+                </div>
+                <div className="divide-y divide-slate-100">
+                  {invoice.tjPassengers.map((pax, i) => (
+                    <div key={i} className="px-4 py-3 flex items-center gap-4 flex-wrap">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-slate-800 text-sm">{pax.name}</p>
+                        <span className="text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded uppercase">{pax.paxType}</span>
+                      </div>
+                      {pax.pnr && (
+                        <div className="text-right shrink-0">
+                          <p className="text-[10px] text-slate-400 uppercase tracking-widest">PNR</p>
+                          <p className="font-mono font-bold text-orange-600 text-sm">{pax.pnr}</p>
+                        </div>
+                      )}
+                      {pax.ticketNum && (
+                        <div className="text-right shrink-0">
+                          <p className="text-[10px] text-slate-400 uppercase tracking-widest">Ticket No.</p>
+                          <p className="font-mono text-slate-700 text-xs">{pax.ticketNum}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

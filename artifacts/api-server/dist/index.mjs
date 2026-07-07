@@ -94330,6 +94330,8 @@ router9.get("/invoice/:bookingRef", async (req, res) => {
     discount: d.discountAmount || void 0,
     roomType: hi.room_type || void 0,
     pnr: d.pnr || d.pnrNumber || fi.pnr || void 0,
+    tjPassengers: d.tjPassengers || void 0,
+    ticketNumbers: d.ticketNumbers || void 0,
     // Flight
     flightAirline: fi.airline || void 0,
     flightNumber: fi.flightNum || void 0,
@@ -95683,6 +95685,34 @@ function generateFlightTicketPDF(ticket) {
     labelValue(doc, cols[1], y + 8, "Flight No.", ticket.flightNum);
     labelValue(doc, cols[2], y + 8, "Duration", ticket.duration);
     labelValue(doc, cols[3], y + 8, "Amount", `\u20B9${ticket.amount.toLocaleString("en-IN")}`, true);
+    if (ticket.pnr || ticket.ticketNumbers && ticket.ticketNumbers.length > 0) {
+      y += 68;
+      hr(doc, y + 60);
+      if (ticket.pnr) {
+        labelValue(doc, cols[0], y + 8, "PNR", ticket.pnr, true);
+      }
+      if (ticket.ticketNumbers && ticket.ticketNumbers.length > 0) {
+        labelValue(doc, cols[2], y + 8, "Ticket No.", ticket.ticketNumbers[0]);
+      }
+    }
+    if (ticket.tjPassengers && ticket.tjPassengers.length > 0) {
+      y += 68;
+      hr(doc, y + 60);
+      doc.font("Helvetica").fontSize(8).fillColor("#64748B").text("PASSENGER DETAILS".toUpperCase(), cols[0], y + 8);
+      y += 22;
+      ticket.tjPassengers.forEach((pax, idx) => {
+        const rowY = y + idx * 22;
+        doc.font("Helvetica-Bold").fontSize(9).fillColor("#1E293B").text(pax.name, cols[0], rowY, { width: 150 });
+        doc.font("Helvetica").fontSize(9).fillColor("#64748B").text(pax.paxType, cols[1], rowY);
+        if (pax.pnr) {
+          doc.font("Helvetica").fontSize(9).fillColor("#F97316").text(`PNR: ${pax.pnr}`, cols[2], rowY, { width: 90 });
+        }
+        if (pax.ticketNum) {
+          doc.font("Helvetica").fontSize(8).fillColor("#64748B").text(pax.ticketNum, cols[3], rowY, { width: 85 });
+        }
+      });
+      y += Math.max(ticket.tjPassengers.length * 22, 22);
+    }
     y += 68;
     hr(doc, y + 60);
     labelValue(doc, cols[0], y + 8, "Passenger Email", ticket.passengerEmail);
@@ -98953,18 +98983,66 @@ router24.post("/book-flight", async (req, res) => {
     details: bookingDetails
   }).returning();
   if (tjSuccess || tjPending) {
-    const statusLabel = tjSuccess ? "CONFIRMED" : "PENDING";
+    let detailPnr = pnr;
+    let tjDetailStatus = tjSuccess ? "CONFIRMED" : "PENDING";
+    let tjPassengers = [];
+    let ticketNumbers = [];
+    if (tjBookingRef) {
+      try {
+        const detailRes = await tjPostWithRetry(
+          "/oms/v1/booking/detail",
+          { bookingId: tjBookingRef },
+          { context: "book-flight/detail", timeoutMs: 15e3, maxRetries: 1 }
+        );
+        const dd = detailRes?.data || {};
+        detailPnr = dd.pnr || dd.pnrDetails?.[0]?.pnr || pnr;
+        tjDetailStatus = (dd.status?.booking || tjDetailStatus).toUpperCase();
+        tjPassengers = (dd.pnrDetails || []).map((p) => ({
+          name: (p.paxName || p.name || "").trim(),
+          pnr: p.pnr || detailPnr || "",
+          ticketNum: p.ticketNum || p.eTicketNumber || p.ticket_num || "",
+          paxType: (p.paxType || "ADULT").toUpperCase()
+        })).filter((p) => p.name.length > 0);
+        ticketNumbers = (dd.pnrDetails || []).map((p) => p.ticketNum || p.eTicketNumber || p.ticket_num).filter(Boolean);
+        logger.info(
+          { paymentId, detailPnr, tjDetailStatus, paxCount: tjPassengers.length, ticketCount: ticketNumbers.length },
+          "[book-flight] STEP 4.5: booking detail enriched"
+        );
+      } catch (detailErr) {
+        logger.warn(
+          { paymentId, err: detailErr?.message },
+          "[book-flight] STEP 4.5: booking detail fetch failed \u2014 using AirBook data"
+        );
+      }
+    }
+    const finalPnr = detailPnr || pnr;
+    const finalBkSt = tjDetailStatus === "CONFIRMED" ? "confirmed" : tjDetailStatus === "PENDING" ? "pending" : resolvedBookingSt;
+    const finalDbSt = tjDetailStatus === "CONFIRMED" ? "confirmed" : tjDetailStatus === "PENDING" ? "pending" : resolvedDbStatus;
+    await db.update(bookingsTable).set({
+      bookingStatus: finalBkSt,
+      status: finalDbSt,
+      details: {
+        ...bookingDetails,
+        pnr: finalPnr || null,
+        tjBookingRef: tjBookingRef || null,
+        tjDetailStatus,
+        ...tjPassengers.length > 0 ? { tjPassengers } : {},
+        ...ticketNumbers.length > 0 ? { ticketNumbers } : {}
+      }
+    }).where(eq(bookingsTable.id, savedBooking.id));
     logger.info(
-      { paymentId, pnr, bookingRef, bookingId: savedBooking.id, statusLabel },
-      `[book-flight] STEP 4: booking ${statusLabel}`
+      { paymentId, pnr: finalPnr, bookingRef, bookingId: savedBooking.id, finalBkSt },
+      `[book-flight] STEP 4: booking persisted as ${finalBkSt}`
     );
     res.json({
       success: true,
-      status: tjSuccess ? "confirmed" : "pending",
-      pnr,
+      status: finalBkSt,
+      pnr: finalPnr,
       tjBookingRef,
       bookingRef,
-      bookingId: savedBooking.id
+      bookingId: savedBooking.id,
+      ...tjPassengers.length > 0 ? { tjPassengers } : {},
+      ...ticketNumbers.length > 0 ? { ticketNumbers } : {}
     });
     const __domain = process.env.REPLIT_DOMAINS?.split(",")[0] || process.env.REPLIT_DEV_DOMAIN || "";
     const __base = __domain ? `https://${__domain}` : "https://dreamflyglobal.in";
@@ -98980,7 +99058,7 @@ router24.post("/book-flight", async (req, res) => {
       paymentId,
       passengers: passengers.length,
       invoiceUrl: `${__base}/invoice/${bookingRef}`,
-      title: `Flight ${pnr ?? bookingRef}`,
+      title: `Flight ${finalPnr ?? bookingRef}`,
       from: __details.from ?? __details.flightFrom ?? void 0,
       to: __details.to ?? __details.flightTo ?? void 0,
       airline: __details.airline ?? __details.flightAirline ?? void 0,
@@ -99047,6 +99125,8 @@ router24.get("/booking-status/:bookingRef", async (req, res) => {
   const storedTjRef = details.tjBookingRef || null;
   let currentStatus = booking.bookingStatus || "confirmed";
   let currentPnr = details.pnr || null;
+  let tjPassengers = details.tjPassengers || [];
+  let ticketNumbers = details.ticketNumbers || [];
   if (currentStatus === "pending" && storedTjRef) {
     try {
       const tjData = await tjPostWithRetry(
@@ -99054,16 +99134,31 @@ router24.get("/booking-status/:bookingRef", async (req, res) => {
         { bookingId: storedTjRef },
         { context: "booking-status-check", timeoutMs: 15e3, maxRetries: 1 }
       );
-      const tjBookingStatus = (tjData?.data?.status?.booking || tjData?.status?.booking || "").toUpperCase();
-      const refreshedPnr = tjData?.data?.pnr || tjData?.data?.pnrDetails?.[0]?.pnr || currentPnr;
-      logger.info({ bookingRef, tjBookingStatus, refreshedPnr }, "[booking-status] TripJack status refresh");
+      const dd = tjData?.data || {};
+      const tjBookingStatus = (dd.status?.booking || tjData?.status?.booking || "").toUpperCase();
+      const refreshedPnr = dd.pnr || dd.pnrDetails?.[0]?.pnr || currentPnr;
+      const refreshedPassengers = (dd.pnrDetails || []).map((p) => ({
+        name: (p.paxName || p.name || "").trim(),
+        pnr: p.pnr || refreshedPnr || "",
+        ticketNum: p.ticketNum || p.eTicketNumber || p.ticket_num || "",
+        paxType: (p.paxType || "ADULT").toUpperCase()
+      })).filter((p) => p.name.length > 0);
+      const refreshedTickets = (dd.pnrDetails || []).map((p) => p.ticketNum || p.eTicketNumber || p.ticket_num).filter(Boolean);
+      logger.info({ bookingRef, tjBookingStatus, refreshedPnr, paxCount: refreshedPassengers.length }, "[booking-status] TripJack status refresh");
       if (tjBookingStatus === "CONFIRMED") {
         currentStatus = "confirmed";
         if (refreshedPnr) currentPnr = refreshedPnr;
+        if (refreshedPassengers.length > 0) tjPassengers = refreshedPassengers;
+        if (refreshedTickets.length > 0) ticketNumbers = refreshedTickets;
         await db.update(bookingsTable).set({
           bookingStatus: "confirmed",
           status: "confirmed",
-          details: { ...details, pnr: currentPnr }
+          details: {
+            ...details,
+            pnr: currentPnr,
+            ...tjPassengers.length > 0 ? { tjPassengers } : {},
+            ...ticketNumbers.length > 0 ? { ticketNumbers } : {}
+          }
         }).where(eq(bookingsTable.bookingRef, bookingRef));
       } else if (tjBookingStatus === "FAILED" || tjBookingStatus === "CANCELLED") {
         currentStatus = "failed";
@@ -99081,7 +99176,9 @@ router24.get("/booking-status/:bookingRef", async (req, res) => {
     passengerName: booking.passengerName,
     travelDate: booking.travelDate,
     totalPrice: booking.totalPrice,
-    bookingType: booking.bookingType
+    bookingType: booking.bookingType,
+    ...tjPassengers.length > 0 ? { tjPassengers } : {},
+    ...ticketNumbers.length > 0 ? { ticketNumbers } : {}
   });
 });
 var book_flight_default = router24;

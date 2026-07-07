@@ -555,18 +555,87 @@ router.post("/book-flight", async (req, res): Promise<void> => {
     .returning();
 
   if (tjSuccess || tjPending) {
-    const statusLabel = tjSuccess ? "CONFIRMED" : "PENDING";
+    // ── STEP 4.5: Immediately fetch booking detail for enriched PNR/ticket data ──
+    let detailPnr      = pnr;
+    let tjDetailStatus = tjSuccess ? "CONFIRMED" : "PENDING";
+    let tjPassengers: Array<{ name: string; pnr: string; ticketNum: string; paxType: string }> = [];
+    let ticketNumbers: string[] = [];
+
+    if (tjBookingRef) {
+      try {
+        const detailRes = await tjPostWithRetry(
+          "/oms/v1/booking/detail",
+          { bookingId: tjBookingRef },
+          { context: "book-flight/detail", timeoutMs: 15_000, maxRetries: 1 },
+        );
+        const dd         = detailRes?.data || {};
+        detailPnr        = dd.pnr || (dd.pnrDetails?.[0]?.pnr) || pnr;
+        tjDetailStatus   = ((dd.status?.booking as string) || tjDetailStatus).toUpperCase();
+
+        tjPassengers = ((dd.pnrDetails || []) as any[])
+          .map((p: any) => ({
+            name:      (p.paxName || p.name || "").trim(),
+            pnr:       p.pnr    || detailPnr || "",
+            ticketNum: p.ticketNum || p.eTicketNumber || p.ticket_num || "",
+            paxType:   (p.paxType   || "ADULT").toUpperCase(),
+          }))
+          .filter((p) => p.name.length > 0);
+
+        ticketNumbers = ((dd.pnrDetails || []) as any[])
+          .map((p: any) => p.ticketNum || p.eTicketNumber || p.ticket_num)
+          .filter(Boolean);
+
+        logger.info(
+          { paymentId, detailPnr, tjDetailStatus, paxCount: tjPassengers.length, ticketCount: ticketNumbers.length },
+          "[book-flight] STEP 4.5: booking detail enriched",
+        );
+      } catch (detailErr: any) {
+        logger.warn(
+          { paymentId, err: detailErr?.message },
+          "[book-flight] STEP 4.5: booking detail fetch failed — using AirBook data",
+        );
+      }
+    }
+
+    const finalPnr  = detailPnr || pnr;
+    const finalBkSt = tjDetailStatus === "CONFIRMED" ? "confirmed"
+                    : tjDetailStatus === "PENDING"   ? "pending"
+                    : resolvedBookingSt;
+    const finalDbSt = tjDetailStatus === "CONFIRMED" ? "confirmed"
+                    : tjDetailStatus === "PENDING"   ? "pending"
+                    : resolvedDbStatus;
+
+    // Persist enriched booking detail back to DB
+    await db
+      .update(bookingsTable)
+      .set({
+        bookingStatus: finalBkSt,
+        status:        finalDbSt,
+        details: {
+          ...bookingDetails,
+          pnr:           finalPnr    || null,
+          tjBookingRef:  tjBookingRef || null,
+          tjDetailStatus,
+          ...(tjPassengers.length  > 0 ? { tjPassengers }  : {}),
+          ...(ticketNumbers.length > 0 ? { ticketNumbers } : {}),
+        },
+      })
+      .where(eq(bookingsTable.id, savedBooking.id));
+
     logger.info(
-      { paymentId, pnr, bookingRef, bookingId: savedBooking.id, statusLabel },
-      `[book-flight] STEP 4: booking ${statusLabel}`,
+      { paymentId, pnr: finalPnr, bookingRef, bookingId: savedBooking.id, finalBkSt },
+      `[book-flight] STEP 4: booking persisted as ${finalBkSt}`,
     );
+
     res.json({
-      success:       true,
-      status:        tjSuccess ? "confirmed" : "pending",
-      pnr,
+      success:      true,
+      status:       finalBkSt,
+      pnr:          finalPnr,
       tjBookingRef,
       bookingRef,
-      bookingId:     savedBooking.id,
+      bookingId:    savedBooking.id,
+      ...(tjPassengers.length  > 0 ? { tjPassengers }  : {}),
+      ...(ticketNumbers.length > 0 ? { ticketNumbers } : {}),
     });
 
     // Fire-and-forget notifications — do not await, never block the response
@@ -586,7 +655,7 @@ router.post("/book-flight", async (req, res): Promise<void> => {
       paymentId:       paymentId,
       passengers:      passengers.length,
       invoiceUrl:      `${__base}/invoice/${bookingRef}`,
-      title:           `Flight ${pnr ?? bookingRef}`,
+      title:           `Flight ${finalPnr ?? bookingRef}`,
       from:            __details.from ?? __details.flightFrom ?? undefined,
       to:              __details.to   ?? __details.flightTo   ?? undefined,
       airline:         __details.airline        ?? __details.flightAirline ?? undefined,
@@ -669,10 +738,12 @@ router.get("/booking-status/:bookingRef", async (req, res): Promise<void> => {
     return;
   }
 
-  const details        = (booking.details as Record<string, any>) || {};
-  const storedTjRef    = (details.tjBookingRef as string | null) || null;
-  let   currentStatus  = booking.bookingStatus || "confirmed";
-  let   currentPnr     = (details.pnr as string | null) || null;
+  const details       = (booking.details as Record<string, any>) || {};
+  const storedTjRef   = (details.tjBookingRef as string | null) || null;
+  let   currentStatus = booking.bookingStatus || "confirmed";
+  let   currentPnr    = (details.pnr as string | null) || null;
+  let   tjPassengers  = (details.tjPassengers  as Array<{ name: string; pnr: string; ticketNum: string; paxType: string }>) || [];
+  let   ticketNumbers = (details.ticketNumbers as string[]) || [];
 
   // Only hit TripJack when status is pending and we have a TJ booking reference
   if (currentStatus === "pending" && storedTjRef) {
@@ -683,28 +754,42 @@ router.get("/booking-status/:bookingRef", async (req, res): Promise<void> => {
         { context: "booking-status-check", timeoutMs: 15_000, maxRetries: 1 },
       );
 
-      const tjBookingStatus = (
-        tjData?.data?.status?.booking ||
-        tjData?.status?.booking       ||
-        ""
-      ).toUpperCase();
+      const dd              = tjData?.data || {};
+      const tjBookingStatus = ((dd.status?.booking || tjData?.status?.booking || "")).toUpperCase();
 
-      const refreshedPnr =
-        tjData?.data?.pnr ||
-        tjData?.data?.pnrDetails?.[0]?.pnr ||
-        currentPnr;
+      const refreshedPnr = dd.pnr || dd.pnrDetails?.[0]?.pnr || currentPnr;
 
-      logger.info({ bookingRef, tjBookingStatus, refreshedPnr }, "[booking-status] TripJack status refresh");
+      const refreshedPassengers = ((dd.pnrDetails || []) as any[])
+        .map((p: any) => ({
+          name:      (p.paxName || p.name || "").trim(),
+          pnr:       p.pnr    || refreshedPnr || "",
+          ticketNum: p.ticketNum || p.eTicketNumber || p.ticket_num || "",
+          paxType:   (p.paxType || "ADULT").toUpperCase(),
+        }))
+        .filter((p) => p.name.length > 0);
+
+      const refreshedTickets = ((dd.pnrDetails || []) as any[])
+        .map((p: any) => p.ticketNum || p.eTicketNumber || p.ticket_num)
+        .filter(Boolean);
+
+      logger.info({ bookingRef, tjBookingStatus, refreshedPnr, paxCount: refreshedPassengers.length }, "[booking-status] TripJack status refresh");
 
       if (tjBookingStatus === "CONFIRMED") {
         currentStatus = "confirmed";
         if (refreshedPnr) currentPnr = refreshedPnr;
+        if (refreshedPassengers.length > 0) tjPassengers = refreshedPassengers;
+        if (refreshedTickets.length    > 0) ticketNumbers = refreshedTickets;
         await db
           .update(bookingsTable)
           .set({
             bookingStatus: "confirmed",
             status:        "confirmed",
-            details:       { ...details, pnr: currentPnr },
+            details: {
+              ...details,
+              pnr: currentPnr,
+              ...(tjPassengers.length  > 0 ? { tjPassengers }  : {}),
+              ...(ticketNumbers.length > 0 ? { ticketNumbers } : {}),
+            },
           })
           .where(eq(bookingsTable.bookingRef, bookingRef));
       } else if (tjBookingStatus === "FAILED" || tjBookingStatus === "CANCELLED") {
@@ -729,6 +814,8 @@ router.get("/booking-status/:bookingRef", async (req, res): Promise<void> => {
     travelDate:    booking.travelDate,
     totalPrice:    booking.totalPrice,
     bookingType:   booking.bookingType,
+    ...(tjPassengers.length  > 0 ? { tjPassengers }  : {}),
+    ...(ticketNumbers.length > 0 ? { ticketNumbers } : {}),
   });
 });
 

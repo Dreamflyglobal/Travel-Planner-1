@@ -56,6 +56,8 @@ interface BookingDetails {
   tjBookingRef?: string;
   tjBookingError?: string;
   tjBookingStatus?: "confirmed" | "pending" | "failed";
+  tjPassengers?: Array<{ name: string; pnr: string; ticketNum: string; paxType: string }>;
+  ticketNumbers?: string[];
 }
 
 export default function PaymentSuccess() {
@@ -175,6 +177,8 @@ export default function PaymentSuccess() {
         tjBookingStatus: data.bookingStatus as "confirmed" | "pending" | "failed",
         tjPnr:           data.pnr           || bookingDetails.tjPnr,
         tjBookingRef:    data.tjBookingRef   || bookingDetails.tjBookingRef,
+        tjPassengers:    data.tjPassengers   || bookingDetails.tjPassengers,
+        ticketNumbers:   data.ticketNumbers  || bookingDetails.ticketNumbers,
       };
       setBookingDetails(updatedDetails);
       // Persist updated status to localStorage so it survives a refresh
@@ -260,6 +264,18 @@ export default function PaymentSuccess() {
 
     return () => clearInterval(interval);
   }, []);
+
+  // ── 30-second auto-refresh when booking is pending ───────────────────────
+  useEffect(() => {
+    if (!bookingDetails?.bookingId || bookingDetails.bookingType !== "flight") return;
+    if (bookingDetails.tjBookingStatus !== "pending") return;
+
+    const timer = setInterval(() => {
+      void handleRefreshStatus();
+    }, 30_000);
+
+    return () => clearInterval(timer);
+  }, [bookingDetails?.bookingId, bookingDetails?.tjBookingStatus, bookingDetails?.bookingType, handleRefreshStatus]);
 
   // Simple particle effect function
   const createParticle = () => {
@@ -526,6 +542,38 @@ export default function PaymentSuccess() {
                   </div>
                 </div>
               </div>
+
+              {/* Per-passenger ticket details (flight only, from TripJack) */}
+              {isFlight && bookingDetails.tjPassengers && bookingDetails.tjPassengers.length > 0 && (
+                <div className="mb-6 border border-blue-100 rounded-xl overflow-hidden">
+                  <div className="bg-blue-50 px-4 py-2.5 flex items-center gap-2 border-b border-blue-100">
+                    <Plane className="w-4 h-4 text-blue-500 shrink-0" />
+                    <span className="text-sm font-bold text-blue-700">Passenger Ticket Details</span>
+                  </div>
+                  <div className="divide-y divide-slate-100">
+                    {bookingDetails.tjPassengers.map((pax, i) => (
+                      <div key={i} className="px-4 py-3 flex items-center gap-4 flex-wrap">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-slate-800">{pax.name}</p>
+                          <span className="text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded uppercase">{pax.paxType}</span>
+                        </div>
+                        {pax.pnr && (
+                          <div className="text-right shrink-0">
+                            <p className="text-[10px] text-slate-400 uppercase tracking-widest">PNR</p>
+                            <p className="font-mono font-bold text-orange-600">{pax.pnr}</p>
+                          </div>
+                        )}
+                        {pax.ticketNum && (
+                          <div className="text-right shrink-0">
+                            <p className="text-[10px] text-slate-400 uppercase tracking-widest">Ticket No.</p>
+                            <p className="font-mono text-slate-700 text-sm">{pax.ticketNum}</p>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Payment Details */}
               <div className={`rounded-lg p-6 border-2 ${isPending ? "bg-amber-50 border-amber-200" : isFailed ? "bg-red-50 border-red-200" : "bg-green-50 border-green-200"}`}>

@@ -926,6 +926,8 @@ export default function BookingPayment() {
           success: boolean; duplicate?: boolean;
           status?: "confirmed" | "pending";
           pnr?: string; tjBookingRef?: string;
+          tjPassengers?: Array<{ name: string; pnr: string; ticketNum: string; paxType: string }>;
+          ticketNumbers?: string[];
           error?: string; refundInitiated?: boolean;
         } | null = null;
 
@@ -1206,10 +1208,12 @@ export default function BookingPayment() {
           flightBaggageKg:  session.type === "flight" ? (session as FlightBookingSession).extraBaggageKg   : undefined,
           flightBaggageCost:session.type === "flight" ? (session as FlightBookingSession).extraBaggageCost : undefined,
         };
-        // PNR, TJ booking ref and status come from the backend response (flight only)
+        // PNR, TJ booking ref, status, and passenger details from the backend response (flight only)
         if (flightBookResult?.pnr)          (lastSuccessful as any).tjPnr          = flightBookResult.pnr;
         if (flightBookResult?.tjBookingRef) (lastSuccessful as any).tjBookingRef   = flightBookResult.tjBookingRef;
         if (flightBookResult?.status)       (lastSuccessful as any).tjBookingStatus = flightBookResult.status;
+        if (flightBookResult?.tjPassengers) (lastSuccessful as any).tjPassengers   = flightBookResult.tjPassengers;
+        if (flightBookResult?.ticketNumbers)(lastSuccessful as any).ticketNumbers  = flightBookResult.ticketNumbers;
         localStorage.setItem("lastSuccessfulBooking", JSON.stringify(lastSuccessful));
         paymentDoneRef.current = true;
         clearBookingSession();

@@ -395,6 +395,8 @@ router.get("/invoice/:bookingRef", async (req, res): Promise<void> => {
     discount:       d.discountAmount || undefined,
     roomType:       hi.room_type || undefined,
     pnr:            (d.pnr || d.pnrNumber || fi.pnr) || undefined,
+    tjPassengers:   (d.tjPassengers  as any[] | undefined) || undefined,
+    ticketNumbers:  (d.ticketNumbers as string[] | undefined) || undefined,
     // Flight
     flightAirline:    fi.airline    || undefined,
     flightNumber:     fi.flightNum  || undefined,

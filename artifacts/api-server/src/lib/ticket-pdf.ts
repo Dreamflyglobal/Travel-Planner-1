@@ -18,6 +18,9 @@ export interface FlightTicketData {
   passengers:    number;
   paymentId?:    string;
   class?:        string;
+  pnr?:          string;
+  ticketNumbers?: string[];
+  tjPassengers?:  Array<{ name: string; pnr: string; ticketNum: string; paxType: string }>;
 }
 
 const BLUE    = "#1E40AF";
@@ -202,6 +205,58 @@ export function generateFlightTicketPDF(ticket: FlightTicketData): Promise<Buffe
     labelValue(doc, cols[1], y + 8,  "Flight No.",     ticket.flightNum);
     labelValue(doc, cols[2], y + 8,  "Duration",       ticket.duration);
     labelValue(doc, cols[3], y + 8,  "Amount", `\u20B9${ticket.amount.toLocaleString("en-IN")}`, true);
+
+    // ── PNR / Ticket Numbers ───────────────────────────────────────────────
+    if (ticket.pnr || (ticket.ticketNumbers && ticket.ticketNumbers.length > 0)) {
+      y += 68;
+      hr(doc, y + 60);
+      if (ticket.pnr) {
+        labelValue(doc, cols[0], y + 8, "PNR", ticket.pnr, true);
+      }
+      if (ticket.ticketNumbers && ticket.ticketNumbers.length > 0) {
+        labelValue(doc, cols[2], y + 8, "Ticket No.", ticket.ticketNumbers[0]);
+      }
+    }
+
+    // ── Per-passenger details (if multiple passengers have ticket numbers) ─
+    if (ticket.tjPassengers && ticket.tjPassengers.length > 0) {
+      y += 68;
+      hr(doc, y + 60);
+      doc
+        .font("Helvetica")
+        .fontSize(8)
+        .fillColor("#64748B")
+        .text("PASSENGER DETAILS".toUpperCase(), cols[0], y + 8);
+      y += 22;
+      ticket.tjPassengers.forEach((pax, idx) => {
+        const rowY = y + idx * 22;
+        doc
+          .font("Helvetica-Bold")
+          .fontSize(9)
+          .fillColor("#1E293B")
+          .text(pax.name, cols[0], rowY, { width: 150 });
+        doc
+          .font("Helvetica")
+          .fontSize(9)
+          .fillColor("#64748B")
+          .text(pax.paxType, cols[1], rowY);
+        if (pax.pnr) {
+          doc
+            .font("Helvetica")
+            .fontSize(9)
+            .fillColor("#F97316")
+            .text(`PNR: ${pax.pnr}`, cols[2], rowY, { width: 90 });
+        }
+        if (pax.ticketNum) {
+          doc
+            .font("Helvetica")
+            .fontSize(8)
+            .fillColor("#64748B")
+            .text(pax.ticketNum, cols[3], rowY, { width: 85 });
+        }
+      });
+      y += Math.max(ticket.tjPassengers.length * 22, 22);
+    }
 
     // ── Email ──────────────────────────────────────────────────────────────
     y += 68;
