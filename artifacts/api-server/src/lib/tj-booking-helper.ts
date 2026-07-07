@@ -188,6 +188,28 @@ export async function fetchTjBookingDetail(
         { context: `${context}/${strategy.label}`, timeoutMs: 15_000, maxRetries: 0 },
       );
 
+      // TripJack sometimes returns HTTP 200 with a TripJack-level error body
+      // (e.g. { status: { success: false, httpStatus: 403 }, errors: [{ errCode: "408", message: "Access Denied" }] }).
+      // This is NOT a successful response — fall through to the next strategy.
+      if (raw?.status?.success === false || (Array.isArray(raw?.errors) && raw.errors.length > 0)) {
+        const tjErrCode = raw?.errors?.[0]?.errCode ?? "unknown";
+        const tjErrMsg  = raw?.errors?.[0]?.message ?? "unknown";
+        logger.warn(
+          {
+            context,
+            tjBookingRef,
+            strategy:       strategy.label,
+            endpoint:       strategy.path,
+            tjErrCode,
+            tjErrMsg,
+            httpStatusBody: raw?.status?.httpStatus ?? null,
+            responseKeys:   raw ? Object.keys(raw) : [],
+          },
+          "[tj-booking-helper] error body despite HTTP 200 (TripJack errCode) — skipping strategy, trying next",
+        );
+        continue;
+      }
+
       const rawStatus  = extractStatus(raw);
       const pnr        = extractPnr(raw);
       const passengers = extractPassengers(raw, pnr);
@@ -208,9 +230,9 @@ export async function fetchTjBookingDetail(
         "[tj-booking-helper] booking status API SUCCESS",
       );
 
-      // Full response logged at debug level for diagnostics
-      logger.debug(
-        { context, tjBookingRef, strategy: strategy.label, response: raw },
+      // Full response logged at INFO level for diagnostics
+      logger.info(
+        { context, tjBookingRef, strategy: strategy.label, fullResponse: raw },
         "[tj-booking-helper] full booking status response",
       );
 

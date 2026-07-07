@@ -94334,6 +94334,24 @@ async function fetchTjBookingDetail(tjBookingRef, context) {
         strategy.body,
         { context: `${context}/${strategy.label}`, timeoutMs: 15e3, maxRetries: 0 }
       );
+      if (raw?.status?.success === false || Array.isArray(raw?.errors) && raw.errors.length > 0) {
+        const tjErrCode = raw?.errors?.[0]?.errCode ?? "unknown";
+        const tjErrMsg = raw?.errors?.[0]?.message ?? "unknown";
+        logger.warn(
+          {
+            context,
+            tjBookingRef,
+            strategy: strategy.label,
+            endpoint: strategy.path,
+            tjErrCode,
+            tjErrMsg,
+            httpStatusBody: raw?.status?.httpStatus ?? null,
+            responseKeys: raw ? Object.keys(raw) : []
+          },
+          "[tj-booking-helper] error body despite HTTP 200 (TripJack errCode) \u2014 skipping strategy, trying next"
+        );
+        continue;
+      }
       const rawStatus = extractStatus(raw);
       const pnr = extractPnr(raw);
       const passengers = extractPassengers(raw, pnr);
@@ -94352,8 +94370,8 @@ async function fetchTjBookingDetail(tjBookingRef, context) {
         },
         "[tj-booking-helper] booking status API SUCCESS"
       );
-      logger.debug(
-        { context, tjBookingRef, strategy: strategy.label, response: raw },
+      logger.info(
+        { context, tjBookingRef, strategy: strategy.label, fullResponse: raw },
         "[tj-booking-helper] full booking status response"
       );
       const source = strategy.label === "detail" ? "detail" : "air-detail";
@@ -99835,29 +99853,58 @@ router24.get("/booking-status/:bookingRef", async (req, res) => {
     if (detail && detail.source !== "none") {
       const tjBookingStatus = detail.rawStatus;
       const refreshedPnr = detail.pnr || currentPnr;
-      logger.info({ bookingRef, tjBookingStatus, refreshedPnr, source: detail.source, paxCount: detail.tjPassengers.length }, "[booking-status] TripJack status refresh");
-      if (tjBookingStatus === "CONFIRMED") {
-        currentStatus = "confirmed";
-        if (refreshedPnr) currentPnr = refreshedPnr;
-        if (detail.tjPassengers.length > 0) tjPassengers = detail.tjPassengers;
-        if (detail.ticketNumbers.length > 0) ticketNumbers = detail.ticketNumbers;
-        await db.update(bookingsTable).set({
-          bookingStatus: "confirmed",
-          status: "confirmed",
-          details: {
+      if (!tjBookingStatus) {
+        logger.warn(
+          { bookingRef, source: detail.source, tjBookingRef: storedTjRef, responseKeys: detail.rawResponse ? Object.keys(detail.rawResponse) : [] },
+          "[booking-status] TripJack returned source but empty rawStatus \u2014 likely error body; stored status unchanged"
+        );
+      } else {
+        logger.info(
+          { bookingRef, tjBookingStatus, refreshedPnr, source: detail.source, paxCount: detail.tjPassengers.length, tjBookingRef: storedTjRef },
+          "[booking-status] TripJack status refresh"
+        );
+        if (tjBookingStatus === "CONFIRMED") {
+          currentStatus = "confirmed";
+          if (refreshedPnr) currentPnr = refreshedPnr;
+          if (detail.tjPassengers.length > 0) tjPassengers = detail.tjPassengers;
+          if (detail.ticketNumbers.length > 0) ticketNumbers = detail.ticketNumbers;
+          const updatedDetails = {
             ...details,
             pnr: currentPnr,
             tjDetailStatus: "CONFIRMED",
             ...tjPassengers.length > 0 ? { tjPassengers } : {},
             ...ticketNumbers.length > 0 ? { ticketNumbers } : {}
-          }
-        }).where(eq(bookingsTable.bookingRef, bookingRef));
-      } else if (tjBookingStatus === "FAILED" || tjBookingStatus === "CANCELLED") {
-        currentStatus = "failed";
-        await db.update(bookingsTable).set({ bookingStatus: "failed", status: "cancelled", failureCode: "api_error" }).where(eq(bookingsTable.bookingRef, bookingRef));
+          };
+          const dbResult = await db.update(bookingsTable).set({ bookingStatus: "confirmed", status: "confirmed", details: updatedDetails }).where(eq(bookingsTable.bookingRef, bookingRef)).returning();
+          logger.info(
+            {
+              bookingRef,
+              pnr: currentPnr,
+              tjBookingRef: storedTjRef,
+              source: detail.source,
+              rowsUpdated: dbResult.length,
+              dbBookingStatus: dbResult[0]?.bookingStatus ?? null,
+              dbStatus: dbResult[0]?.status ?? null,
+              fullTjResponse: detail.rawResponse
+            },
+            "[booking-status] DB updated to CONFIRMED \u2014 booking is now confirmed"
+          );
+        } else if (tjBookingStatus === "FAILED" || tjBookingStatus === "CANCELLED") {
+          currentStatus = "failed";
+          const dbResult = await db.update(bookingsTable).set({ bookingStatus: "failed", status: "cancelled", failureCode: "api_error" }).where(eq(bookingsTable.bookingRef, bookingRef)).returning();
+          logger.warn(
+            { bookingRef, tjBookingStatus, tjBookingRef: storedTjRef, rowsUpdated: dbResult.length },
+            "[booking-status] DB updated to FAILED/CANCELLED"
+          );
+        } else {
+          logger.info(
+            { bookingRef, tjBookingStatus, tjBookingRef: storedTjRef, source: detail.source },
+            "[booking-status] TripJack still PENDING \u2014 no DB update, poller will retry"
+          );
+        }
       }
     } else {
-      logger.warn({ bookingRef }, "[booking-status] all TripJack strategies failed \u2014 returning stored status");
+      logger.warn({ bookingRef, tjBookingRef: storedTjRef }, "[booking-status] all TripJack strategies failed \u2014 returning stored status");
     }
   }
   res.json({

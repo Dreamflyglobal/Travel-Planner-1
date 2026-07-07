@@ -929,37 +929,77 @@ router.get("/booking-status/:bookingRef", async (req, res): Promise<void> => {
     if (detail && detail.source !== "none") {
       const tjBookingStatus = detail.rawStatus;
       const refreshedPnr    = detail.pnr || currentPnr;
-      logger.info({ bookingRef, tjBookingStatus, refreshedPnr, source: detail.source, paxCount: detail.tjPassengers.length }, "[booking-status] TripJack status refresh");
 
-      if (tjBookingStatus === "CONFIRMED") {
-        currentStatus = "confirmed";
-        if (refreshedPnr) currentPnr = refreshedPnr;
-        if (detail.tjPassengers.length  > 0) tjPassengers  = detail.tjPassengers;
-        if (detail.ticketNumbers.length > 0) ticketNumbers = detail.ticketNumbers;
-        await db
-          .update(bookingsTable)
-          .set({
-            bookingStatus: "confirmed",
-            status:        "confirmed",
-            details: {
-              ...details,
-              pnr: currentPnr,
-              tjDetailStatus: "CONFIRMED",
-              ...(tjPassengers.length  > 0 ? { tjPassengers }  : {}),
-              ...(ticketNumbers.length > 0 ? { ticketNumbers } : {}),
+      // Guard: if the helper returned a "source" but rawStatus is empty, it means
+      // TripJack returned an error body that was mis-parsed (e.g. HTTP 200 with
+      // success:false — fixed in tj-booking-helper, but guard here as safety net).
+      if (!tjBookingStatus) {
+        logger.warn(
+          { bookingRef, source: detail.source, tjBookingRef: storedTjRef, responseKeys: detail.rawResponse ? Object.keys(detail.rawResponse) : [] },
+          "[booking-status] TripJack returned source but empty rawStatus — likely error body; stored status unchanged",
+        );
+      } else {
+        logger.info(
+          { bookingRef, tjBookingStatus, refreshedPnr, source: detail.source, paxCount: detail.tjPassengers.length, tjBookingRef: storedTjRef },
+          "[booking-status] TripJack status refresh",
+        );
+
+        if (tjBookingStatus === "CONFIRMED") {
+          currentStatus = "confirmed";
+          if (refreshedPnr) currentPnr = refreshedPnr;
+          if (detail.tjPassengers.length  > 0) tjPassengers  = detail.tjPassengers;
+          if (detail.ticketNumbers.length > 0) ticketNumbers = detail.ticketNumbers;
+
+          const updatedDetails = {
+            ...details,
+            pnr: currentPnr,
+            tjDetailStatus: "CONFIRMED",
+            ...(tjPassengers.length  > 0 ? { tjPassengers }  : {}),
+            ...(ticketNumbers.length > 0 ? { ticketNumbers } : {}),
+          };
+          const dbResult = await db
+            .update(bookingsTable)
+            .set({ bookingStatus: "confirmed", status: "confirmed", details: updatedDetails })
+            .where(eq(bookingsTable.bookingRef, bookingRef))
+            .returning();
+
+          logger.info(
+            {
+              bookingRef,
+              pnr:          currentPnr,
+              tjBookingRef: storedTjRef,
+              source:       detail.source,
+              rowsUpdated:  dbResult.length,
+              dbBookingStatus: dbResult[0]?.bookingStatus ?? null,
+              dbStatus:        dbResult[0]?.status ?? null,
+              fullTjResponse:  detail.rawResponse,
             },
-          })
-          .where(eq(bookingsTable.bookingRef, bookingRef));
-      } else if (tjBookingStatus === "FAILED" || tjBookingStatus === "CANCELLED") {
-        currentStatus = "failed";
-        await db
-          .update(bookingsTable)
-          .set({ bookingStatus: "failed", status: "cancelled", failureCode: "api_error" })
-          .where(eq(bookingsTable.bookingRef, bookingRef));
+            "[booking-status] DB updated to CONFIRMED — booking is now confirmed",
+          );
+
+        } else if (tjBookingStatus === "FAILED" || tjBookingStatus === "CANCELLED") {
+          currentStatus = "failed";
+          const dbResult = await db
+            .update(bookingsTable)
+            .set({ bookingStatus: "failed", status: "cancelled", failureCode: "api_error" })
+            .where(eq(bookingsTable.bookingRef, bookingRef))
+            .returning();
+
+          logger.warn(
+            { bookingRef, tjBookingStatus, tjBookingRef: storedTjRef, rowsUpdated: dbResult.length },
+            "[booking-status] DB updated to FAILED/CANCELLED",
+          );
+
+        } else {
+          // PENDING or PROCESSING — no update, keep polling
+          logger.info(
+            { bookingRef, tjBookingStatus, tjBookingRef: storedTjRef, source: detail.source },
+            "[booking-status] TripJack still PENDING — no DB update, poller will retry",
+          );
+        }
       }
-      // PENDING → no update, keep polling
     } else {
-      logger.warn({ bookingRef }, "[booking-status] all TripJack strategies failed — returning stored status");
+      logger.warn({ bookingRef, tjBookingRef: storedTjRef }, "[booking-status] all TripJack strategies failed — returning stored status");
     }
   }
 
